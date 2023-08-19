@@ -6,7 +6,7 @@ namespace ChaosDbg
     /// <summary>
     /// Provides the global <see cref="IServiceProvider"/> used by the application.
     /// </summary>
-    class GlobalProvider
+    public class GlobalProvider
     {
         //The service probider is lazily loaded on first access
         private static Lazy<IServiceProvider> serviceProvider;
@@ -25,6 +25,11 @@ namespace ChaosDbg
             }
         }
 
+        /// <summary>
+        /// An optional hook that allows modifying services.
+        /// </summary>
+        public static Action<ServiceCollection> ConfigureServices { get; set; }
+
         static GlobalProvider()
         {
             serviceProvider = new Lazy<IServiceProvider>(CreateServiceProvider);
@@ -33,6 +38,8 @@ namespace ChaosDbg
         private static IServiceProvider CreateServiceProvider()
         {
             var services = new ServiceCollection();
+
+            ConfigureServices?.Invoke(services);
 
             var provider = services.Build();
 

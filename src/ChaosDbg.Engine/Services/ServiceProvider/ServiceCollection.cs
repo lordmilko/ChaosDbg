@@ -45,6 +45,24 @@ namespace ChaosDbg.Engine
             services[serviceType] = new ServiceDescriptor(serviceType, implementation.GetType(), implementation: implementation);
         }
 
+        public void Replace(Type serviceType, Type newImplementationType)
+        {
+            services.Remove(serviceType);
+            Add(serviceType, newImplementationType);
+        }
+
+        public void Replace<T>(Type serviceType, Func<IServiceProvider, T> newFactory) where T : class
+        {
+            services.Remove(serviceType);
+            Add(serviceType, newFactory);
+        }
+
+        public void Replace(Type serviceType, object newImplementation)
+        {
+            services.Remove(serviceType);
+            Add(serviceType, newImplementation);
+        }
+
         private void Validate(Type serviceType, Type implementationType)
         {
             if (implementationType != null && implementationType.IsInterface)
