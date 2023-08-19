@@ -1,8 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using ChaosDbg.Engine;
+using FlaUI.Core.AutomationElements;
+using FlaUI.UIA3;
+using FlaUIWindow = FlaUI.Core.AutomationElements.Window;
 
 namespace ChaosDbg.Tests
 {
@@ -22,6 +26,7 @@ namespace ChaosDbg.Tests
         {
             var ap = Application.Current;
             var thread = new Thread(App.Main);
+            thread.Name = "AppRunnerThread";
             thread.SetApartmentState(ApartmentState.STA);
 
             thread.Start();
@@ -37,7 +42,12 @@ namespace ChaosDbg.Tests
         private static T Invoke<T>(Func<Application, T> func) =>
             Application.Current.Dispatcher.Invoke(() => func(Application.Current));
 
-        public static void WithApp(Action<IntPtr> action, Action<ServiceCollection> configureServices = null)
+        /// <summary>
+        /// Executes an application within the current process, allowing modifications to its internal services prior to startup.
+        /// </summary>
+        /// <param name="action">The action to perform during the lifetime of the application.</param>
+        /// <param name="configureServices">An optional action that allows modifying or mocking the services of the application prior to startup.</param>
+        public static void WithInProcessApp(Action<FlaUIWindow> action, Action<ServiceCollection> configureServices = null)
         {
             lock (lockObj)
             {
@@ -89,13 +99,50 @@ namespace ChaosDbg.Tests
 
                 try
                 {
-                    action(hwnd);
+                    using (var automation = new UIA3Automation())
+                    {
+                        var window = automation.FromHandle(hwnd).AsWindow();
+
+                        action(window);
+                    }
                 }
                 finally
                 {
                     GlobalProvider.ConfigureServices = null;
                     cts.Cancel();
                 }                
+            }
+        }
+
+        /// <summary>
+        /// Executes an application out of process, optionally attaching to it with the Visual Studio debugger that is debugging this process.
+        /// </summary>
+        /// <param name="action">The action to perform during the lifetime of the application.</param>
+        /// <param name="debug">Whether to attach the Visual Studio debugger to the process.</param>
+        public static void WithOutOfProcessApp(Action<FlaUIWindow> action, bool debug = false)
+        {
+            lock (lockObj)
+            {
+                var path = typeof(App).Assembly.Location;
+
+                var app = FlaUI.Core.Application.Launch(path);
+
+                try
+                {
+                    if (debug)
+                        VsDebugger.Attach(Process.GetProcessById(app.ProcessId));
+
+                    using (var automation = new UIA3Automation())
+                    {
+                        var window = app.GetMainWindow(automation);
+
+                        action(window);
+                    }
+                }
+                finally
+                {
+                    app.Close();
+                }
             }
         }
     }
