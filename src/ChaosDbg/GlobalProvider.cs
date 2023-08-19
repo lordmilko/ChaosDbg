@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using ChaosDbg.Engine;
 
 namespace ChaosDbg
@@ -28,6 +29,7 @@ namespace ChaosDbg
         /// <summary>
         /// An optional hook that allows modifying services.
         /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public static Action<ServiceCollection> ConfigureServices { get; set; }
 
         static GlobalProvider()
