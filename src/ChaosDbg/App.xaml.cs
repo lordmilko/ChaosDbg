@@ -13,5 +13,9 @@ namespace ChaosDbg
     /// </summary>
     public partial class App : Application
     {
+        private void App_Exit(object sender, ExitEventArgs e)
+        {
+            GlobalProvider.Dispose();
+        }
     }
 }
