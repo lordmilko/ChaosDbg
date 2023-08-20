@@ -5,9 +5,14 @@ VisualStudioVersion = 16.0.32126.315
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg", "src\ChaosDbg\ChaosDbg.csproj", "{BB1BEE98-15F8-40D8-B8F3-13D02DF61856}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaosDbg.Engine", "src\ChaosDbg.Engine\ChaosDbg.Engine.csproj", "{14EB146E-9F40-44F5-9C85-5F9A4E7E13ED}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Engine", "src\ChaosDbg.Engine\ChaosDbg.Engine.csproj", "{14EB146E-9F40-44F5-9C85-5F9A4E7E13ED}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaosDbg.Tests", "src\ChaosDbg.Tests\ChaosDbg.Tests.csproj", "{4B2014D7-04BF-4103-881B-64F0B2347397}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Tests", "src\ChaosDbg.Tests\ChaosDbg.Tests.csproj", "{4B2014D7-04BF-4103-881B-64F0B2347397}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B59D2025-ED8A-49F1-AF72-BEE25FF5864B}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
