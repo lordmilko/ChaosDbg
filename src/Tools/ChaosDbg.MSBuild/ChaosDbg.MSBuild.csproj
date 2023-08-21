@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\ChaosDbg.Engine\Either.cs" Link="Either.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="16.11.0" IncludeAssets="compile" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="16.11.0" IncludeAssets="compile" PrivateAssets="all" />
+    
+    <!-- Need to use System.Collections.Immutable 5 or under, as MSBuild currently uses version 5, and if we use anything newer we'll get version conflicts.
+         Even attempting to load ourselves into a separate AppDomain won't load us, as MSBuild will just refuse to load us -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.2.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

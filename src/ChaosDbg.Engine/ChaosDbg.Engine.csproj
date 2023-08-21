@@ -3,6 +3,11 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <GeneratedViewModelsPath>$(MSBuildProjectDirectory)\ViewModel\ViewModels.g.cs</GeneratedViewModelsPath>
+    
+    <ChaosDbgMSBuildProjectPath>$(MSBuildProjectDirectory)\..\Tools\ChaosDbg.MSBuild</ChaosDbgMSBuildProjectPath>
+    <ChaosDbgMSBuildOutputPath>$(ChaosDbgMSBuildProjectPath)\bin\$(Configuration)\ChaosDbg.MSBuild.dll</ChaosDbgMSBuildOutputPath>
   </PropertyGroup>
 
 	<ItemGroup>
@@ -13,6 +18,24 @@
 		<Reference Include="ClrDebug" Condition="Exists('$(LocalClrDebug)')">
 			<HintPath>$(LocalClrDebug)</HintPath>
 		</Reference>
+    <Compile Remove="$(GeneratedViewModelsPath)" />
+    <Compile Include="$(GeneratedViewModelsPath)" Condition="Exists($(GeneratedViewModelsPath))" Visible="false" />
 	</ItemGroup>
+
+  <!-- The assembly won't actually be loaded until its needed; thus if we need to compile it, MSBuild won't complain that it doesn't exist here -->
+  <UsingTask TaskName="GenerateViewModels" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
+
+  <!-- Compile ChaosDbg.MSBuild (if it doesn't exist) and generate our custom view models -->
+  <Target Name="GenerateViewModels" BeforeTargets="CoreCompile">
+    <Exec Command="dotnet build $(ChaosDbgMSBuildProjectPath) -c $(Configuration)" Condition="!Exists($(ChaosDbgMSBuildOutputPath))" />
+    <ItemGroup>
+      <ViewModelFiles Include="$(MSBuildProjectDirectory)\ViewModel\**\*.cs" />
+    </ItemGroup>
+    <GenerateViewModels Files="@(ViewModelFiles)" Output="$(GeneratedViewModelsPath)" />
+    <ItemGroup Condition="Exists($(GeneratedViewModelsPath))">
+      <Compile Remove="$(GeneratedViewModelsPath)" />
+      <Compile Include="$(GeneratedViewModelsPath)" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>
