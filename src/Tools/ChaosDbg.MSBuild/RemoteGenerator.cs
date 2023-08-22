@@ -76,14 +76,24 @@ namespace ChaosDbg.MSBuild
                 }
             }
 
-            if (errors.Count > 0 || infos.Count == 0)
+            if (errors.Count > 0)
                 return errors.ToArray();
+
+            if (infos.Count == 0)
+            {
+                if (File.Exists(output))
+                    File.Delete(output);
+
+                return Array.Empty<string>();
+            }
 
             var writer = new SyntaxWriter();
 
             var groups = infos.GroupBy(v => v.ClassName).ToArray();
 
             writer
+                .WriteLine("using ChaosDbg.Reactive;")
+                .WriteLine()
                 .WriteLine("namespace ChaosDbg.ViewModel")
                 .WriteLine("{")
                 .Indent();

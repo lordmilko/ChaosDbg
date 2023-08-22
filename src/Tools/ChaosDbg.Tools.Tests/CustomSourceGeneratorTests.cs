@@ -23,6 +23,8 @@ public partial class foo
 }";
 
             var expected = @"
+using ChaosDbg.Reactive;
+
 namespace ChaosDbg.ViewModel
 {
     public partial class foo
@@ -78,7 +80,7 @@ public partial class foo
     {
     }
 }";
-            TestResult(input, string.Empty);
+            TestResult(input, null);
         }
 
         [TestMethod]
@@ -110,6 +112,8 @@ public partial class foo
     }
 }";
             var expected = @"
+using ChaosDbg.Reactive;
+
 namespace ChaosDbg.ViewModel
 {
     public partial class foo
