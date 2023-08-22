@@ -1,0 +1,18 @@
+<Project TreatAsLocalProperty="TaskFolder">
+  <PropertyGroup>
+    <TaskFolder Condition="'$(MSBuildRuntimeType)' == 'Core'">net5.0</TaskFolder>
+    <TaskFolder Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</TaskFolder>
+
+    <ChaosDbgMSBuildProjectPath>$(MSBuildProjectDirectory)\..\Tools\ChaosDbg.MSBuild</ChaosDbgMSBuildProjectPath>
+    <ChaosDbgMSBuildOutputPath>$(ChaosDbgMSBuildProjectPath)\bin\$(Configuration)\$(TaskFolder)\ChaosDbg.MSBuild.dll</ChaosDbgMSBuildOutputPath>
+    <GeneratedViewModelsPath>$(MSBuildProjectDirectory)\ViewModel\ViewModels.g.cs</GeneratedViewModelsPath>    
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="$(GeneratedViewModelsPath)" />
+    <Compile Include="$(GeneratedViewModelsPath)" Condition="Exists($(GeneratedViewModelsPath))" Visible="false" />
+  </ItemGroup>
+
+  <!-- The assembly won't actually be loaded until its needed; thus if we need to compile it, MSBuild won't complain that it doesn't exist here -->
+  <UsingTask TaskName="GenerateViewModels" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
+</Project>

@@ -1,7 +1,8 @@
 ﻿<Project>
   <PropertyGroup>
-    <LocalClrDebug>$(MSBuildProjectDirectory)\..\..\..\ClrDebug\ClrDebug\bin\Debug\netstandard2.0\ClrDebug.dll</LocalClrDebug>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
+    <Build>$(MSBuildThisFileDirectory)..\build\</Build>
 	
     <Copyright>(c) 2023 lordmilko. All rights reserved.</Copyright>
   </PropertyGroup>
@@ -11,6 +12,7 @@
   <PropertyGroup>
 	  <EnvDTEVersion>8.0.3</EnvDTEVersion>
     <ClrDebugVersion>0.3.0</ClrDebugVersion>
+    <DbgEngVersion>20230731.1609.0</DbgEngVersion>
 	  <FlaUIVersion>4.0.0</FlaUIVersion>
 
 		<TestSDKVersion>16.9.4</TestSDKVersion>

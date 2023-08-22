@@ -1,0 +1,14 @@
+<Project>
+  <!-- Compile ChaosDbg.MSBuild (if it doesn't exist) and generate our custom view models -->
+  <Target Name="GenerateViewModels" BeforeTargets="CoreCompile">
+    <Exec Command="dotnet build $(ChaosDbgMSBuildProjectPath) -c $(Configuration)" Condition="!Exists($(ChaosDbgMSBuildOutputPath))" />
+    <ItemGroup>
+      <ViewModelFiles Include="$(MSBuildProjectDirectory)\ViewModel\**\*.cs" />
+    </ItemGroup>
+    <GenerateViewModels Files="@(ViewModelFiles)" Output="$(GeneratedViewModelsPath)" />
+    <ItemGroup Condition="Exists($(GeneratedViewModelsPath))">
+      <Compile Remove="$(GeneratedViewModelsPath)" />
+      <Compile Include="$(GeneratedViewModelsPath)" Visible="false" />
+    </ItemGroup>
+  </Target>
+</Project>

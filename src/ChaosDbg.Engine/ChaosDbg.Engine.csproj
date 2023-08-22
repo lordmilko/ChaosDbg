@@ -1,43 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(Build)ClrDebug.props" />
+  <Import Project="$(Build)ChaosDbg.MSBuild.props" />
+  
   <PropertyGroup>
+    <RootNamespace>ChaosDbg</RootNamespace>
     <TargetFramework>net472</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
-    <GeneratedViewModelsPath>$(MSBuildProjectDirectory)\ViewModel\ViewModels.g.cs</GeneratedViewModelsPath>
-    
-    <ChaosDbgMSBuildProjectPath>$(MSBuildProjectDirectory)\..\Tools\ChaosDbg.MSBuild</ChaosDbgMSBuildProjectPath>
-    <ChaosDbgMSBuildOutputPath>$(ChaosDbgMSBuildProjectPath)\bin\$(Configuration)\ChaosDbg.MSBuild.dll</ChaosDbgMSBuildOutputPath>
-    <RootNamespace>ChaosDbg</RootNamespace>
   </PropertyGroup>
-
+  
 	<ItemGroup>
-		<!-- If ClrDebug has been cloned to the parent directory containing both ClrDebug and DebugTools,
-         prefer the local version for development purposes -->
-		<PackageReference Include="ClrDebug" Version="$(ClrDebugVersion)" Condition="!Exists('$(LocalClrDebug)')" />
 		<PackageReference Include="Iced" Version="1.20.0" />
-
-		<Reference Include="ClrDebug" Condition="Exists('$(LocalClrDebug)')">
-			<HintPath>$(LocalClrDebug)</HintPath>
-		</Reference>
-    <Compile Remove="$(GeneratedViewModelsPath)" />
-    <Compile Include="$(GeneratedViewModelsPath)" Condition="Exists($(GeneratedViewModelsPath))" Visible="false" />
+		<PackageReference Include="Microsoft.Debugging.Platform.DbgEng" Version="$(DbgEngVersion)" />
+		<PackageReference Include="Microsoft.Debugging.Platform.SymSrv" Version="$(DbgEngVersion)" />
 	</ItemGroup>
 
-  <!-- The assembly won't actually be loaded until its needed; thus if we need to compile it, MSBuild won't complain that it doesn't exist here -->
-  <UsingTask TaskName="GenerateViewModels" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
+  <ItemGroup>
+    <!-- Copy DbgEng related assemblies to the output directory. This technique ensures that assemblies are
+         copied to the output directories of any projects that depend on ChaosDbg.Engine as well (which
+         a <Copy /> task wouldn't do) -->
+    <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)x86\dbgeng.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
+    <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)x86\dbghelp.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
+    <None Include="$(MicrosoftDebuggingPlatformSymSrvContent)x86\symsrv.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
 
-  <!-- Compile ChaosDbg.MSBuild (if it doesn't exist) and generate our custom view models -->
-  <Target Name="GenerateViewModels" BeforeTargets="CoreCompile">
-    <Exec Command="dotnet build $(ChaosDbgMSBuildProjectPath) -c $(Configuration)" Condition="!Exists($(ChaosDbgMSBuildOutputPath))" />
-    <ItemGroup>
-      <ViewModelFiles Include="$(MSBuildProjectDirectory)\ViewModel\**\*.cs" />
-    </ItemGroup>
-    <GenerateViewModels Files="@(ViewModelFiles)" Output="$(GeneratedViewModelsPath)" />
-    <ItemGroup Condition="Exists($(GeneratedViewModelsPath))">
-      <Compile Remove="$(GeneratedViewModelsPath)" />
-      <Compile Include="$(GeneratedViewModelsPath)" Visible="false" />
-    </ItemGroup>
-  </Target>
+    <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbgeng.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+    <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbghelp.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+    <None Include="$(MicrosoftDebuggingPlatformSymSrvContent)amd64\symsrv.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+  </ItemGroup>
+  
+  <Import Project="$(Build)ChaosDbg.MSBuild.targets" />
 
 </Project>
