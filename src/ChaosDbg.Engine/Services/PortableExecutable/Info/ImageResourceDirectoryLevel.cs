@@ -31,16 +31,16 @@ namespace ChaosDbg.Metadata
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => string.Join(", ", Entries.Select(e => e.ToString()));
 
-        public static ImageResourceDirectoryLevel New(PEFile file)
+        public static ImageResourceDirectoryLevel New(PEFile file, PEBinaryReader reader)
         {
             int offset;
 
             if (!file.TryGetDirectoryOffset(file.OptionalHeader.ResourceTableDirectory, out offset, false))
                 return null;
 
-            file.Reader.Seek(offset);
+            reader.Seek(offset);
 
-            return new ImageResourceDirectoryLevel(file.Reader, offset);
+            return new ImageResourceDirectoryLevel(reader, offset);
         }
 
         public IImageResourceDirectory Directory { get; }

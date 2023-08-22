@@ -49,7 +49,7 @@ namespace ChaosDbg.Metadata
         #endregion
 
         /// <summary>
-        /// Tries to get the offset within the image of the full directory pointed to by an <see cref="ImageDataDirectory"/>.
+        /// Tries to get the physical offset within the image of the full directory pointed to by an <see cref="ImageDataDirectory"/>.
         /// </summary>
         /// <param name="entry">The <see cref="ImageDataDirectory"/> that may point to a full directory within the image.</param>
         /// <param name="offset">Offset from the start of the image to the given directory data.</param>
@@ -57,6 +57,12 @@ namespace ChaosDbg.Metadata
         /// <returns>True if the <see cref="ImageDataDirectory"/> points to a valid section, otherwise false.</returns>
         bool TryGetDirectoryOffset(IImageDataDirectory entry, out int offset, bool canCrossSectionBoundary);
 
+        /// <summary>
+        /// Tries to get the physical offset within the image of a specified relative virtual address.
+        /// </summary>
+        /// <param name="rva">The relative virtual address within the image to translate.</param>
+        /// <param name="offset">The translated physical address.</param>
+        /// <returns>True if the RVA was translated to a physical offset, otherwise false.</returns>
         bool TryGetOffset(int rva, out int offset);
 
         /// <summary>
@@ -103,11 +109,6 @@ namespace ChaosDbg.Metadata
 
         #endregion
 
-        /// <summary>
-        /// Gets a reader capable of seeking to and reading from arbitrary locations within the image.
-        /// </summary>
-        public PEBinaryReader Reader { get; }
-
         public PEFile(Stream stream, bool isLoadedImage)
         {
             if (stream == null)
@@ -118,30 +119,30 @@ namespace ChaosDbg.Metadata
 
             IsLoadedImage = isLoadedImage;
 
-            Reader = new PEBinaryReader(stream);
+            var reader = new PEBinaryReader(stream);
 
             //The PE file format extends the COFF format; if the file doesn't start with MZ,
             //it may be an old school COFF file (i.e. *.obj)
-            var isCoffOnly = SkipDosHeader();
+            var isCoffOnly = SkipDosHeader(reader);
 
-            FileHeader = new ImageFileHeader(Reader);
+            FileHeader = new ImageFileHeader(reader);
 
             if (!isCoffOnly)
-                OptionalHeader = new ImageOptionalHeader(Reader);
+                OptionalHeader = new ImageOptionalHeader(reader);
 
-            SectionHeaders = ReadSectionHeaders();
+            SectionHeaders = ReadSectionHeaders(reader);
 
             //Try read various directories. Some entries are optional, while others are mandatory
 
             if (!isCoffOnly)
-                Cor20Header = ReadCor20Header();
+                Cor20Header = ReadCor20Header(reader);
 
-            ExportDirectory = ReadExportDirectory();
-            DebugDirectoryInfo = new ImageDebugDirectoryInfo(this);
-            ResourceDirectoryInfo = new ImageResourceDirectoryInfo(this);
+            ExportDirectory = ReadExportDirectory(reader);
+            DebugDirectoryInfo = new ImageDebugDirectoryInfo(this, reader);
+            ResourceDirectoryInfo = new ImageResourceDirectoryInfo(this, reader);
         }
 
-        private IImageSectionHeader[] ReadSectionHeaders()
+        private IImageSectionHeader[] ReadSectionHeaders(PEBinaryReader reader)
         {
             if (FileHeader.NumberOfSections < 0)
                 throw new BadImageFormatException("Invalid number of sections declared in PE header.");
@@ -149,57 +150,57 @@ namespace ChaosDbg.Metadata
             var list = new List<IImageSectionHeader>();
 
             for (var i = 0; i < FileHeader.NumberOfSections; i++)
-                list.Add(new ImageSectionHeader(Reader));
+                list.Add(new ImageSectionHeader(reader));
 
             return list.ToArray();
         }
 
-        private ImageCor20Header ReadCor20Header()
+        private ImageCor20Header ReadCor20Header(PEBinaryReader reader)
         {
             int offset;
             if (TryCalculateCor20HeaderOffset(out offset))
             {
-                Reader.Seek(offset);
-                return new ImageCor20Header(Reader);
+                reader.Seek(offset);
+                return new ImageCor20Header(reader);
             }
 
             return null;
         }
 
-        private ImageExportDirectory ReadExportDirectory()
+        private ImageExportDirectory ReadExportDirectory(PEBinaryReader reader)
         {
             int offset;
 
             if (!TryGetDirectoryOffset(OptionalHeader.ExportTableDirectory, out offset, true))
                 return null;
 
-            Reader.Seek(offset);
-            return new ImageExportDirectory(Reader);
+            reader.Seek(offset);
+            return new ImageExportDirectory(reader);
         }
 
         #region Helpers
 
-        private bool SkipDosHeader()
+        private bool SkipDosHeader(PEBinaryReader reader)
         {
-            var dosSig = Reader.ReadUInt16();
+            var dosSig = reader.ReadUInt16();
 
             if (dosSig != DosSignature)
             {
-                if (dosSig != 0 || Reader.ReadUInt16() != 0xffff)
+                if (dosSig != 0 || reader.ReadUInt16() != 0xffff)
                 {
-                    Reader.Seek(0);
+                    reader.Seek(0);
                     return true;
                 }
 
                 throw new BadImageFormatException("Unknown file format.");
             }
 
-            Reader.Seek(PESignatureOffsetLocation);
+            reader.Seek(PESignatureOffsetLocation);
 
-            int ntHeaderOffset = Reader.ReadInt32();
-            Reader.Seek(ntHeaderOffset);
+            int ntHeaderOffset = reader.ReadInt32();
+            reader.Seek(ntHeaderOffset);
 
-            var ntSignature = Reader.ReadUInt32();
+            var ntSignature = reader.ReadUInt32();
 
             if (ntSignature != PESignature)
                 throw new BadImageFormatException("Invalid PE signature.");

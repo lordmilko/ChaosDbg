@@ -23,14 +23,14 @@ namespace ChaosDbg.Metadata
 
         public IVS_VERSIONINFO Version { get; }
 
-        internal ImageResourceDirectoryInfo(PEFile file)
+        internal ImageResourceDirectoryInfo(PEFile file, PEBinaryReader reader)
         {
-            Root = ImageResourceDirectoryLevel.New(file);
+            Root = ImageResourceDirectoryLevel.New(file, reader);
 
-            Version = ReadVersionInfo(file);
+            Version = ReadVersionInfo(file, reader);
         }
 
-        private VS_VERSIONINFO ReadVersionInfo(PEFile file)
+        private VS_VERSIONINFO ReadVersionInfo(PEFile file, PEBinaryReader reader)
         {
             const int VS_FILE_INFO = 16;
             const int VS_VERSION_INFO = 1;
@@ -45,9 +45,9 @@ namespace ChaosDbg.Metadata
             if (!file.TryGetOffset(entry.Data.OffsetToData, out offset))
                 return null;
 
-            file.Reader.Seek(offset);
+            reader.Seek(offset);
 
-            var version = new VS_VERSIONINFO(file.Reader);
+            var version = new VS_VERSIONINFO(reader);
 
             if (version.Value.Signature != VS_FIXEDFILEINFO.FixedFileInfoSignature)
                 return null;

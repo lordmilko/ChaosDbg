@@ -27,25 +27,25 @@ namespace ChaosDbg.Metadata
 
         public IImageDebugDirectory[] Entries { get; }
 
-        internal ImageDebugDirectoryInfo(PEFile file)
+        internal ImageDebugDirectoryInfo(PEFile file, PEBinaryReader reader)
         {
             this.file = file;
 
-            Entries = ReadDebugDirectories();
+            Entries = ReadDebugDirectories(reader);
             CodeViews = Entries
                 .Where(v => v.Type == ImageDebugType.CodeView)
                 .Select(v =>
                 {
                     var offset = file.GetOffset(v);
 
-                    file.Reader.Seek(offset);
+                    reader.Seek(offset);
 
-                    return (ICodeViewInfo) new CodeViewInfo(file.Reader);
+                    return (ICodeViewInfo) new CodeViewInfo(reader);
                 })
                 .ToArray();
         }
 
-        private IImageDebugDirectory[] ReadDebugDirectories()
+        private IImageDebugDirectory[] ReadDebugDirectories(PEBinaryReader reader)
         {
             var entryCount = file.OptionalHeader.DebugTableDirectory.Size / ImageDebugDirectory.Size;
 
@@ -56,12 +56,12 @@ namespace ChaosDbg.Metadata
                 if (!file.TryGetDirectoryOffset(file.OptionalHeader.DebugTableDirectory, out offset, true))
                     return Array.Empty<IImageDebugDirectory>();
 
-                file.Reader.Seek(offset);
+                reader.Seek(offset);
 
                 var list = new List<IImageDebugDirectory>();
 
                 for (var i = 0; i < entryCount; i++)
-                    list.Add(new ImageDebugDirectory(file.Reader));
+                    list.Add(new ImageDebugDirectory(reader));
 
                 return list.ToArray();
             }
