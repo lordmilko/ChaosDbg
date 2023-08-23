@@ -105,14 +105,6 @@ namespace ChaosDbg.Disasm
         }
 
         /// <inheritdoc />
-        public INativeInstruction[] Disassemble(int count) =>
-            EnumerateInstructions().Take(count).ToArray();
-
-        /// <inheritdoc />
-        public INativeInstruction[] Disassemble(long address, int count) =>
-            EnumerateInstructions(address).Take(count).ToArray();
-
-        /// <inheritdoc />
         public IEnumerable<INativeInstruction> EnumerateInstructions()
         {
             Decoder.IP = (ulong) Stream.Position;
@@ -150,60 +142,9 @@ namespace ChaosDbg.Disasm
             return EnumerateInstructions();
         }
 
-        #region Format
-
         //Formatting relies on the symbol resolver, thus it must be part of the disassembler and cannot simply
         //be a static/standalone type
-
-        //A cached StringOutput (containing a StringBuilder) to use for formatting.
-        //We don't currently bother trying to pool these types, the side effect of which
-        //is that formatting using NativeDisassembler is NOT thread safe
-        readonly StringOutput formatWriter = new StringOutput();
-
-        /// <summary>
-        /// Formats a given instruction as a string.<para/>
-        /// This method is NOT thread safe.
-        /// </summary>
-        /// <param name="instruction">The instruction to format.</param>
-        /// <returns>The formatted instruction.</returns>
-        public string Format(INativeInstruction instruction)
-        {
-            if (instruction == null)
-                throw new ArgumentNullException(nameof(instruction));
-
-            //Format the instruction in the same style as DbgEng. 
-
-            formatWriter.Reset();
-
-            var fmt = Formatter.Formatter;
-
-            //Format the instruction pointer as a 32-bit or 64-bit number depending on our target bitness
-            formatWriter.Write(
-                Bitness == 32 ?
-                    fmt.FormatInt32((int)instruction.IP, Formatter.ImmediateOptions) :
-                    fmt.FormatInt64(instruction.IP, Formatter.ImmediateOptions)
-            );
-
-            formatWriter.Write(" ");
-
-            //Convert each byte into a two digit lowercase hexadecimal value.
-            foreach (var @byte in instruction.Bytes)
-                formatWriter.Write(@byte.ToString("X2").ToLower());
-
-            //Add some padding so that the instruction details are nicely aligned after the bytes
-            var padding = 16 - (instruction.Bytes.Length * 2);
-
-            for (var i = 0; i < padding; i++)
-                formatWriter.Write(" ");
-
-            //Now that we've processed the bytes, display the actual instruction
-            fmt.Format(instruction.Instruction, formatWriter);
-            var str = formatWriter.ToStringAndReset();
-
-            return str;
-        }
-
-        #endregion
+        public string Format(INativeInstruction instruction) => Formatter.Format(instruction);
 
         public void Dispose()
         {

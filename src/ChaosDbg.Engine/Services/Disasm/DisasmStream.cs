@@ -7,7 +7,7 @@ namespace ChaosDbg.Disasm
     /// <summary>
     /// Represents a stream that is used to read disassembly information from a target.
     /// </summary>
-    public abstract class DisasmStream : Stream
+    public sealed class DisasmStream : RelayStream
     {
         //We want to be able to display the bytes that corresponded to each CPU instruction. Iced doesn't store this
         //information, its assumed the caller already has it. All our information comes from a stream.
@@ -15,10 +15,14 @@ namespace ChaosDbg.Disasm
         //all Read() calls that were required in order to read the instruction.
         private List<byte> readBytes = new List<byte>();
 
+        public DisasmStream(Stream stream) : base(stream)
+        {
+        }
+
         public sealed override int Read(byte[] buffer, int offset, int count)
         {
             //Read some of the bytes required for the instruction
-            var result = ReadDisasm(buffer, offset, count);
+            var result = Stream.Read(buffer, offset, count);
 
             //If any bytes were read, cache them for when we need them
             if (result > 0)
@@ -29,8 +33,6 @@ namespace ChaosDbg.Disasm
 
             return result;
         }
-
-        protected abstract int ReadDisasm(byte[] buffer, int offset, int count);
 
         public void ClearReadBytes() => readBytes.Clear();
 

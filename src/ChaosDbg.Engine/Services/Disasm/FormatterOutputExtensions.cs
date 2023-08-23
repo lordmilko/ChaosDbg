@@ -2,11 +2,11 @@
 
 namespace ChaosDbg
 {
-    static class StringOutputExtensions
+    static class FormatterOutputExtensions
     {
         //For all tokens we append ourselves,
         //we use FormatterTextKind.Text.The FormatterTextKind is ignored by StringOutput
-        public static void Write(this StringOutput output, string text) =>
+        public static void Write(this FormatterOutput output, string text) =>
             output.Write(text, FormatterTextKind.Text);
     }
 }

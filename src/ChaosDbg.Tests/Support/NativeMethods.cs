@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 
-namespace ChaosDbg
+namespace ChaosDbg.Tests
 {
     public static class NativeMethods
     {

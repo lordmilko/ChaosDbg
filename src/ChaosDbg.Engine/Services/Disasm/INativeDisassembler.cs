@@ -9,23 +9,6 @@ namespace ChaosDbg.Disasm
     public interface INativeDisassembler : IDisposable
     {
         /// <summary>
-        /// Disassembles a specified number of instructions from the current instruction pointer.
-        /// </summary>
-        /// <param name="count">The maximum number of instructions to disassemble. Fewer than this number may be returned if the disassembler
-        /// reads into memory that no longer contains valid instructions.</param>
-        /// <returns>An array of disassembled instructions.</returns>
-        INativeInstruction[] Disassemble(int count);
-
-        /// <summary>
-        /// Disassembles a specified number of instructions at a given address.
-        /// </summary>
-        /// <param name="address">The address to start disassembling from.</param>
-        /// <param name="count">The maximum number of instructions to disassemble. Fewer than this number may be returned if the disassembler
-        /// reads into memory that no longer contains valid instructions.</param>
-        /// <returns>An array of disassembled instructions.</returns>
-        INativeInstruction[] Disassemble(long address, int count);
-
-        /// <summary>
         /// Creates an enumeration that disassembles instructions starting from the current position until
         /// an invalid instruction is encountered.
         /// </summary>

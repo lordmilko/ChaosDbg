@@ -18,7 +18,7 @@ namespace ChaosDbg.Disasm
             this.symbolResolver = symbolResolver;
         }
 
-        protected override DisasmStream CreateStream() => new RelayDisasmStream(stream);
+        protected override DisasmStream CreateStream() => new DisasmStream(stream);
 
         protected override ISymbolResolver CreateSymbolResolver() => symbolResolver;
     }

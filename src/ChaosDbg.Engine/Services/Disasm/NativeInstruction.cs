@@ -36,7 +36,7 @@ namespace ChaosDbg.Disasm
 
         public override string ToString()
         {
-            return Instruction.ToString();
+            return DbgEngFormatter.Default.Format(this);
         }
     }
 }
