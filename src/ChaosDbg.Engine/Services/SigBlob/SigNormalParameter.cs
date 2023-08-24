@@ -2,13 +2,18 @@
 
 namespace ChaosDbg.Metadata
 {
-    public class SigParameter : ISigParameter
+    public interface ISigNormalParameter : ISigParameter
+    {
+        GetParamPropsResult? Info { get; }
+    }
+
+    public class SigNormalParameter : ISigNormalParameter
     {
         public ISigType Type { get; }
 
         public GetParamPropsResult? Info { get; }
 
-        internal SigParameter(SigType type, GetParamPropsResult? info)
+        internal SigNormalParameter(SigType type, GetParamPropsResult? info)
         {
             Type = type;
             Info = info;

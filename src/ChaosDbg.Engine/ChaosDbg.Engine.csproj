@@ -13,6 +13,11 @@
 		<PackageReference Include="Iced" Version="1.20.0" />
 		<PackageReference Include="Microsoft.Debugging.Platform.DbgEng" Version="$(DbgEngVersion)" />
 		<PackageReference Include="Microsoft.Debugging.Platform.SymSrv" Version="$(DbgEngVersion)" />
+    
+    <!-- We could include types in the WDK too but I don't think we need that for the moment.
+         For now, we won't bother with docs -->
+		<!--<PackageReference Include="Microsoft.Windows.SDK.Win32Docs" Version="0.1.42-alpha" />-->
+		<PackageReference Include="Microsoft.Windows.SDK.Win32Metadata" Version="54.0.44-preview" />
 	</ItemGroup>
 
   <ItemGroup>
@@ -26,6 +31,10 @@
     <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbgeng.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
     <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbghelp.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
     <None Include="$(MicrosoftDebuggingPlatformSymSrvContent)amd64\symsrv.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+
+    <!-- Copy the winmd metadata file -->
+    <None Include="@(ProjectionMetadataWinmd->'%(FullPath)')" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="winmd\%(FileName)%(Extension)" />
+    <!--<None Include="@(ProjectionDocs->'%(FullPath)')" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="winmd\%(FileName)%(Extension)" />-->
   </ItemGroup>
   
   <Import Project="$(Build)ChaosDbg.MSBuild.targets" />

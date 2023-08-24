@@ -20,7 +20,7 @@ namespace ChaosDbg
         private string root;
         private bool disposed;
 
-        private ConcurrentDictionary<string, IntPtr> loaded = new ConcurrentDictionary<string, IntPtr>();
+        private ConcurrentDictionary<string, Lazy<IntPtr>> loaded = new ConcurrentDictionary<string, Lazy<IntPtr>>();
 
         public NativeLibraryProvider()
         {
@@ -34,12 +34,13 @@ namespace ChaosDbg
 
         public IntPtr GetModuleHandle(string name)
         {
-            return loaded.GetOrAdd(name, v =>
+            //GetOrAdd is not thread safe unless using Lazy<T>
+            return loaded.GetOrAddSafe(name, () =>
             {
                 var path = Path.Combine(root, name);
 
                 if (!File.Exists(path))
-                    throw new NotImplementedException();
+                    throw new FileNotFoundException($"Failed to find module file '{path}'", path);
 
                 var hModule = NativeMethods.LoadLibrary(path);
 
@@ -80,7 +81,7 @@ namespace ChaosDbg
                 return;
 
             foreach (var item in loaded)
-                NativeMethods.FreeLibrary(item.Value);
+                NativeMethods.FreeLibrary(item.Value.Value);
 
             loaded.Clear();
 

@@ -7,6 +7,8 @@ namespace ChaosDbg.Metadata
         ISigMethod ReadMethod(mdMethodDef token, MetaDataImport import);
 
         ISigField ReadFieldType(mdFieldDef token, MetaDataImport import);
+
+        ISigCustomAttribute ReadCustomAttribute(mdCustomAttribute token, MetaDataImport import, ITypeRefResolver typeRefResolver);
     }
 
     public class SigReader : ISigReader
@@ -17,7 +19,7 @@ namespace ChaosDbg.Metadata
 
             var reader = new SigReaderInternal(info.ppvSigBlob, info.pcbSigBlob, token, import);
 
-            return reader.ParseMethod(info.szMethod, false);
+            return reader.ParseMethod(info.szMethod, true);
         }
 
         public ISigField ReadFieldType(mdFieldDef token, MetaDataImport import)
@@ -27,6 +29,15 @@ namespace ChaosDbg.Metadata
             var reader = new SigReaderInternal(info.ppvSigBlob, info.pcbSigBlob, token, import);
 
             return reader.ParseField(info.szField);
+        }
+
+        public ISigCustomAttribute ReadCustomAttribute(mdCustomAttribute token, MetaDataImport import, ITypeRefResolver typeRefResolver)
+        {
+            var info = import.GetCustomAttributeProps(token);
+
+            var reader = new SigReaderInternal(info.ppBlob, info.pcbSize, token, import);
+
+            return reader.ParseCustomAttribute(info.ptkType, typeRefResolver);
         }
     }
 }
