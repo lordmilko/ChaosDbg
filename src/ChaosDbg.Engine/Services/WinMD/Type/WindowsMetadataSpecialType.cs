@@ -8,5 +8,10 @@
         {
             Kind = kind;
         }
+
+        public override string ToString()
+        {
+            return Kind.ToString();
+        }
     }
 }

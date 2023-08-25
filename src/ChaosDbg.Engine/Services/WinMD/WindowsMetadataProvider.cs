@@ -1,11 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ChaosDbg.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD
 {
+    class WindowsMetadataProviderBuilderContext
+    {
+        public Dictionary<IMetaDataImport, Dictionary<mdTypeDef, IWindowsMetadataType>> TypeCache = new Dictionary<IMetaDataImport, Dictionary<mdTypeDef, IWindowsMetadataType>>();
+
+        //Currently we only support a single *.winmd file. If we support more in the future, we need to have a separate typeRefCache per file
+        //private Dictionary<mdTypeRef, IWindowsMetadataType> typeRefCache = new Dictionary<mdTypeRef, IWindowsMetadataType>();
+        public List<Tuple<MetaDataImport, mdTypeDef>> TypesToDelete = new List<Tuple<MetaDataImport, mdTypeDef>>();
+    }
+
     /// <summary>
     /// Provides access to metadata regarding the Windows SDK stored in *.winmd files.
     /// </summary>
@@ -13,14 +23,13 @@ namespace ChaosDbg.WinMD
     {
         private string root;
 
-        private Dictionary<IMetaDataImport, Dictionary<mdTypeDef, IWindowsMetadataType>> typeCache = new Dictionary<IMetaDataImport, Dictionary<mdTypeDef, IWindowsMetadataType>>();
+        private IWindowsMetadataType[] allTypes;
         private Dictionary<CorElementType, IWindowsMetadataType> primitiveTypeCache = new Dictionary<CorElementType, IWindowsMetadataType>();
 
-        //Currently we only support a single *.winmd file. If we support more in the future, we need to have a separate typeRefCache per file
-        //private Dictionary<mdTypeRef, IWindowsMetadataType> typeRefCache = new Dictionary<mdTypeRef, IWindowsMetadataType>();
-        private List<Tuple<MetaDataImport, mdTypeDef>> typesToDelete = new List<Tuple<MetaDataImport, mdTypeDef>>();
-
         private List<WindowsMetadataType> apiTypes = new List<WindowsMetadataType>();
+
+        private Dictionary<string, WindowsMetadataMethod[]> functions;
+        private Dictionary<string, WindowsMetadataType[]> interfaces;
 
         private ISigReader sigReader;
 
@@ -37,6 +46,33 @@ namespace ChaosDbg.WinMD
             );
 
             this.sigReader = sigReader;
+        }
+
+        #region IWindowsMetadataProvider
+
+        public bool TryGetFunction(string name, out WindowsMetadataMethod method)
+        {
+            EnsureInitialized();
+
+            if (functions.TryGetValue(name, out var candidates))
+            {
+                if (candidates.Length > 1)
+                    throw new NotSupportedException("Resolving a function with multiple possible candidates is not currently supported");
+
+                method = candidates[0];
+                return true;
+            }
+
+            method = null;
+            return false;
+        }
+
+        #endregion
+
+        private void EnsureInitialized()
+        {
+            if (allTypes == null)
+                Initialize();
         }
 
         private void Initialize()
@@ -58,23 +94,29 @@ namespace ChaosDbg.WinMD
 
             var types = mdi.EnumTypeDefs();
 
+            var builderCtx = new WindowsMetadataProviderBuilderContext();
+
             foreach (var type in types)
-            {
-                ProcessTypeDef(type, mdi);
-            }
+                ProcessTypeDef(type, mdi, builderCtx);
 
-            foreach (var item in typesToDelete)
-                typeCache[item.Item1.Raw].Remove(item.Item2);
+            foreach (var item in builderCtx.TypesToDelete)
+                builderCtx.TypeCache[item.Item1.Raw].Remove(item.Item2);
 
-            typesToDelete = null;
+            allTypes = builderCtx.TypeCache.SelectMany(kv => kv.Value.Select(v => v.Value)).ToArray();
+
+            var fullTypes = allTypes.OfType<WindowsMetadataType>().ToArray();
+            var ifaces = fullTypes.Where(f => (f.Flags & CorTypeAttr.tdInterface) != 0).ToArray();
+
+            functions = apiTypes.SelectMany(a => a.Methods).GroupBy(a => a.Name).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+            interfaces = ifaces.GroupBy(i => i.Name).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
         }
 
-        private IWindowsMetadataType ProcessTypeDef(mdTypeDef typeDef, MetaDataImport mdi)
+        private IWindowsMetadataType ProcessTypeDef(mdTypeDef typeDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             if (typeDef.Rid == 0)
                 return null;
 
-            var mdiCache = GetMDICache(mdi);
+            var mdiCache = GetMDICache(mdi, builderCtx);
 
             if (mdiCache.TryGetValue(typeDef, out var type))
                 return type;
@@ -89,11 +131,15 @@ namespace ChaosDbg.WinMD
                     return type;
 
                 case "System.Enum":
+                    mdiCache[typeDef] = WindowsMetadataTypeInternal.EnumType;
+                    return WindowsMetadataTypeInternal.EnumType;
+
                 case "System.MulticastDelegate":
-                    mdiCache[typeDef] = null;
-                    return null;
+                    mdiCache[typeDef] = WindowsMetadataTypeInternal.MulticastDelegateType;
+                    return WindowsMetadataTypeInternal.MulticastDelegateType;
 
                 case "System.Attribute":
+                    mdiCache[typeDef] = WindowsMetadataTypeInternal.DeleteInheritedType;
                     return WindowsMetadataTypeInternal.DeleteInheritedType;
 
                 case "System.Guid":
@@ -112,37 +158,95 @@ namespace ChaosDbg.WinMD
 
             var fullType = new WindowsMetadataType(
                 typeDef,
-                props,
-                fieldDefs.Length,
-                methodDefs.Length
+                props
             );
 
-            mdiCache[typeDef] = fullType;
+            if (mdi.TryGetNestedClassProps(typeDef, out var enclosingClass) == HRESULT.S_OK)
+            {
+                var parentType = ProcessTypeDef(enclosingClass, mdi, builderCtx);
 
-            fullType.BaseType = ProcessType(props.ptkExtends, mdi);
+                fullType.ParentType = parentType;
+            }
+
+            mdiCache[typeDef] = fullType;
+            fullType.BaseType = ProcessType(props.ptkExtends, mdi, builderCtx);
+
+            var isEnum = fullType.BaseType == WindowsMetadataTypeInternal.EnumType;
 
             if (fullType.BaseType != WindowsMetadataTypeInternal.DeleteInheritedType)
                 fullType.CustomAttributes = ReadCustomAttribs(typeDef, mdi);
 
-            for (var i = 0; i < fieldDefs.Length; i++)
+            var lazyFields = new Lazy<WindowsMetadataField[]>(() =>
             {
-                var field = ProcessField(fieldDefs[i], mdi);
+                var fields = new WindowsMetadataField[fieldDefs.Length];
 
-                fullType.Fields[i] = field;
+                for (var i = 0; i < fieldDefs.Length; i++)
+                {
+                    var field = ProcessField(fieldDefs[i], mdi, builderCtx);
+
+                    fields[i] = field;
+                }
+
+                return fields;
+            });
+
+            fullType.SetFields(lazyFields);
+
+            if (fullType.BaseType == WindowsMetadataTypeInternal.MulticastDelegateType)
+            {
+                var delegateType = new WindowsMetadataDelegateType(typeDef, props);
+
+                //Replace the existing WindowsMetadataType. Since our base class was System.MulticastDelegate, there shouldn't
+                //be any references to the previously cached type anywhere
+                mdiCache[typeDef] = delegateType;
             }
-
-            for (var i = 0; i < methodDefs.Length; i++)
+            else if (isEnum)
             {
-                var method = ProcessMethod(methodDefs[i], mdi);
+                var enumType = new WindowsMetadataEnumType(typeDef, props);
+                enumType.SetFields(new Lazy<WindowsMetadataField[]>(() =>
+                {
+                    var list = new List<WindowsMetadataField>();
 
-                fullType.Methods[i] = method;
+                    foreach (var fieldDef in fieldDefs)
+                    {
+                        var field = ProcessField(fieldDef, mdi, builderCtx);
+
+                        //Skip value__
+                        if ((field.Flags & CorFieldAttr.fdLiteral) == 0 && (field.Flags & CorFieldAttr.fdStatic) == 0)
+                            continue;
+
+                        list.Add(field);
+                    }
+
+                    return list.ToArray();
+                }));
+
+                //Replace the existing WindowsMetadataType. Since our base class was System.Enum, there shouldn't
+                //be any references to the previously cached type anywhere
+                mdiCache[typeDef] = enumType;
+            }
+            else
+            {
+                fullType.SetMethods(new Lazy<WindowsMetadataMethod[]>(() =>
+                {
+                    var methods = new WindowsMetadataMethod[methodDefs.Length];
+
+                    for (var i = 0; i < methodDefs.Length; i++)
+                    {
+                        var method = ProcessMethod(methodDefs[i], mdi, builderCtx);
+
+                        methods[i] = method;
+                    }
+
+                    return methods;
+                }));
             }
 
             if (fullType.Name == "Apis")
                 apiTypes.Add(fullType);
 
             if (ShouldDeleteType(fullType))
-                typesToDelete.Add(Tuple.Create(mdi, typeDef));
+                builderCtx.TypesToDelete.Add(Tuple.Create(mdi, typeDef));
 
             return fullType;
         }
@@ -162,7 +266,7 @@ namespace ChaosDbg.WinMD
             return list.ToArray();
         }
 
-        private IWindowsMetadataType ProcessTypeRef(mdTypeRef typeRef, MetaDataImport mdi)
+        private IWindowsMetadataType ProcessTypeRef(mdTypeRef typeRef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             if (typeRef.Rid == 0)
                 return null;
@@ -175,7 +279,14 @@ namespace ChaosDbg.WinMD
             if (resolvedRef == null)
                 return null;
 
-            return ProcessTypeDef(resolvedRef.TypeDef, resolvedRef.TypeDefModule.Import);
+            if (resolvedRef is ResolvedTypeRef r)
+                return ProcessTypeDef(r.TypeDef, resolvedRef.TypeDefModule.Import, builderCtx);
+
+            var ambiguous = (AmbiguousResolvedTypeRef) resolvedRef;
+
+            var results = ambiguous.TypeDefs.Select(v => ProcessTypeDef(v, resolvedRef.TypeDefModule.Import, builderCtx)).ToArray();
+
+            return new WindowsMetadataAmbiguousType(results);
         }
 
         private bool ShouldDeleteType(IWindowsMetadataType type)
@@ -199,27 +310,41 @@ namespace ChaosDbg.WinMD
             return false;
         }
 
-        private IWindowsMetadataType ProcessType(mdToken token, MetaDataImport mdi)
+        private IWindowsMetadataType ProcessType(mdToken token, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             switch (token.Type)
             {
                 case CorTokenType.mdtTypeDef:
-                    return ProcessTypeDef((mdTypeDef) token, mdi);
+                    return ProcessTypeDef((mdTypeDef) token, mdi, builderCtx);
 
                 case CorTokenType.mdtTypeRef:
-                    return ProcessTypeRef((mdTypeRef) token, mdi);
+                    return ProcessTypeRef((mdTypeRef) token, mdi, builderCtx);
 
                 default:
                     throw new NotImplementedException($"Don't know how to handle token of type {token.Type}");
             }
         }
 
-        private WindowsMetadataField ProcessField(mdFieldDef fieldDef, MetaDataImport mdi)
+        private WindowsMetadataField ProcessField(mdFieldDef fieldDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             var props = mdi.GetFieldProps(fieldDef);
 
-            var type = ProcessTypeDef(props.pClass, mdi);
+            var sig = sigReader.ReadField(fieldDef, mdi, props);
+
+            var type = ConvertSigTypeToWinMDType(sig.Type, mdi, builderCtx);
             var customAttribs = ReadCustomAttribs(fieldDef, mdi);
+
+            if (type is WindowsMetadataAmbiguousType a)
+            {
+                foreach (var item in a.Candidates)
+                {
+                    if (item is WindowsMetadataType t && t.ParentType is WindowsMetadataType p && p.TypeDef == props.pClass)
+                    {
+                        type = item;
+                        break;
+                    }
+                }
+            }
 
             return new WindowsMetadataField(
                 fieldDef,
@@ -229,12 +354,12 @@ namespace ChaosDbg.WinMD
             );
         }
 
-        private WindowsMetadataMethod ProcessMethod(mdMethodDef methodDef, MetaDataImport mdi)
+        private WindowsMetadataMethod ProcessMethod(mdMethodDef methodDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             var props = mdi.GetMethodProps(methodDef);
             var sig = sigReader.ReadMethod(methodDef, mdi);
 
-            var returnType = ConvertSigTypeToWinMDType(sig.RetType, mdi);
+            var returnType = ConvertSigTypeToWinMDType(sig.RetType, mdi, builderCtx);
 
             //You can't get the parameter type from MDI, so we have to use the sigblob
 
@@ -247,7 +372,7 @@ namespace ChaosDbg.WinMD
                 parameters = new IWindowsMetadataParameter[sig.Parameters.Length];
 
                 for (var i = 0; i < sig.Parameters.Length; i++)
-                    parameters[i] = ProcessParameter(sig.Parameters[i], mdi);
+                    parameters[i] = ProcessParameter(sig.Parameters[i], mdi, builderCtx);
             }
 
             var customAttribs = ReadCustomAttribs(methodDef, mdi);
@@ -257,12 +382,12 @@ namespace ChaosDbg.WinMD
             return method;
         }
 
-        private IWindowsMetadataParameter ProcessParameter(ISigParameter parameter, MetaDataImport mdi)
+        private IWindowsMetadataParameter ProcessParameter(ISigParameter parameter, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             if (parameter is ISigArgListParameter)
                 return new WindowsMetadataArgListParameter();
 
-            var type = ConvertSigTypeToWinMDType(parameter.Type, mdi);
+            var type = ConvertSigTypeToWinMDType(parameter.Type, mdi, builderCtx);
 
             if (parameter is ISigNormalParameter sigNormal)
                 return new WindowsMetadataNormalParameter(sigNormal.Info, type);
@@ -272,7 +397,7 @@ namespace ChaosDbg.WinMD
                 throw new NotImplementedException($"Don't know how to handle parameter of type {parameter.GetType().Name}");
         }
 
-        private IWindowsMetadataType ConvertSigTypeToWinMDType(ISigType sigType, MetaDataImport mdi)
+        private IWindowsMetadataType ConvertSigTypeToWinMDType(ISigType sigType, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             switch (sigType.Type)
             {
@@ -299,16 +424,16 @@ namespace ChaosDbg.WinMD
 
                 case CorElementType.Array:
                     //SigArrayType
-                    throw new NotImplementedException($"Don't know how to handle type '{sigType.Type}'");
+                    return GetArrayMetadataType((ISigArrayType) sigType, mdi, builderCtx);
 
                 #endregion
                 #region CLASS TypeDefOrRefOrSpecEncoded | VALUETYPE TypeDefOrRefOrSpecEncoded
 
                 case CorElementType.Class:
-                    return ProcessType(((ISigClassType) sigType).Token, mdi);
+                    return ProcessType(((ISigClassType) sigType).Token, mdi, builderCtx);
 
                 case CorElementType.ValueType:
-                    return ProcessType(((ISigValueType) sigType).Token, mdi);
+                    return ProcessType(((ISigValueType) sigType).Token, mdi, builderCtx);
 
                 #endregion
                 #region FNPTR MethodDefSig | FNPTR MethodRefSig
@@ -346,18 +471,18 @@ namespace ChaosDbg.WinMD
                 #region PTR CustomMod* Type | PTR CustomMod* VOID
 
                 case CorElementType.Ptr:
-                    return new WindowsMetadataPointerType(ConvertSigTypeToWinMDType(((ISigPtrType) sigType).PtrType, mdi));
+                    return new WindowsMetadataPointerType(ConvertSigTypeToWinMDType(((ISigPtrType) sigType).PtrType, mdi, builderCtx));
 
                 #endregion
                 #region SZARRAY CustomMod* Type (single dimensional, zero-based array i.e., vector)
 
                 case CorElementType.SZArray:
-                    return GetSZArrayMetadataType((ISigSZArrayType) sigType, mdi);
+                    return GetSZArrayMetadataType((ISigSZArrayType) sigType, mdi, builderCtx);
 
                 #endregion
 
                 case CorElementType.ByRef:
-                    return new WindowsMetadataByRefType(ConvertSigTypeToWinMDType(((ISigRefType) sigType).InnerType, mdi));
+                    return new WindowsMetadataByRefType(ConvertSigTypeToWinMDType(((ISigRefType) sigType).InnerType, mdi, builderCtx));
 
                 //A RetType includes either a [ByRef] Type / TypedByRef / Void
                 case CorElementType.Void:
@@ -389,19 +514,26 @@ namespace ChaosDbg.WinMD
             return value;
         }
 
-        private IWindowsMetadataType GetSZArrayMetadataType(ISigSZArrayType sigType, MetaDataImport mdi)
+        private IWindowsMetadataType GetArrayMetadataType(ISigArrayType sigType, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
-            var elementType = ConvertSigTypeToWinMDType(sigType.ElementType, mdi);
+            var elementType = ConvertSigTypeToWinMDType(sigType.ElementType, mdi, builderCtx);
+
+            return new WindowsMetadataArrayType(elementType, sigType.Rank, sigType.Sizes, sigType.LowerBounds);
+        }
+
+        private IWindowsMetadataType GetSZArrayMetadataType(ISigSZArrayType sigType, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
+        {
+            var elementType = ConvertSigTypeToWinMDType(sigType.ElementType, mdi, builderCtx);
 
             return new WindowsMetadataSZArrayType(elementType);
         }
 
-        private Dictionary<mdTypeDef, IWindowsMetadataType> GetMDICache(MetaDataImport mdi)
+        private Dictionary<mdTypeDef, IWindowsMetadataType> GetMDICache(MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
-            if (!typeCache.TryGetValue(mdi.Raw, out var value))
+            if (!builderCtx.TypeCache.TryGetValue(mdi.Raw, out var value))
             {
                 value = new Dictionary<mdTypeDef, IWindowsMetadataType>();
-                typeCache[mdi.Raw] = value;
+                builderCtx.TypeCache[mdi.Raw] = value;
             }
 
             return value;

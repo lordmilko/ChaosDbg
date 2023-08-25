@@ -4,27 +4,27 @@ namespace ChaosDbg.Metadata
 {
     public interface ISigReader
     {
-        ISigMethod ReadMethod(mdMethodDef token, MetaDataImport import);
+        ISigMethod ReadMethod(mdMethodDef token, MetaDataImport import, MetaDataImport_GetMethodPropsResult? props = null);
 
-        ISigField ReadFieldType(mdFieldDef token, MetaDataImport import);
+        ISigField ReadField(mdFieldDef token, MetaDataImport import, GetFieldPropsResult? props = null);
 
         ISigCustomAttribute ReadCustomAttribute(mdCustomAttribute token, MetaDataImport import, ITypeRefResolver typeRefResolver);
     }
 
     public class SigReader : ISigReader
     {
-        public ISigMethod ReadMethod(mdMethodDef token, MetaDataImport import)
+        public ISigMethod ReadMethod(mdMethodDef token, MetaDataImport import, MetaDataImport_GetMethodPropsResult? props = null)
         {
-            var info = import.GetMethodProps(token);
+            var info = props ?? import.GetMethodProps(token);
 
             var reader = new SigReaderInternal(info.ppvSigBlob, info.pcbSigBlob, token, import);
 
             return reader.ParseMethod(info.szMethod, true);
         }
 
-        public ISigField ReadFieldType(mdFieldDef token, MetaDataImport import)
+        public ISigField ReadField(mdFieldDef token, MetaDataImport import, GetFieldPropsResult? props = null)
         {
-            var info = import.GetFieldProps(token);
+            var info = props ?? import.GetFieldProps(token);
 
             var reader = new SigReaderInternal(info.ppvSigBlob, info.pcbSigBlob, token, import);
 

@@ -13,5 +13,13 @@ namespace ChaosDbg.WinMD
             Name = info?.szName;
             Type = type;
         }
+
+        public override string ToString()
+        {
+            if (Name == null)
+                return Type.ToString();
+
+            return $"{Type} {Name}";
+        }
     }
 }

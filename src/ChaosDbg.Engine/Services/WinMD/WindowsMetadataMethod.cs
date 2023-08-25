@@ -1,4 +1,5 @@
-﻿using ChaosDbg.Metadata;
+﻿using System.Text;
+using ChaosDbg.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD
@@ -22,6 +23,25 @@ namespace ChaosDbg.WinMD
             ReturnType = returnType;
             Parameters = parameters;
             CustomAttributes = customAttributes;
+        }
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+
+            builder.Append(Name).Append("(");
+
+            for (var i = 0; i < Parameters.Length; i++)
+            {
+                builder.Append(Parameters[i]);
+
+                if (i < Parameters.Length - 1)
+                    builder.Append(", ");
+            }
+
+            builder.Append(")");
+
+            return builder.ToString();
         }
     }
 }

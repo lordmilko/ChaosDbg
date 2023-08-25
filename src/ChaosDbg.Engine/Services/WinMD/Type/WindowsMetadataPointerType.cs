@@ -8,5 +8,10 @@
         {
             PtrType = ptrType;
         }
+
+        public override string ToString()
+        {
+            return $"{PtrType}*";
+        }
     }
 }

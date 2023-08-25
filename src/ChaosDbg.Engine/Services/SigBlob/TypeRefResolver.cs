@@ -9,7 +9,7 @@ namespace ChaosDbg
 {
     public interface ITypeRefResolver
     {
-        ResolvedTypeRef ResolveTypeRef(mdTypeRef typeRef, MetaDataImport import);
+        IResolvedTypeRef ResolveTypeRef(mdTypeRef typeRef, MetaDataImport import);
 
         ResolvedMemberRef ResolveMemberRef(mdMemberRef memberRef, MetaDataImport import);
     }
@@ -19,7 +19,7 @@ namespace ChaosDbg
         private Dictionary<IMetaDataImport, ModuleResolutionContext> mdiToCtxCache = new Dictionary<IMetaDataImport, ModuleResolutionContext>();
         private Dictionary<string, MetaDataImport> asmCache = new Dictionary<string, MetaDataImport>();
 
-        public ResolvedTypeRef ResolveTypeRef(mdTypeRef typeRef, MetaDataImport import)
+        public IResolvedTypeRef ResolveTypeRef(mdTypeRef typeRef, MetaDataImport import)
         {
             if (!mdiToCtxCache.TryGetValue(import.Raw, out var moduleCtx))
             {
@@ -36,7 +36,7 @@ namespace ChaosDbg
 
             var resolutionScopeType = props.ptkResolutionScope.Type;
 
-            ResolvedTypeRef resolvedTypeRef;
+            IResolvedTypeRef resolvedTypeRef;
 
             switch (resolutionScopeType)
             {
@@ -45,7 +45,7 @@ namespace ChaosDbg
                     break;
 
                 case CorTokenType.mdtTypeRef:
-                    resolvedTypeRef = ResolveFromNestedTypeRef(typeRef, import);
+                    resolvedTypeRef = ResolveFromNestedTypeRef((mdTypeRef)props.ptkResolutionScope, typeRef, props.szName, import, moduleCtx);
                     break;
 
                 case CorTokenType.mdtModule:
@@ -61,7 +61,7 @@ namespace ChaosDbg
             return resolvedTypeRef;
         }
 
-        private ResolvedTypeRef ResolveFromAssemblyTypeRef(
+        private IResolvedTypeRef ResolveFromAssemblyTypeRef(
             mdAssemblyRef assemblyRef,
             mdTypeRef typeRef,
             string typeName,
@@ -98,34 +98,104 @@ namespace ChaosDbg
 
             //Some types are .NET Standard exclusive, e.g. System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute.
             //In these cases, return null
-            if (typeDefMDI.TryFindTypeDefByName(typeName, mdToken.Nil, out var typeDef) != HRESULT.S_OK)
+            if (!typeDefCtx.NameToTypeDefCache.TryGetValue(typeName, out var typeDefs))
                 return null;
 
-            return new ResolvedTypeRef(
+            if (typeDefs.Length == 1)
+            {
+                return new ResolvedTypeRef(
+                    typeRef,
+                    typeDefs[0],
+                    typeRefCtx,
+                    typeDefCtx
+                );
+            }
+
+            //There are multiple typedefs with the same name, indicating this is a *.winmd file with multiple architecture specific implementations of the same type.
+            return new AmbiguousResolvedTypeRef(
                 typeRef,
-                typeDef,
+                typeDefs,
                 typeRefCtx,
                 typeDefCtx
             );
         }
 
-        private ResolvedTypeRef ResolveFromNestedTypeRef(mdTypeRef typeRef, MetaDataImport import)
+        private IResolvedTypeRef ResolveFromNestedTypeRef(mdTypeRef parentTypeRef, mdTypeRef typeRef, string typeName, MetaDataImport import, ModuleResolutionContext moduleRefCtx)
         {
-            throw new NotImplementedException("Processing nested types is not implemented");
+            var resolvedParent = ResolveTypeRef(parentTypeRef, import);
+
+            if (resolvedParent is ResolvedTypeRef r)
+            {
+                var typeDef = resolvedParent.TypeDefModule.Import.FindTypeDefByName(typeName, r.TypeDef);
+
+                return new ResolvedTypeRef(
+                    typeRef,
+                    typeDef,
+                    moduleRefCtx,
+                    moduleRefCtx
+                );
+            }
+
+            var ambiguous = (AmbiguousResolvedTypeRef) resolvedParent;
+
+            //We might be trying to resolve the type of a field. The field's parent type might be ambiguous, but the actual type of the field
+            //is nested under the parent type. If multiple parent types have the same nested type, it will still be ambiguous, but if only
+            //one of them has that nested type, we've successfully disambiguated the type we're looking for
+
+            var resolvedTypeDefs = new List<mdTypeDef>();
+
+            foreach (var item in ambiguous.TypeDefs)
+            {
+                if (resolvedParent.TypeDefModule.Import.TryFindTypeDefByName(typeName, item, out var found) == HRESULT.S_OK)
+                    resolvedTypeDefs.Add(found);
+            }
+
+            if (resolvedTypeDefs.Count == 0)
+                throw new InvalidOperationException($"TypeRef {typeRef} {typeName} resolved to {ambiguous.TypeDefs.Length} candidate typedefs, none of which were valid");
+
+            if (resolvedTypeDefs.Count == 1)
+            {
+                //We disambiguated it!
+                return new ResolvedTypeRef(
+                    typeRef,
+                    resolvedTypeDefs[0],
+                    moduleRefCtx,
+                    moduleRefCtx
+                );
+            }
+
+            //Still ambiguous
+            return new AmbiguousResolvedTypeRef(
+                typeRef,
+                resolvedTypeDefs.ToArray(),
+                moduleRefCtx,
+                moduleRefCtx
+            );
         }
 
-        private ResolvedTypeRef ResolveFromModuleTypeRef(mdModule module, mdTypeRef typeRef, string typeName, ModuleResolutionContext moduleRefCtx)
+        private IResolvedTypeRef ResolveFromModuleTypeRef(mdModule module, mdTypeRef typeRef, string typeName, ModuleResolutionContext moduleRefCtx)
         {
             if (module != moduleRefCtx.Import.ModuleFromScope)
                 throw new NotImplementedException("Don't know how to handle a module that is not the current module");
 
             //We have a typeref to a type within this module
 
-            var typeDef = moduleRefCtx.Import.FindTypeDefByName(typeName, mdToken.Nil);
+            var typeDefs = moduleRefCtx.NameToTypeDefCache[typeName];
 
-            return new ResolvedTypeRef(
+            if (typeDefs.Length == 1)
+            {
+                return new ResolvedTypeRef(
+                    typeRef,
+                    typeDefs[0],
+                    moduleRefCtx,
+                    moduleRefCtx //This is currently predicated on the assumption there'll only be one module, thus the source and destination modules will be the same
+                );
+            }
+
+            //There are multiple typedefs with the same name, indicating this is a *.winmd file with multiple architecture specific implementations of the same type.
+            return new AmbiguousResolvedTypeRef(
                 typeRef,
-                typeDef,
+                typeDefs,
                 moduleRefCtx,
                 moduleRefCtx //This is currently predicated on the assumption there'll only be one module, thus the source and destination modules will be the same
             );
@@ -170,7 +240,7 @@ namespace ChaosDbg
 
         private ResolvedMemberRef ResolveMemberRefFromTypeRef(mdMemberRef memberRef, GetMemberRefPropsResult props, ModuleResolutionContext memberRefCtx)
         {
-            var resolvedTypeRef = ResolveTypeRef((mdTypeRef)props.ptk, memberRefCtx.Import);
+            var resolvedTypeRef = (ResolvedTypeRef) ResolveTypeRef((mdTypeRef)props.ptk, memberRefCtx.Import);
 
             if (resolvedTypeRef == null)
                 return null;

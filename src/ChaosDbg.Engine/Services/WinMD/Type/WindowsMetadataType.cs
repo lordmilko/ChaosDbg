@@ -11,6 +11,10 @@ namespace ChaosDbg.WinMD
     class WindowsMetadataTypeInternal : IWindowsMetadataType
     {
         internal static readonly IWindowsMetadataType DeleteInheritedType = new WindowsMetadataTypeInternal();
+
+        internal static readonly IWindowsMetadataType MulticastDelegateType = new WindowsMetadataTypeInternal();
+
+        internal static readonly IWindowsMetadataType EnumType = new WindowsMetadataTypeInternal();
     }
 
     class WindowsMetadataType : IWindowsMetadataType
@@ -21,22 +25,29 @@ namespace ChaosDbg.WinMD
 
         public string FullName { get; }
 
+        public CorTypeAttr Flags { get; }
+
+        public IWindowsMetadataType ParentType { get; set; }
+
         public IWindowsMetadataType BaseType { get; set; }
 
-        public WindowsMetadataField[] Fields { get; }
+        public WindowsMetadataField[] Fields => fields?.Value;
 
-        public WindowsMetadataMethod[] Methods { get; }
+        public WindowsMetadataMethod[] Methods => methods?.Value;
 
         public ISigCustomAttribute[] CustomAttributes { get; set; }
 
+        private Lazy<WindowsMetadataField[]> fields;
+        private Lazy<WindowsMetadataMethod[]> methods;
+
         public WindowsMetadataType(
             mdTypeDef typeDef,
-            GetTypeDefPropsResult props,
-            int numFields,
-            int numMethods)
+            GetTypeDefPropsResult props)
         {
             TypeDef = typeDef;
             FullName = props.szTypeDef;
+
+            Flags = props.pdwTypeDefFlags;
 
             var dot = FullName.LastIndexOf('.');
 
@@ -44,10 +55,10 @@ namespace ChaosDbg.WinMD
                 Name = FullName.Substring(dot + 1);
             else
                 Name = FullName;
-
-            Fields = numFields == 0 ? Array.Empty<WindowsMetadataField>() : new WindowsMetadataField[numFields];
-            Methods = numMethods == 0 ? Array.Empty<WindowsMetadataMethod>() : new WindowsMetadataMethod[numMethods];
         }
+
+        public void SetFields(Lazy<WindowsMetadataField[]> fields) => this.fields = fields;
+        public void SetMethods(Lazy<WindowsMetadataMethod[]> methods) => this.methods = methods;
 
         public override string ToString()
         {

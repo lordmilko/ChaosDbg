@@ -2,11 +2,16 @@
 {
     class WindowsMetadataSZArrayType : IWindowsMetadataType
     {
+        public IWindowsMetadataType ElementType { get; }
+
         public WindowsMetadataSZArrayType(IWindowsMetadataType elementType)
         {
             ElementType = elementType;
         }
 
-        public IWindowsMetadataType ElementType { get; }
+        public override string ToString()
+        {
+            return $"{ElementType}[]";
+        }
     }
 }

@@ -232,7 +232,7 @@ namespace ChaosDbg.Metadata
                     break;
 
                 case CorTokenType.mdtTypeRef:
-                    var resolvedTypeRef = typeRefResolver.ResolveTypeRef((mdTypeRef) valueType.Token, ctorImport);
+                    var resolvedTypeRef = (ResolvedTypeRef) typeRefResolver.ResolveTypeRef((mdTypeRef) valueType.Token, ctorImport);
                     mdi = resolvedTypeRef.TypeDefModule.Import;
                     typeDef = resolvedTypeRef.TypeDef;
                     break;
