@@ -15,12 +15,15 @@ namespace ChaosDbg.WinMD
 
         public IWindowsMetadataType Type { get; }
 
+        public WindowsMetadataType Owner { get; }
+
         public ISigCustomAttribute[] CustomAttributes { get; set; }
 
         public object Value { get; }
 
-        public WindowsMetadataField(mdFieldDef fieldDef, GetFieldPropsResult props, IWindowsMetadataType type, ISigCustomAttribute[] customAttributes)
+        public WindowsMetadataField(WindowsMetadataType owner, mdFieldDef fieldDef, GetFieldPropsResult props, IWindowsMetadataType type, ISigCustomAttribute[] customAttributes)
         {
+            Owner = owner;
             FieldDef = fieldDef;
             Name = props.szField;
             Flags = props.pdwAttr;
@@ -28,84 +31,87 @@ namespace ChaosDbg.WinMD
             CustomAttributes = customAttributes;
 
             if (type is WindowsMetadataPrimitiveType p)
-            {
-                switch (p.Type)
-                {
-                    case CorElementType.Boolean:
-                        Value = ReadValue<byte>(props.ppValue) == 1;
-                        break;
-
-                    case CorElementType.Char:
-                        Value = ReadValue<char>(props.ppValue);
-                        break;
-
-                    case CorElementType.I1:
-                        Value = ReadValue<sbyte>(props.ppValue);
-                        break;
-
-                    case CorElementType.U1:
-                        Value = ReadValue<byte>(props.ppValue);
-                        break;
-
-                    case CorElementType.I2:
-                        Value = ReadValue<short>(props.ppValue);
-                        break;
-
-                    case CorElementType.U2:
-                        Value = ReadValue<ushort>(props.ppValue);
-                        break;
-
-                    case CorElementType.I4:
-                        Value = ReadValue<int>(props.ppValue);
-                        break;
-
-                    case CorElementType.U4:
-                        Value = ReadValue<uint>(props.ppValue);
-                        break;
-
-                    case CorElementType.I8:
-                        Value = ReadValue<long>(props.ppValue);
-                        break;
-
-                    case CorElementType.U8:
-                        Value = ReadValue<ulong>(props.ppValue);
-                        break;
-
-                    case CorElementType.R4:
-                        Value = ReadValue<float>(props.ppValue);
-                        break;
-
-                    case CorElementType.R8:
-                        Value = ReadValue<double>(props.ppValue);
-                        break;
-
-                    case CorElementType.String:
-                        //We expect most values that have a string to be constants, but *.winmd files can also
-                        //contain Attributes, and they might have string members without default values
-                        if (props.ppValue != IntPtr.Zero)
-                            Value = Marshal.PtrToStringUni(props.ppValue, props.pcchValue);
-                        break;
-
-                    case CorElementType.I:
-                        Value = ReadValue<IntPtr>(props.ppValue);
-                        break;
-
-                    case CorElementType.U:
-                        Value = ReadValue<UIntPtr>(props.ppValue);
-                        break;
-
-                    default:
-                        throw new NotImplementedException($"Don't know how to handle {nameof(CorElementType)} '{p.Type}'.");
-                }
-            }
+                Value = ReadPrimitiveType(p.Type, props.ppValue,  props.pcchValue);
             else
             {
-                if (props.pcchValue != 0)
+                if (props.ppValue != IntPtr.Zero)
                 {
-                    if (!(type is WindowsMetadataPrimitiveType t))
+                    if (type is WindowsMetadataTransparentType t)
+                    {
+                        var underlying = t.ValueField.Type;
+
+                        if (underlying is WindowsMetadataPointerType)
+                            Value = ReadValue<IntPtr>(props.ppValue);
+                        else if (underlying is WindowsMetadataPrimitiveType tp)
+                            Value = ReadPrimitiveType(tp.Type, props.ppValue, props.pcchValue);
+                        else
+                            throw new InvalidOperationException($"Cannot read default value for type {underlying.GetType().Name} inside transparent struct representing type {type}");
+                    }
+                    else
+                    {
                         throw new InvalidOperationException($"Cannot read default value for field type {type.GetType().Name} representing type {type}");
+                    }
                 }
             }            
+        }
+
+        private object ReadPrimitiveType(CorElementType type, IntPtr ptr, int length)
+        {
+            switch (type)
+            {
+                case CorElementType.Boolean:
+                    return ReadValue<byte>(ptr) == 1;
+
+                case CorElementType.Char:
+                    return ReadValue<char>(ptr);
+
+                case CorElementType.I1:
+                    return ReadValue<sbyte>(ptr);
+
+                case CorElementType.U1:
+                    return ReadValue<byte>(ptr);
+
+                case CorElementType.I2:
+                    return ReadValue<short>(ptr);
+
+                case CorElementType.U2:
+                    return ReadValue<ushort>(ptr);
+
+                case CorElementType.I4:
+                    return ReadValue<int>(ptr);
+
+                case CorElementType.U4:
+                    return ReadValue<uint>(ptr);
+
+                case CorElementType.I8:
+                    return ReadValue<long>(ptr);
+
+                case CorElementType.U8:
+                    return ReadValue<ulong>(ptr);
+
+                case CorElementType.R4:
+                    return ReadValue<float>(ptr);
+
+                case CorElementType.R8:
+                    return ReadValue<double>(ptr);
+
+                case CorElementType.String:
+                    //We expect most values that have a string to be constants, but *.winmd files can also
+                    //contain Attributes, and they might have string members without default values
+                    if (ptr != IntPtr.Zero)
+                        return Marshal.PtrToStringUni(ptr, length);
+
+                    return null;
+
+                case CorElementType.I:
+                    return ReadValue<IntPtr>(ptr);
+
+                case CorElementType.U:
+                    return ReadValue<UIntPtr>(ptr);
+
+                default:
+                    throw new NotImplementedException($"Don't know how to handle {nameof(CorElementType)} '{type}'.");
+            }
         }
 
         private unsafe T? ReadValue<T>(IntPtr ptr) where T : unmanaged
@@ -119,7 +125,10 @@ namespace ChaosDbg.WinMD
 
         public override string ToString()
         {
-            return $"{Type} {Name}";
+            if (Value == null)
+                return $"{Type} {Name}";
+
+            return $"{Type} {Name} = {(Value is string ? $"\"{Value}\"" : Value)}";
         }
     }
 }

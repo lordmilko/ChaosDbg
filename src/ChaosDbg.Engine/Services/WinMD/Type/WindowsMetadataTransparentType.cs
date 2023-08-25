@@ -3,38 +3,43 @@ using ClrDebug;
 
 namespace ChaosDbg.WinMD
 {
-    class WindowsMetadataDelegateType : IWindowsMetadataType
+    class WindowsMetadataTransparentType : IWindowsMetadataType
     {
         public mdTypeDef TypeDef { get; }
 
         public string Name { get; }
 
-        public CorTypeAttr Flags { get; }
-
         public string FullName { get; }
+
+        public string Namespace { get; }
+
+        public WindowsMetadataField ValueField { get; }
 
         public ISigCustomAttribute[] CustomAttributes { get; set; }
 
-        public WindowsMetadataDelegateType(
+        public WindowsMetadataTransparentType(
             mdTypeDef typeDef,
-            GetTypeDefPropsResult props)
+            GetTypeDefPropsResult props,
+            WindowsMetadataField valueField)
         {
             TypeDef = typeDef;
             FullName = props.szTypeDef;
-
-            Flags = props.pdwTypeDefFlags;
+            ValueField = valueField;
 
             var dot = FullName.LastIndexOf('.');
 
             if (dot != -1)
+            {
                 Name = FullName.Substring(dot + 1);
+                Namespace = FullName.Substring(0, dot);
+            }
             else
                 Name = FullName;
         }
 
         public override string ToString()
         {
-            return Name;
+            return $"{Name} ({ValueField.Type})";
         }
     }
 }

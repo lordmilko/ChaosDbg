@@ -28,7 +28,32 @@ namespace ChaosDbg.WinMD
 
         private List<WindowsMetadataType> apiTypes = new List<WindowsMetadataType>();
 
+        private Dictionary<string, WindowsMetadataField[]> constants;
+
+        private Dictionary<string, WindowsMetadataField[]> Constants
+        {
+            get
+            {
+                if (constants == null)
+                    constants = apiTypes.SelectMany(a => a.Fields).GroupBy(a => a.Name.ToLower()).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+                return constants;
+            }
+        }
+
         private Dictionary<string, WindowsMetadataMethod[]> functions;
+
+        private Dictionary<string, WindowsMetadataMethod[]> Functions
+        {
+            get
+            {
+                if (functions == null)
+                    functions = apiTypes.SelectMany(a => a.Methods).GroupBy(a => a.Name.ToLower()).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+                return functions;
+            }
+        }
+
         private Dictionary<string, WindowsMetadataType[]> interfaces;
 
         private ISigReader sigReader;
@@ -50,11 +75,28 @@ namespace ChaosDbg.WinMD
 
         #region IWindowsMetadataProvider
 
+        public bool TryGetConstant(string name, out WindowsMetadataField constant)
+        {
+            EnsureInitialized();
+
+            if (Constants.TryGetValue(name, out var candidates))
+            {
+                if (candidates.Length > 1)
+                    throw new NotSupportedException("Resolving a constant with multiple possible candidates is not currently supported");
+
+                constant = candidates[0];
+                return true;
+            }
+
+            constant = null;
+            return false;
+        }
+
         public bool TryGetFunction(string name, out WindowsMetadataMethod method)
         {
             EnsureInitialized();
 
-            if (functions.TryGetValue(name, out var candidates))
+            if (Functions.TryGetValue(name, out var candidates))
             {
                 if (candidates.Length > 1)
                     throw new NotSupportedException("Resolving a function with multiple possible candidates is not currently supported");
@@ -102,13 +144,13 @@ namespace ChaosDbg.WinMD
             foreach (var item in builderCtx.TypesToDelete)
                 builderCtx.TypeCache[item.Item1.Raw].Remove(item.Item2);
 
+            //Done! Now set common lookup values
+
             allTypes = builderCtx.TypeCache.SelectMany(kv => kv.Value.Select(v => v.Value)).ToArray();
 
             var fullTypes = allTypes.OfType<WindowsMetadataType>().ToArray();
-            var ifaces = fullTypes.Where(f => (f.Flags & CorTypeAttr.tdInterface) != 0).ToArray();
-
-            functions = apiTypes.SelectMany(a => a.Methods).GroupBy(a => a.Name).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
-            interfaces = ifaces.GroupBy(i => i.Name).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+            var ifaces = fullTypes.Where(f => (f.Flags & CorTypeAttr.tdInterface) != 0).ToArray();            
+            interfaces = ifaces.GroupBy(i => i.Name).ToDictionary(g => g.Key.ToLower(), g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
         }
 
         private IWindowsMetadataType ProcessTypeDef(mdTypeDef typeDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
@@ -176,29 +218,47 @@ namespace ChaosDbg.WinMD
             if (fullType.BaseType != WindowsMetadataTypeInternal.DeleteInheritedType)
                 fullType.CustomAttributes = ReadCustomAttribs(typeDef, mdi);
 
-            var lazyFields = new Lazy<WindowsMetadataField[]>(() =>
+            //This captures fullType, so we if want to change fullType to something else, we need to change
+            //how we write this callback
+            fullType.SetFields(new Lazy<WindowsMetadataField[]>(() =>
             {
                 var fields = new WindowsMetadataField[fieldDefs.Length];
 
                 for (var i = 0; i < fieldDefs.Length; i++)
                 {
-                    var field = ProcessField(fieldDefs[i], mdi, builderCtx);
+                    var field = ProcessField(fullType, fieldDefs[i], mdi, builderCtx);
 
                     fields[i] = field;
                 }
 
                 return fields;
-            });
+            }));
 
-            fullType.SetFields(lazyFields);
+            if (fieldDefs.Length == 1 && mdi.GetFieldProps(fieldDefs[0]).szField == "Value")
+            {
+                //It's a simple transparent type around a raw value!
+                var transparentType = new WindowsMetadataTransparentType(typeDef, props, fullType.Fields[0])
+                {
+                    CustomAttributes = fullType.CustomAttributes
+                };
+
+                mdiCache[typeDef] = transparentType;
+
+                return transparentType;
+            }
 
             if (fullType.BaseType == WindowsMetadataTypeInternal.MulticastDelegateType)
             {
-                var delegateType = new WindowsMetadataDelegateType(typeDef, props);
+                var delegateType = new WindowsMetadataDelegateType(typeDef, props)
+                {
+                    CustomAttributes = fullType.CustomAttributes
+                };
 
                 //Replace the existing WindowsMetadataType. Since our base class was System.MulticastDelegate, there shouldn't
                 //be any references to the previously cached type anywhere
                 mdiCache[typeDef] = delegateType;
+
+                return delegateType;
             }
             else if (isEnum)
             {
@@ -209,7 +269,7 @@ namespace ChaosDbg.WinMD
 
                     foreach (var fieldDef in fieldDefs)
                     {
-                        var field = ProcessField(fieldDef, mdi, builderCtx);
+                        var field = ProcessField(enumType, fieldDef, mdi, builderCtx);
 
                         //Skip value__
                         if ((field.Flags & CorFieldAttr.fdLiteral) == 0 && (field.Flags & CorFieldAttr.fdStatic) == 0)
@@ -221,9 +281,13 @@ namespace ChaosDbg.WinMD
                     return list.ToArray();
                 }));
 
+                enumType.CustomAttributes = fullType.CustomAttributes;
+
                 //Replace the existing WindowsMetadataType. Since our base class was System.Enum, there shouldn't
                 //be any references to the previously cached type anywhere
                 mdiCache[typeDef] = enumType;
+
+                return enumType;
             }
             else
             {
@@ -325,7 +389,7 @@ namespace ChaosDbg.WinMD
             }
         }
 
-        private WindowsMetadataField ProcessField(mdFieldDef fieldDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
+        private WindowsMetadataField ProcessField(WindowsMetadataType owner, mdFieldDef fieldDef, MetaDataImport mdi, WindowsMetadataProviderBuilderContext builderCtx)
         {
             var props = mdi.GetFieldProps(fieldDef);
 
@@ -347,6 +411,7 @@ namespace ChaosDbg.WinMD
             }
 
             return new WindowsMetadataField(
+                owner,
                 fieldDef,
                 props,
                 type,

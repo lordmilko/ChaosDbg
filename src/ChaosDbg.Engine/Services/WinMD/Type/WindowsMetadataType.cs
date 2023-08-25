@@ -25,6 +25,8 @@ namespace ChaosDbg.WinMD
 
         public string FullName { get; }
 
+        public string Namespace { get; }
+
         public CorTypeAttr Flags { get; }
 
         public IWindowsMetadataType ParentType { get; set; }
@@ -52,7 +54,10 @@ namespace ChaosDbg.WinMD
             var dot = FullName.LastIndexOf('.');
 
             if (dot != -1)
+            {
                 Name = FullName.Substring(dot + 1);
+                Namespace = FullName.Substring(0, dot);
+            }
             else
                 Name = FullName;
         }
