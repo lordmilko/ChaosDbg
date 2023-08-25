@@ -10,10 +10,15 @@ namespace ChaosDbg.Tests
     [TestClass]
     public class CustomSourceGeneratorTests
     {
+        #region RelayCommand
+
         [TestMethod]
         public void CommandSourceGenerator_Success()
         {
             var input = @"
+using System.Windows.Forms;
+using ClrDebug;
+
 public partial class foo
 {
     [ChaosDbg.Reactive.RelayCommandAttribute]
@@ -23,7 +28,9 @@ public partial class foo
 }";
 
             var expected = @"
+using System.Windows.Forms;
 using ChaosDbg.Reactive;
+using ClrDebug;
 
 namespace ChaosDbg.ViewModel
 {
@@ -110,6 +117,8 @@ public partial class foo
     public void OnFoo()
     {
     }
+
+    private bool foo() => true;
 }";
             var expected = @"
 using ChaosDbg.Reactive;
@@ -141,6 +150,217 @@ namespace ChaosDbg.ViewModel
 
             TestResult(input, expected);
         }
+
+        #endregion
+        #region RelayCommand<T>
+
+        [TestMethod]
+        public void CommandSourceGenerator_ExecuteParameter_Success()
+        {
+            var input = @"
+public partial class foo
+{
+    [ChaosDbg.Reactive.RelayCommandAttribute]
+    public void OnFoo(double value)
+    {
+    }
+}";
+
+            var expected = @"
+using ChaosDbg.Reactive;
+
+namespace ChaosDbg.ViewModel
+{
+    public partial class foo
+    {
+        /// <summary>
+        /// The backing field for <see cref=""FooCommand""/>
+        /// </summary>
+        private IRelayCommand<double> fooCommand;
+
+        /// <summary>
+        /// Gets an <see cref=""IRelayCommand{T}""/> instance wrapping <see cref=""OnFoo""/>
+        /// </summary>
+        public IRelayCommand<double> FooCommand
+        {
+            get
+            {
+                if (fooCommand == null)
+                    fooCommand = new RelayCommand<double>(OnFoo);
+
+                return fooCommand;
+            }
+        }
+    }
+}";
+            TestResult(input, expected);
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_ExecuteParameter_CanExecuteParameter_Success()
+        {
+            var input = @"
+public partial class foo
+{
+    [RelayCommand(CanExecute = nameof(CanFoo))]
+    public void OnFoo(double value)
+    {
+    }
+
+    public bool CanFoo(double value) => true;
+}";
+            var expected = @"
+using ChaosDbg.Reactive;
+
+namespace ChaosDbg.ViewModel
+{
+    public partial class foo
+    {
+        /// <summary>
+        /// The backing field for <see cref=""FooCommand""/>
+        /// </summary>
+        private IRelayCommand<double> fooCommand;
+
+        /// <summary>
+        /// Gets an <see cref=""IRelayCommand{T}""/> instance wrapping <see cref=""OnFoo""/>
+        /// </summary>
+        public IRelayCommand<double> FooCommand
+        {
+            get
+            {
+                if (fooCommand == null)
+                    fooCommand = new RelayCommand<double>(OnFoo, CanFoo);
+
+                return fooCommand;
+            }
+        }
+    }
+}";
+
+            TestResult(input, expected);
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_ExecuteParameter_CanExecute_HasWrapperAction()
+        {
+            var input = @"
+public partial class foo
+{
+    [RelayCommand(CanExecute = nameof(CanFoo))]
+    public void OnFoo(double value)
+    {
+    }
+
+    public bool CanFoo() => true;
+}";
+
+            var expected = @"
+using ChaosDbg.Reactive;
+
+namespace ChaosDbg.ViewModel
+{
+    public partial class foo
+    {
+        /// <summary>
+        /// The backing field for <see cref=""FooCommand""/>
+        /// </summary>
+        private IRelayCommand<double> fooCommand;
+
+        /// <summary>
+        /// Gets an <see cref=""IRelayCommand{T}""/> instance wrapping <see cref=""OnFoo""/>
+        /// </summary>
+        public IRelayCommand<double> FooCommand
+        {
+            get
+            {
+                if (fooCommand == null)
+                    fooCommand = new RelayCommand<double>(OnFoo, _ => CanFoo());
+
+                return fooCommand;
+            }
+        }
+    }
+}";
+
+            TestResult(input, expected);
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_Execute_CanExecuteParameter_Throws()
+        {
+            var input = @"
+public partial class foo
+{
+    [RelayCommand(CanExecute = nameof(CanFoo))]
+    public void OnFoo()
+    {
+    }
+
+    public bool CanFoo(double value) => true;
+}";
+            AssertEx.Throws<InvalidOperationException>(
+                () => TestResult(input, string.Empty),
+                "Cannot generate RelayCommand: expected method 'foo.CanFoo' to not contain any parameters. Either add a parameter to method 'OnFoo' or remove the parameters from method 'CanFoo'."
+            );
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_MultipleExecuteParameters_Throws()
+        {
+            var input = @"
+public partial class foo
+{
+    [ChaosDbg.Reactive.RelayCommandAttribute]
+    public void OnFoo(double value1, double value2)
+    {
+    }
+}";
+
+            AssertEx.Throws<InvalidOperationException>(
+                () => TestResult(input, string.Empty),
+                "Cannot generate RelayCommand<T> for method foo.OnFoo: method has multiple parameters."
+            );
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_MultipleCanExecuteParameters_Throws()
+        {
+            var input = @"
+public partial class foo
+{
+    [RelayCommand(CanExecute = nameof(CanFoo))]
+    public void OnFoo(double value)
+    {
+    }
+
+    public bool CanFoo(double value1, double value2) => true;
+}";
+            AssertEx.Throws<InvalidOperationException>(
+                () => TestResult(input, string.Empty),
+                "Cannot generate RelayCommand<T>: method 'foo.CanFoo' contains multiple parameters."
+            );
+        }
+
+        [TestMethod]
+        public void CommandSourceGenerator_ExecuteParameter_CanExecuteParameter_DifferentTypes_Throws()
+        {
+            var input = @"
+public partial class foo
+{
+    [RelayCommand(CanExecute = nameof(CanFoo))]
+    public void OnFoo(double value)
+    {
+    }
+
+    public bool CanFoo(bool value) => true;
+}";
+            AssertEx.Throws<InvalidOperationException>(
+                () => TestResult(input, string.Empty),
+                "Cannot generate RelayCommand<T>: expected method 'foo.CanFoo' to contain a parameter of type 'double'."
+            );
+        }
+
+        #endregion
 
         private void TestResult(string input, string expected)
         {

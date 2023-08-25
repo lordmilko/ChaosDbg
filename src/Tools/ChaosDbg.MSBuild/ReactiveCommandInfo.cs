@@ -36,14 +36,33 @@
         /// <summary>
         /// Gets the type to use for the field/property.
         /// </summary>
-        public string PropertyType { get; } = "IRelayCommand";
+        public string PropertyType { get; }
 
         /// <summary>
         /// Gets the implementing type to use for the field/property.
         /// </summary>
-        public string CommandType { get; } = "RelayCommand";
+        public string CommandType { get; }
 
-        public ReactiveCommandInfo(string ns, string className, string methodName, string propertyName, string fieldName, string canExecuteName)
+        /// <summary>
+        /// Gets the value to display in XmlDocs when referring to <see cref="CommandType"/>.
+        /// </summary>
+        public string XmlCommandType { get; }
+
+        /// <summary>
+        /// Gets whether a wrapper func needs to be generated to invoke a <see cref="CanExecuteName"/>
+        /// method that does not take a parameter for a RelayCommand{T}.
+        /// </summary>
+        public bool NeedCanExecuteFuncWrapper { get; }
+
+        public ReactiveCommandInfo(
+            string ns,
+            string className,
+            string methodName,
+            string propertyName,
+            string fieldName,
+            string canExecuteName,
+            string genericType,
+            bool needCanExecuteFuncWrapper)
         {
             Namespace = ns;
             ClassName = className;
@@ -51,6 +70,12 @@
             PropertyName = propertyName;
             FieldName = fieldName;
             CanExecuteName = canExecuteName;
+
+            PropertyType = genericType == null ? "IRelayCommand" : $"IRelayCommand<{genericType}>";
+            CommandType = genericType == null ? "RelayCommand" : $"RelayCommand<{genericType}>";
+            XmlCommandType = genericType == null ? PropertyType : "IRelayCommand{T}";
+
+            NeedCanExecuteFuncWrapper = needCanExecuteFuncWrapper;
         }
     }
 }
