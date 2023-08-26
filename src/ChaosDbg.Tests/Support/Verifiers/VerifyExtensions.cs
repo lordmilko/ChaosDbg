@@ -1,4 +1,7 @@
-﻿using ChaosDbg.Disasm;
+﻿using System;
+using System.Linq;
+using System.Windows.Media;
+using ChaosDbg.Disasm;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -13,6 +16,16 @@ namespace ChaosDbg.Tests
 
             Assert.AreEqual(defaultFormat, result[0].Instruction.ToString(), "Default instruction format was not correct");
             Assert.AreEqual(customFormat, engine.Format(result[0]), "Custom instruction format was not correct");
+        }
+
+        public static void Verify(this DrawingGroup drawingGroup, params Action<DrawingInfo>[] verifiers)
+        {
+            var desc = drawingGroup.DescendantDrawings().ToArray();
+
+            Assert.AreEqual(verifiers.Length, desc.Length, "Number of drawings in drawing group did not match number of verifiers");
+
+            for (var i = 0; i < desc.Length; i++)
+                verifiers[i](DrawingInfo.New(desc[i]));
         }
     }
 }

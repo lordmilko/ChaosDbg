@@ -36,7 +36,7 @@ namespace ChaosDbg.Tests
             return thread;
         }
 
-        private static void Invoke(Action<Application> action) =>
+        public static void Invoke(Action<Application> action) =>
             Application.Current.Dispatcher.Invoke(() => action(Application.Current));
 
         private static T Invoke<T>(Func<Application, T> func) =>
