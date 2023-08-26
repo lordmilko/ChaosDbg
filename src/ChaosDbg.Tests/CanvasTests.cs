@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
+using ChaosDbg.Scroll;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -26,7 +28,19 @@ namespace ChaosDbg.Tests
         }
 
         [TestMethod]
-        public void Canvas_Scroll()
+        public void Canvas_Scroll_LineDown()
+        {
+            TestScroll(
+                0, 25,
+                m => m.LineDown(),
+                1, 26
+            );
+        }
+
+        private void TestScroll(
+            int initialStartIndex, int initialEndIndex,
+            Action<ScrollManager> action,
+            int finalStartIndex, int finalEndIndex)
         {
             AppRunner.WithInProcessApp(_ =>
             {
@@ -36,13 +50,34 @@ namespace ChaosDbg.Tests
 
                     var verifiers = new List<Action<DrawingInfo>>();
 
-                    for (var i = 0; i < 50; i++)
+                    for (var i = initialStartIndex; i < initialEndIndex; i++)
                     {
                         var i1 = i;
                         verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
                     }
 
                     group.Verify(verifiers.ToArray());
+
+                    var canvas = a.MainWindow.GetLogicalDescendant<TextCanvas>();
+
+                    action(canvas.ScrollManager);
+
+                    var op = Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                    {
+                        verifiers = new List<Action<DrawingInfo>>();
+
+                        for (var i = finalStartIndex; i < finalEndIndex; i++)
+                        {
+                            var i1 = i;
+                            verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
+                        }
+
+                        group.Verify(verifiers.ToArray());
+                    }), DispatcherPriority.ContextIdle, null);
+
+                    canvas.ScrollManager.ForceInvalidateScrolledArea();
+
+                    op.Wait();
                 });
             });
         }

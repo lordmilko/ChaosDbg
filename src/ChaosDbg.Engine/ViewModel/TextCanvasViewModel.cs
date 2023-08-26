@@ -9,7 +9,9 @@ namespace ChaosDbg.ViewModel
 
         public Font Font { get; }
 
-        public TextCanvasViewModel(IThemeProvider themeProvider, ITextBufferProvider textBufferProvider)
+        public TextCanvasViewModel(
+            IThemeProvider themeProvider,
+            ITextBufferProvider textBufferProvider)
         {
             var theme = themeProvider.GetTheme();
             Font = theme.ContentFont;

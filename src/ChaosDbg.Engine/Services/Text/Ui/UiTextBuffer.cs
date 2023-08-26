@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows.Media;
 using ChaosDbg.Render;
+using ChaosDbg.Scroll;
 using ChaosDbg.Theme;
 
 namespace ChaosDbg.Text
@@ -8,7 +9,7 @@ namespace ChaosDbg.Text
     /// <summary>
     /// Stores the visual representation of an <see cref="ITextBuffer"/> to be displayed in the UI.
     /// </summary>
-    public interface IUiTextBuffer : IRenderer
+    public interface IUiTextBuffer : IRenderer, IScrollArea
     {
         ITextBuffer Buffer { get; }
     }
@@ -34,20 +35,43 @@ namespace ChaosDbg.Text
             this.font = font;
         }
 
-        public void Render(DrawingContext drawingContext)
+        #region IUiTextBuffer
+
+        public void Render(DrawingContext drawingContext, ScrollManager scrollManager)
         {
-            for (var i = 0; i < Buffer.LineCount; i++)
+            var range = scrollManager.GetVisibleTextRange();
+
+            var offset = range.Start.Row;
+
+            var maxWidth = 0;
+
+            for (var i = range.Start.Row; i < range.End.Row; i++)
             {
                 var line = Buffer.GetLine(i);
+
+                maxWidth = Math.Max(maxWidth, line.GetLength());
 
                 var uiLine = new UiTextLine(line, font);
 
                 //The IUiTextLine doesn't know what its Y coordinate should be. We apply a transform
                 //to the Y axis such that each line will be displayed further and further down the page
-                drawingContext.PushTransform(new TranslateTransform(0, i * font.LineHeight));
+                drawingContext.PushTransform(new TranslateTransform(0, (i - offset) * font.LineHeight));
                 uiLine.Render(drawingContext);
                 drawingContext.Pop();
             }
+
+            ScrollAreaWidth = maxWidth;
         }
+
+        #endregion
+        #region IScrollArea
+
+        public double ScrollLineHeight => font.LineHeight;
+
+        public double ScrollAreaWidth { get; private set; }
+
+        public double ScrollAreaHeight => Buffer.LineCount * font.LineHeight;
+
+        #endregion
     }
 }

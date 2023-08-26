@@ -1,8 +1,14 @@
 ﻿using System;
 using System.Windows.Media;
+using ChaosDbg.Scroll;
 
 namespace ChaosDbg.Render
 {
+    //Rather than rendering custom content straight to the DrawingContext,
+    //we instead render it to a DrawingGroup that we then render to the original
+    //DrawingContext. This lets us then get at the DrawingGroup from within
+    //unit tests and inspect the elements that were rendered
+
     public class TwoStageRenderManager
     {
         public DrawingGroup DrawingGroup { get; } = new DrawingGroup();
@@ -16,12 +22,12 @@ namespace ChaosDbg.Render
             this.baseRender = baseRender;
         }
 
-        public void Render(DrawingContext originalContext)
+        public void Render(DrawingContext originalContext, ScrollManager scrollManager)
         {
             baseRender(originalContext);
 
             using (var internalCtx = DrawingGroup.Open())
-                renderer.Render(internalCtx);
+                renderer.Render(internalCtx, scrollManager);
 
             originalContext.DrawDrawing(DrawingGroup);
         }
