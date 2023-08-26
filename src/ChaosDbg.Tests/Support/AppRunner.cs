@@ -31,13 +31,39 @@ namespace ChaosDbg.Tests
 
             thread.Start();
 
-            token.Register(() => Invoke(a => a.Shutdown()));
+            token.Register(() => Invoke(a =>
+            {
+                try
+                {
+                    a?.Shutdown();
+                }
+                catch
+                {
+                }
+            }));
 
             return thread;
         }
 
-        public static void Invoke(Action<Application> action) =>
-            Application.Current.Dispatcher.Invoke(() => action(Application.Current));
+        public static void Invoke(Action<Application> action)
+        {
+            Exception outerEx = null;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    action(Application.Current);
+                }
+                catch (Exception ex)
+                {
+                    outerEx = ex;
+                }
+            });
+
+            if (outerEx != null)
+                throw outerEx;
+        }
 
         private static T Invoke<T>(Func<Application, T> func) =>
             Application.Current.Dispatcher.Invoke(() => func(Application.Current));
@@ -109,8 +135,16 @@ namespace ChaosDbg.Tests
                 finally
                 {
                     GlobalProvider.ConfigureServices = null;
-                    cts.Cancel();
-                }                
+
+                    try
+                    {
+                        Invoke(a => a?.Shutdown());
+                        cts.Cancel();
+                    }
+                    catch
+                    {
+                    }
+                }
             }
         }
 

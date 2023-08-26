@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -22,6 +23,28 @@ namespace ChaosDbg.Tests
                     e => e.HasText("foo", 14, "Consolas", Brushes.Green, 10, 10)
                 )
             );
+        }
+
+        [TestMethod]
+        public void Canvas_Scroll()
+        {
+            AppRunner.WithInProcessApp(_ =>
+            {
+                AppRunner.Invoke(a =>
+                {
+                    var group = a.MainWindow.GetDrawingGroup<TextCanvas>();
+
+                    var verifiers = new List<Action<DrawingInfo>>();
+
+                    for (var i = 0; i < 50; i++)
+                    {
+                        var i1 = i;
+                        verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
+                    }
+
+                    group.Verify(verifiers.ToArray());
+                });
+            });
         }
 
         private FormattedText MakeText(

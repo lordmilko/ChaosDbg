@@ -8,8 +8,8 @@
         x:TypeArguments="vm:MainWindowViewModel"
         d:DataContext="{d:DesignInstance Type=vm:MainWindowViewModel}"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="450" Width="800" WindowStartupLocation="CenterScreen">
     <Grid>
-        
+        <local:TextPaneControl />
     </Grid>
 </local:WindowBase>

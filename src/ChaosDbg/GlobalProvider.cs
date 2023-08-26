@@ -1,6 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
 using ChaosDbg.Engine;
+using ChaosDbg.Text;
+using ChaosDbg.Theme;
 
 namespace ChaosDbg
 {
@@ -39,7 +41,11 @@ namespace ChaosDbg
 
         private static IServiceProvider CreateServiceProvider()
         {
-            var services = new ServiceCollection();
+            var services = new ServiceCollection
+            {
+                { typeof(IThemeProvider), typeof(ThemeProvider) },
+                { typeof(ITextBufferProvider), typeof(TextBufferProvider) }
+            };
 
             ConfigureServices?.Invoke(services);
 

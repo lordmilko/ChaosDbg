@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
 using System.Windows.Media;
+using ChaosDbg.Render;
 
 namespace ChaosDbg.Tests
 {
@@ -26,6 +29,17 @@ namespace ChaosDbg.Tests
                         yield return child;
                 }
             }
+        }
+
+        public static DrawingGroup GetDrawingGroup<TControl>(this Window window)
+        {
+            var descendant = window.GetLogicalDescendants().OfType<TControl>().Single();
+
+            var manager = ((IRenderManagerProvider)descendant).RenderManager;
+
+            var group = manager.DrawingGroup;
+
+            return group;
         }
     }
 }
