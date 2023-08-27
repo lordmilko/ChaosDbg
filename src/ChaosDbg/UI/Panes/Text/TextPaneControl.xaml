@@ -1,4 +1,4 @@
-﻿<local:UserControlEx x:Class="ChaosDbg.TextPaneControl"
+﻿<local:ChildUserControl x:Class="ChaosDbg.TextPaneControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -13,7 +13,11 @@
         <!-- CanContentScroll="True" means we are responsible for handling the scrolling. In this case
              ScrollViewer looks to its child. an IScrollInfo, to get information about the scrolling state -->
         <ScrollViewer HorizontalScrollBarVisibility="Visible" CanContentScroll="True">
-            <local:TextCanvas />
+            <!-- TextPaneControl does not have a DataContext (thus allowing our parent to pass us some RawContent).
+                 RawContent sets the RenderContent (via the DependencyObject setter) which we can then relay to TextCanvas.
+                 Since we don't have a DataContext, we must explicitly specify to use the RenderContent DependencyObject getter defined on
+                 TextPaneControl -->
+            <local:TextCanvas RenderContent="{Binding RenderContent, RelativeSource={RelativeSource AncestorType=UserControl}}" />
         </ScrollViewer>
     </Grid>
-</local:UserControlEx>
+</local:ChildUserControl>

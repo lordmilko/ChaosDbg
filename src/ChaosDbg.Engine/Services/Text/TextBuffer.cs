@@ -1,4 +1,6 @@
 ﻿using System;
+using ChaosDbg.Render;
+using ChaosDbg.Theme;
 
 namespace ChaosDbg.Text
 {
@@ -20,5 +22,7 @@ namespace ChaosDbg.Text
         }
 
         public ITextLine GetLine(int index) => lines[index];
+
+        public IRenderable ToRenderable(ITheme theme) => new UiTextBuffer(this, theme.ContentFont);
     }
 }

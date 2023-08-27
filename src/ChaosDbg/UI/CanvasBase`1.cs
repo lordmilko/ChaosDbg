@@ -15,7 +15,6 @@ namespace ChaosDbg
         public CanvasBase()
         {
             ViewModel = ServiceProvider.GetViewModel<T>();
-            DataContext = ViewModel;
         }
     }
 }

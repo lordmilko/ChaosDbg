@@ -1,9 +1,11 @@
-﻿namespace ChaosDbg.Text
+﻿using ChaosDbg.Render;
+
+namespace ChaosDbg.Text
 {
     /// <summary>
     /// Represents a collection of <see cref="ITextLine"/> items displayed in a single buffer.
     /// </summary>
-    public interface ITextBuffer
+    public interface ITextBuffer : IConvertableToRenderable
     {
         /// <summary>
         /// Gets the number of lines contained in the buffer.

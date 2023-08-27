@@ -13,10 +13,12 @@ namespace ChaosDbg.Render
     {
         public DrawingGroup DrawingGroup { get; } = new DrawingGroup();
 
-        private IRenderer renderer;
+        private IRenderable renderer;
         private Action<DrawingContext> baseRender;
 
-        public TwoStageRenderManager(IRenderer renderer, Action<DrawingContext> baseRender)
+        public bool IsBaseRendering { get; private set; }
+
+        public TwoStageRenderManager(IRenderable renderer, Action<DrawingContext> baseRender)
         {
             this.renderer = renderer;
             this.baseRender = baseRender;
@@ -24,7 +26,16 @@ namespace ChaosDbg.Render
 
         public void Render(DrawingContext originalContext, ScrollManager scrollManager)
         {
-            baseRender(originalContext);
+            try
+            {
+                IsBaseRendering = true;
+
+                baseRender(originalContext);
+            }
+            finally
+            {
+                IsBaseRendering = false;
+            }
 
             using (var internalCtx = DrawingGroup.Open())
                 renderer.Render(internalCtx, scrollManager);

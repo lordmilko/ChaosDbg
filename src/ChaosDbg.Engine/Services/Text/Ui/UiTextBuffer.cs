@@ -9,7 +9,7 @@ namespace ChaosDbg.Text
     /// <summary>
     /// Stores the visual representation of an <see cref="ITextBuffer"/> to be displayed in the UI.
     /// </summary>
-    public interface IUiTextBuffer : IRenderer, IScrollArea
+    public interface IUiTextBuffer : IRenderable, IScrollArea
     {
         ITextBuffer Buffer { get; }
     }
