@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows;
 using System.Windows.Media;
 using ChaosDbg.Render;
 using ChaosDbg.Scroll;
@@ -45,6 +46,18 @@ namespace ChaosDbg.Text
 
             var maxWidth = 0;
 
+            var scrollPos = scrollManager.ScrollPositionPixels;
+
+            var startPixel = ScrollLineHeight * range.Start.Row;
+            var scrollOffset = new Point(scrollPos.X, scrollPos.Y - startPixel);
+
+            var clipGeometry = new RectangleGeometry(new Rect(scrollManager.ViewportSize));
+            drawingContext.PushClip(clipGeometry);
+            drawingContext.PushTransform(new ScaleTransform(scrollManager.Zoom, scrollManager.Zoom));
+
+            //This line is very important. Without it, when we scroll to the bottom of a list, part of the last line is cutoff and doesn't display properly
+            drawingContext.PushTransform(new TranslateTransform(-scrollOffset.X, -scrollOffset.Y));
+
             for (var i = range.Start.Row; i < range.End.Row; i++)
             {
                 var line = Buffer.GetLine(i);
@@ -55,10 +68,17 @@ namespace ChaosDbg.Text
 
                 //The IUiTextLine doesn't know what its Y coordinate should be. We apply a transform
                 //to the Y axis such that each line will be displayed further and further down the page
-                drawingContext.PushTransform(new TranslateTransform(0, (i - offset) * font.LineHeight));
+
+                var offsetY = (i - offset) * font.LineHeight;
+
+                drawingContext.PushTransform(new TranslateTransform(0, offsetY));
                 uiLine.Render(drawingContext);
                 drawingContext.Pop();
             }
+
+            drawingContext.Pop();
+            drawingContext.Pop();
+            drawingContext.Pop();
 
             ScrollAreaWidth = maxWidth;
         }

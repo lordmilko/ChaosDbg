@@ -40,6 +40,11 @@ namespace ChaosDbg.Scroll
         private Point scrollPosition;
 
         /// <summary>
+        /// Gets the current <see cref="ScrollPosition"/> in absolute pixels (without decimal places).
+        /// </summary>
+        public Point ScrollPositionPixels => RoundPointToPixel(ScrollPosition);
+
+        /// <summary>
         /// Gets the current zoom level.
         /// </summary>
         public double Zoom { get; } = 1;
@@ -56,11 +61,12 @@ namespace ChaosDbg.Scroll
         /// </summary>
         public double ViewportZoomWidth => ViewportWidth / Zoom;
 
-        public double MaxVerticalScrollPosition => Math.Max(ScrollArea.ScrollAreaHeight - ViewportZoomHeight + 4, 0);
+        public double MaxVerticalScrollPosition => Math.Max(ScrollArea.ScrollAreaHeight - ViewportZoomHeight + edgeGap, 0);
 
-        public double MaxHorizontalScrollPosition => Math.Max(ScrollArea.ScrollAreaWidth - ViewportZoomWidth + 4, 0);
+        public double MaxHorizontalScrollPosition => Math.Max(ScrollArea.ScrollAreaWidth - ViewportZoomWidth + edgeGap, 0);
 
         private DispatcherTimer invalidateVisualDispatcher;
+        private const int edgeGap = 4;
 
         public ScrollManager(IScrollInfo scrollee, IScrollArea scrollArea)
         {
@@ -116,15 +122,17 @@ namespace ChaosDbg.Scroll
 
         public TextRange GetVisibleTextRange()
         {
+            var scrollPos = ScrollPositionPixels;
+
             var lineCount = (int) (ScrollArea.ScrollAreaHeight / ScrollArea.ScrollLineHeight);
 
             return new TextRange(
                 new TextPosition(
-                    (int)Math.Floor(ScrollPosition.Y / ScrollArea.ScrollLineHeight),
+                    (int)Math.Floor(scrollPos.Y / ScrollArea.ScrollLineHeight),
                     0
                 ),
                 new TextPosition(
-                    Math.Min((int)Math.Ceiling((ScrollPosition.Y + ViewportHeight / Zoom) / ScrollArea.ScrollLineHeight), lineCount),
+                    Math.Min((int)Math.Ceiling((scrollPos.Y + ViewportHeight / Zoom) / ScrollArea.ScrollLineHeight), lineCount),
                     0
                 )
             );
@@ -157,6 +165,24 @@ namespace ChaosDbg.Scroll
             return value;
         }
 
+        private Point RoundPointToPixel(Point pt)
+        {
+            var window = Application.Current.MainWindow;
+
+            if (window == null)
+                return pt;
+
+            var matrix = PresentationSource.FromVisual(window)?.CompositionTarget?.TransformToDevice ?? default;
+
+            double m11 = matrix.M11;
+            double m22 = matrix.M22;
+
+            pt.X = Math.Floor(pt.X * m11) / m11;
+            pt.Y = Math.Floor(pt.Y * m22) / m22;
+
+            return pt;
+        }
+
         #region IScrollInfo
 
         public double ExtentWidth => ScrollArea.ScrollAreaWidth;
@@ -166,7 +192,9 @@ namespace ChaosDbg.Scroll
         public double HorizontalOffset => scrollPosition.X;
         public double VerticalOffset => scrollPosition.Y;
 
-        //todo: holding down a scroll button causes it to hang
+        //Note while it may appear that holding down the LineUp or LineDown buttons causes things to hang,
+        //this is actually just an artifact of having a debugger attached! If you launch the program standalone,
+        //there's no issue
         public void LineUp() => Scroll(0, -ScrollArea.ScrollLineHeight);
 
         public void LineDown() => Scroll(0, ScrollArea.ScrollLineHeight);

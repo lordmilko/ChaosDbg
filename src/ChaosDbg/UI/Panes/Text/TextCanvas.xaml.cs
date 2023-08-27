@@ -106,9 +106,9 @@ namespace ChaosDbg
         public bool CanVerticallyScroll { get; set; }
         public bool CanHorizontallyScroll { get; set; }
 
-        public double ExtentWidth => ScrollManager.ExtentWidth;
+        public double ExtentWidth => scrollManager?.Value.ExtentWidth ?? 0;
         public double ExtentHeight => ScrollManager.ExtentHeight;
-        public double ViewportWidth => ScrollManager.ViewportWidth;
+        public double ViewportWidth => scrollManager?.Value.ViewportWidth ?? 0;
         public double ViewportHeight => ScrollManager.ViewportHeight;
         public double HorizontalOffset => ScrollManager.HorizontalOffset;
         public double VerticalOffset => ScrollManager.VerticalOffset;

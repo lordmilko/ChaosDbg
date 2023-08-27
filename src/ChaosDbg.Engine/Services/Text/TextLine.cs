@@ -17,5 +17,7 @@ namespace ChaosDbg.Text
 
             Runs = runs;
         }
+
+        public override string ToString() => this.GetText();
     }
 }

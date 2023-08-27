@@ -16,5 +16,10 @@ namespace ChaosDbg.Text
 
             Text = text;
         }
+
+        public override string ToString()
+        {
+            return Text;
+        }
     }
 }
