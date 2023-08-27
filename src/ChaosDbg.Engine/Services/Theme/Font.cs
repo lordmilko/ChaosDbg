@@ -10,7 +10,7 @@ namespace ChaosDbg.Theme
 
         public Typeface Typeface { get; }
 
-        public int FontSize { get; }
+        public double FontSize { get; }
 
         private double lineHeight;
 
@@ -32,7 +32,7 @@ namespace ChaosDbg.Theme
             }
         }
 
-        public Font(string name, int fontSize)
+        public Font(string name, double fontSize)
         {
             FontFamily = new FontFamily(name);
             Typeface = new Typeface(FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);

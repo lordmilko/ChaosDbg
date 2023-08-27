@@ -10,7 +10,7 @@ namespace ChaosDbg
 
         protected TService GetRequiredService<TService>() => ServiceProvider.GetService<TService>();
 
-        protected T ViewModel { get; }
+        public T ViewModel { get; }
 
         public CanvasBase()
         {

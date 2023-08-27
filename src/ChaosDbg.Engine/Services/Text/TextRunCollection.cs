@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace ChaosDbg.Text
 {
@@ -11,8 +12,13 @@ namespace ChaosDbg.Text
     /// <summary>
     /// Represents a logical collection of <see cref="ITextRun"/> elements within a single <see cref="ITextLine"/>.
     /// </summary>
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     class TextRunCollection : ITextRunCollection
     {
+        private string DebuggerDisplay => Name != null ? $"[{Name}] {Text}" : Text;
+
+        public string Name { get; set; }
+
         public string Text => this.GetText();
 
         public ITextStyle Style { get; set; }

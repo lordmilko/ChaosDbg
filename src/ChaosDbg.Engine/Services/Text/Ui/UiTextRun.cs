@@ -12,6 +12,8 @@ namespace ChaosDbg.Text
     /// </summary>
     public interface IUiTextRun : IRenderable
     {
+        Point Position { get; }
+
         /// <summary>
         /// Gets the width of the run based on its specified font.
         /// </summary>
@@ -42,7 +44,18 @@ namespace ChaosDbg.Text
 
         public double Height => FormattedText.Height;
 
-        public double Width => FormattedText.WidthIncludingTrailingWhitespace;
+        public double Width
+        {
+            get
+            {
+                var width = FormattedText.WidthIncludingTrailingWhitespace;
+
+                if (Run.Style != null)
+                    width += Run.Style.Margin.Right;
+
+                return width;
+            }
+        }
 
         public UiTextRun(ITextRun run, Font font, Point position)
         {

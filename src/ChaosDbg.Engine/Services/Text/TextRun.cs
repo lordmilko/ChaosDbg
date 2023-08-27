@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace ChaosDbg.Text
 {
@@ -23,8 +24,13 @@ namespace ChaosDbg.Text
     /// <summary>
     /// Represents a chunk of text in an <see cref="ITextLine"/>.
     /// </summary>
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     class TextRun : ITextRun
     {
+        private string DebuggerDisplay => Name != null ? $"[{Name}] {Text}" : Text;
+
+        public string Name { get; set; }
+
         public string Text { get; }
 
         public ITextStyle Style { get; set; }

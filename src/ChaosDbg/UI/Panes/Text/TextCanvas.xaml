@@ -6,9 +6,8 @@
                xmlns:local="clr-namespace:ChaosDbg"
                xmlns:vm="clr-namespace:ChaosDbg.ViewModel;assembly=ChaosDbg.Engine"
                x:TypeArguments="vm:TextCanvasViewModel"
-               d:DataContext="{d:DesignInstance Type=vm:TextCanvasViewModel}"
                mc:Ignorable="d" 
-               d:DesignHeight="450" d:DesignWidth="800">
+               d:DesignHeight="450" d:DesignWidth="800" Background="{Binding ViewModel.BackgroundColor, RelativeSource={RelativeSource Self}}">
     <Grid >
 
     </Grid>

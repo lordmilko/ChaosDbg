@@ -10,7 +10,7 @@ namespace ChaosDbg.Text
     {
         protected ITextLineOrCollection Owner { get; }
 
-        public double Width { get; private set; }
+        public virtual double Width { get; private set; }
 
         public double Height { get; private set; }
 
@@ -48,6 +48,8 @@ namespace ChaosDbg.Text
 
         private IUiTextRun[] CalculateRuns(RenderContext renderContext, Point startingPosition)
         {
+            var originalX = startingPosition.X;
+
             if (runs != null)
                 return runs;
 
@@ -81,11 +83,9 @@ namespace ChaosDbg.Text
                     c.CalculateRuns(renderContext, startingPosition);
 
                 startingPosition.X += uiRun.Width;
-
-                startingPosition.X += run.Style?.Margin.Right ?? 0;
             }
 
-            Width = startingPosition.X;
+            Width = startingPosition.X - originalX;
 
             runs = list.ToArray();
 
