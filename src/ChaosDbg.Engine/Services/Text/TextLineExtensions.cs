@@ -5,13 +5,13 @@ namespace ChaosDbg.Text
 {
     static class TextLineExtensions
     {
-        public static int GetLength(this ITextLine line) => line.Runs.Sum(r => r.Text.Length);
+        public static int GetLength(this ITextLineOrCollection lineOrCollection) => lineOrCollection.Runs.Sum(r => r.Text.Length);
 
-        public static string GetText(this ITextLine line)
+        public static string GetText(this ITextLineOrCollection lineOrCollection)
         {
             var builder = new StringBuilder();
 
-            foreach (var run in line.Runs)
+            foreach (var run in lineOrCollection.Runs)
                 builder.Append(run);
 
             return builder.ToString();

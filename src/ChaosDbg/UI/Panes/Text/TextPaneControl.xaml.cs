@@ -28,7 +28,7 @@ namespace ChaosDbg
         private static void RawContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (e.NewValue is IConvertableToRenderable c)
-                d.SetValue(RenderContentProperty, c.ToRenderable(GlobalProvider.ServiceProvider.GetService<IThemeProvider>().GetTheme()));
+                d.SetValue(RenderContentProperty, c.ToRenderable());
         }
 
         #endregion

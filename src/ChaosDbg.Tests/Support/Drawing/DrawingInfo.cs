@@ -11,6 +11,14 @@ namespace ChaosDbg.Tests
             if (drawing is GlyphRunDrawing g)
                 return new GlyphDrawingInfo(g);
 
+            if (drawing is GeometryDrawing geo)
+            {
+                if (geo.Geometry is LineGeometry)
+                    return new LineDrawingInfo(geo);
+
+                throw new NotImplementedException($"Don't know how to handle a {nameof(GeometryDrawing)} containing geometry of type {geo.Geometry.GetType().Name}");
+            }
+
             throw new NotImplementedException($"Don't know how to create {nameof(DrawingInfo)} for drawing of type {drawing.GetType().Name}");
         }
 

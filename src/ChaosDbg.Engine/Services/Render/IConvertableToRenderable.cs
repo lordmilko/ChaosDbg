@@ -7,6 +7,6 @@ namespace ChaosDbg.Render
     /// </summary>
     public interface IConvertableToRenderable
     {
-        IRenderable ToRenderable(ITheme theme);
+        IRenderable ToRenderable();
     }
 }

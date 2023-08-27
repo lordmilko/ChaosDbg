@@ -24,7 +24,7 @@ namespace ChaosDbg.Render
             this.baseRender = baseRender;
         }
 
-        public void Render(DrawingContext originalContext, ScrollManager scrollManager)
+        public void Render(DrawingContext originalContext, RenderContext renderContext)
         {
             try
             {
@@ -38,7 +38,7 @@ namespace ChaosDbg.Render
             }
 
             using (var internalCtx = DrawingGroup.Open())
-                renderer.Render(internalCtx, scrollManager);
+                renderer.Render(internalCtx, renderContext);
 
             originalContext.DrawDrawing(DrawingGroup);
         }

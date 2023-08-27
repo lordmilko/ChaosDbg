@@ -22,24 +22,26 @@ namespace ChaosDbg.Text
     {
         public ITextBuffer Buffer { get; }
 
-        private Font font;
-
-        public UiTextBuffer(ITextBuffer buffer, Font font)
+        public UiTextBuffer(ITextBuffer buffer)
         {
             if (buffer == null)
                 throw new ArgumentNullException(nameof(buffer));
 
-            if (font == null)
-                throw new ArgumentNullException(nameof(font));
-
             Buffer = buffer;
-            this.font = font;
         }
 
         #region IUiTextBuffer
 
-        public void Render(DrawingContext drawingContext, ScrollManager scrollManager)
+        public void Render(DrawingContext drawingContext, RenderContext renderContext)
         {
+            var scrollManager = renderContext.ScrollManager;
+            var theme = renderContext.ThemeProvider.GetTheme();
+
+            var font = theme.ContentFont;
+
+            ScrollLineHeight = font.LineHeight;
+            ScrollAreaHeight = Buffer.LineCount * font.LineHeight;
+
             var range = scrollManager.GetVisibleTextRange();
 
             var offset = range.Start.Row;
@@ -64,7 +66,7 @@ namespace ChaosDbg.Text
 
                 maxWidth = Math.Max(maxWidth, line.GetLength());
 
-                var uiLine = new UiTextLine(line, font);
+                var uiLine = new UiTextLine(line);
 
                 //The IUiTextLine doesn't know what its Y coordinate should be. We apply a transform
                 //to the Y axis such that each line will be displayed further and further down the page
@@ -72,7 +74,7 @@ namespace ChaosDbg.Text
                 var offsetY = (i - offset) * font.LineHeight;
 
                 drawingContext.PushTransform(new TranslateTransform(0, offsetY));
-                uiLine.Render(drawingContext);
+                uiLine.Render(drawingContext, renderContext);
                 drawingContext.Pop();
             }
 
@@ -86,11 +88,11 @@ namespace ChaosDbg.Text
         #endregion
         #region IScrollArea
 
-        public double ScrollLineHeight => font.LineHeight;
+        public double ScrollLineHeight { get; private set; }
 
         public double ScrollAreaWidth { get; private set; }
 
-        public double ScrollAreaHeight => Buffer.LineCount * font.LineHeight;
+        public double ScrollAreaHeight { get; private set; }
 
         #endregion
     }

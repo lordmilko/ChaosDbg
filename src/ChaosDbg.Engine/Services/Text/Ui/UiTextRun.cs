@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using ChaosDbg.Render;
 using ChaosDbg.Theme;
 
 namespace ChaosDbg.Text
@@ -9,13 +10,17 @@ namespace ChaosDbg.Text
     /// <summary>
     /// Stores the visual representation of an <see cref="ITextRun"/> to be displayed in the UI.
     /// </summary>
-    interface IUiTextRun
+    public interface IUiTextRun : IRenderable
     {
         /// <summary>
-        /// Renders this run to a <see cref="DrawingContext"/>
+        /// Gets the width of the run based on its specified font.
         /// </summary>
-        /// <param name="drawingContext">The <see cref="DrawingContext"/> this run should be rendered to</param>
-        void Render(DrawingContext drawingContext);
+        double Width { get; }
+
+        /// <summary>
+        /// Gets the hight of the run based on its specified font.
+        /// </summary>
+        double Height { get; }
     }
 
     class UiTextRun : IUiTextRun
@@ -59,7 +64,7 @@ namespace ChaosDbg.Text
             Run = run;
         }
 
-        public void Render(DrawingContext drawingContext)
+        public void Render(DrawingContext drawingContext, RenderContext renderContext)
         {
             drawingContext.DrawText(FormattedText, Position);
         }

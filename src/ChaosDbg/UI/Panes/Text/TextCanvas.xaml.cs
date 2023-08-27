@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using ChaosDbg.Render;
 using ChaosDbg.Scroll;
+using ChaosDbg.Theme;
 using ChaosDbg.ViewModel;
 
 namespace ChaosDbg
@@ -40,7 +41,7 @@ namespace ChaosDbg
 
                 canvas.scrollManager = new Lazy<ScrollManager>(() =>
                 {
-                    var manager = new ScrollManager(canvas, r);
+                    var manager = new ScrollManager(canvas, (IScrollArea) r);
 
                     //Neither the logical nor visual tree has been constructed yet. Waiting for the loaded event is too long,
                     //we need to be accessible as soon as possible, so we can be used during arrange, etc. Thus, we lazily initialize
@@ -53,6 +54,8 @@ namespace ChaosDbg
 
                     return manager;
                 });
+
+                canvas.renderContext = new Lazy<RenderContext>(() => new RenderContext(canvas.scrollManager.Value, GlobalProvider.ServiceProvider.GetService<IThemeProvider>()));
 
                 //Force a re-render now our properties have been set
                 canvas.InvalidateVisual();
@@ -68,9 +71,15 @@ namespace ChaosDbg
 
         private Lazy<ScrollManager> scrollManager;
 
+        private Lazy<RenderContext> renderContext;
+
         public TextCanvas()
         {
             InitializeComponent();
+
+            //In order to display pixel perfect table lines (without any blurring at higher DPIs) we must
+            //set the EdgeMode to Aliased
+            RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
         }
 
         protected override void OnRender(DrawingContext dc)
@@ -79,7 +88,7 @@ namespace ChaosDbg
             //is not set yet, we haven't set our RenderManager yet either. We'll force a refresh via
             //InvalidateVisual once the RenderContent is set
             if (RenderManager != null && !RenderManager.IsBaseRendering)
-                RenderManager.Render(dc, ScrollManager);
+                RenderManager.Render(dc, renderContext.Value);
             else
                 base.OnRender(dc);
         }
