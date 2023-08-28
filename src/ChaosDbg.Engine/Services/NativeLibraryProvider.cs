@@ -15,7 +15,7 @@ namespace ChaosDbg
     /// <summary>
     /// Provides facilities for locating and interacting with native libraries in the output directory of ChaosDbg.
     /// </summary>
-    class NativeLibraryProvider : IDisposable
+    public class NativeLibraryProvider : IDisposable
     {
         private string root;
         private bool disposed;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using ChaosDbg.DbgEng;
 using ChaosDbg.Engine;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
@@ -43,6 +44,9 @@ namespace ChaosDbg
         {
             var services = new ServiceCollection
             {
+                typeof(DbgEngEngine),
+                typeof(NativeLibraryProvider),
+
                 { typeof(IThemeProvider), typeof(ThemeProvider) },
                 { typeof(ITextBufferProvider), typeof(TextBufferProvider) }
             };
