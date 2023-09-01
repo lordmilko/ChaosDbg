@@ -12,12 +12,12 @@
     <Grid>
         <!-- CanContentScroll="True" means we are responsible for handling the scrolling. In this case
              ScrollViewer looks to its child. an IScrollInfo, to get information about the scrolling state -->
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" CanContentScroll="True">
+        <ScrollViewer x:Name="ScrollViewer" HorizontalScrollBarVisibility="Auto" CanContentScroll="True">
             <!-- TextPaneControl does not have a DataContext (thus allowing our parent to pass us some RawContent).
                  RawContent sets the RenderContent (via the DependencyObject setter) which we can then relay to TextCanvas.
                  Since we don't have a DataContext, we must explicitly specify to use the RenderContent DependencyObject getter defined on
                  TextPaneControl -->
-            <local:TextCanvas RenderContent="{Binding RenderContent, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+            <local:TextCanvas x:Name="Canvas" RenderContent="{Binding RenderContent, RelativeSource={RelativeSource AncestorType=UserControl}}" />
         </ScrollViewer>
     </Grid>
 </local:ChildUserControl>

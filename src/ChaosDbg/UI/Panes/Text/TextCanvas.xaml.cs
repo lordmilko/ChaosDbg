@@ -1,12 +1,9 @@
-﻿using System;
-using System.Diagnostics;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using ChaosDbg.Render;
 using ChaosDbg.Scroll;
-using ChaosDbg.Theme;
 using ChaosDbg.ViewModel;
 
 namespace ChaosDbg
@@ -14,7 +11,7 @@ namespace ChaosDbg
     /// <summary>
     /// Interaction logic for TextCanvasControl.xaml
     /// </summary>
-    public partial class TextCanvas : CanvasBase<TextCanvasViewModel>, IRenderManagerProvider, IScrollInfo
+    public partial class TextCanvas : CanvasBase<TextCanvasViewModel>, IDrawable, IScrollInfo
     {
         #region Content
 
@@ -33,45 +30,13 @@ namespace ChaosDbg
 
         private static void RenderContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (e.NewValue is IRenderable r)
-            {
-                var canvas = (TextCanvas)d;
-
-                canvas.RenderManager = new TwoStageRenderManager(r, canvas.OnRender);
-
-                canvas.scrollManager = new Lazy<ScrollManager>(() =>
-                {
-                    var manager = new ScrollManager(canvas, (IScrollArea) r);
-
-                    //Neither the logical nor visual tree has been constructed yet. Waiting for the loaded event is too long,
-                    //we need to be accessible as soon as possible, so we can be used during arrange, etc. Thus, we lazily initialize
-                    //ourselves. By the time we're accessed, we can probably be used
-                    var parentPane = canvas.GetAncestor<TextPaneControl>();
-                    var scrollViewer = parentPane.GetLogicalDescendant<ScrollViewer>();
-
-                    scrollViewer.ScrollChanged += manager.ScrollViewerScrollChanged;
-                    scrollViewer.PreviewMouseWheel += manager.ScrollViewerMouseWheel;
-
-                    return manager;
-                });
-
-                canvas.renderContext = new Lazy<RenderContext>(() => new RenderContext(canvas.scrollManager.Value, GlobalProvider.ServiceProvider.GetService<IThemeProvider>()));
-
-                //Force a re-render now our properties have been set
-                canvas.InvalidateVisual();
-            }
         }
 
         #endregion
 
-        public TwoStageRenderManager RenderManager { get; private set; }
-
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public ScrollManager ScrollManager => scrollManager.Value;
-
-        private Lazy<ScrollManager> scrollManager;
-
-        private Lazy<RenderContext> renderContext;
+        public DrawingGroup DrawingGroup { get; } = new DrawingGroup();
+        public ScrollManager ScrollManager { get; set; }
+        public RenderContext RenderContext { get; set; }
 
         public TextCanvas()
         {
@@ -84,13 +49,15 @@ namespace ChaosDbg
 
         protected override void OnRender(DrawingContext dc)
         {
-            //A single render pass occurs before property binding occurs. As such, if RenderContent
-            //is not set yet, we haven't set our RenderManager yet either. We'll force a refresh via
-            //InvalidateVisual once the RenderContent is set
-            if (RenderManager != null && !RenderManager.IsBaseRendering)
-                RenderManager.Render(dc, renderContext.Value);
-            else
-                base.OnRender(dc);
+            base.OnRender(dc);
+
+            if (RenderContent != null)
+            {
+                using (var internalCtx = DrawingGroup.Open())
+                    RenderContent.Render(internalCtx, RenderContext);
+
+                dc.DrawDrawing(DrawingGroup);
+            }
         }
 
         protected override Size ArrangeOverride(Size arrangeSize)
@@ -98,7 +65,7 @@ namespace ChaosDbg
             //If the RenderContent has not been set yet, we won't have a ScrollManager to interact with yet.
             //The first render pass occurs before property binding has occurred. RenderContent will call
             //InvalidateVisual upon being bound, forcing a refresh here
-            if (scrollManager != null)
+            if (ScrollManager != null)
             {
                 ScrollManager.ViewportSize = arrangeSize;
                 ScrollOwner.InvalidateScrollInfo();
@@ -115,9 +82,9 @@ namespace ChaosDbg
         public bool CanVerticallyScroll { get; set; }
         public bool CanHorizontallyScroll { get; set; }
 
-        public double ExtentWidth => scrollManager?.Value.ExtentWidth ?? 0;
+        public double ExtentWidth => ScrollManager?.ExtentWidth ?? 0;
         public double ExtentHeight => ScrollManager.ExtentHeight;
-        public double ViewportWidth => scrollManager?.Value.ViewportWidth ?? 0;
+        public double ViewportWidth => ScrollManager?.ViewportWidth ?? 0;
         public double ViewportHeight => ScrollManager.ViewportHeight;
         public double HorizontalOffset => ScrollManager.HorizontalOffset;
         public double VerticalOffset => ScrollManager.VerticalOffset;
@@ -134,7 +101,13 @@ namespace ChaosDbg
         public void MouseWheelLeft() => ScrollManager.MouseWheelLeft();
         public void MouseWheelRight() => ScrollManager.MouseWheelRight();
         public void SetHorizontalOffset(double offset) => ScrollManager.SetHorizontalOffset(offset);
+
+        /// <summary>
+        /// Sets the current vertical offset in pixels between 0 and <see cref="ExtentHeight"/>.
+        /// </summary>
+        /// <param name="offset">The pixel offset to set the vertical scrollbar to.</param>
         public void SetVerticalOffset(double offset) => ScrollManager.SetVerticalOffset(offset);
+
         public Rect MakeVisible(Visual visual, Rect rectangle) => ScrollManager.MakeVisible(visual, rectangle);
 
         #endregion

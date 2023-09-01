@@ -35,11 +35,7 @@ namespace ChaosDbg.Tests
         {
             var descendant = window.GetLogicalDescendants().OfType<TControl>().Single();
 
-            var manager = ((IRenderManagerProvider)descendant).RenderManager;
-
-            var group = manager.DrawingGroup;
-
-            return group;
+            return ((IDrawable) descendant).DrawingGroup;
         }
     }
 }
