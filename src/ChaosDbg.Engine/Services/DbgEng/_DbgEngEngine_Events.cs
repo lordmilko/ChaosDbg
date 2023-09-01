@@ -1,6 +1,7 @@
 ﻿using System;
 using ClrDebug;
 using ClrDebug.DbgEng;
+using static ChaosDbg.EventExtensions;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.DbgEng
@@ -9,6 +10,8 @@ namespace ChaosDbg.DbgEng
 
     partial class DbgEngEngine : IDebugEventCallbacks, IDebugOutputCallbacks2
     {
+        #region ChaosDbg Event Handlers
+
         /// <summary>
         /// The event that occurs when the engine wishes to print output to the console.
         /// </summary>
@@ -19,12 +22,26 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         public event EventHandler<EngineStatusChangedEventArgs> EngineStatusChanged;
 
+        /// <summary>
+        /// The event that occurs when a module is loaded into the current process.
+        /// </summary>
+        public event EventHandler<EngineModuleLoadEventArgs> ModuleLoad;
+
+        /// <summary>
+        /// The event that occurs when a module is unloaded from the current process.
+        /// </summary>
+        public event EventHandler<EngineModuleUnloadEventArgs> ModuleUnload;
+
+        #endregion
         #region IDebugEventCallbacks
 
         HRESULT IDebugEventCallbacks.GetInterestMask(out DEBUG_EVENT_TYPE mask)
         {
             mask =
-                DEBUG_EVENT_TYPE.CHANGE_ENGINE_STATE; //Track when the debuggee state changes
+                DEBUG_EVENT_TYPE.CHANGE_ENGINE_STATE | //Track when the debuggee state changes
+                DEBUG_EVENT_TYPE.CREATE_PROCESS      | //We need to simulate a module load event when a process is created
+                DEBUG_EVENT_TYPE.LOAD_MODULE         | //We want to know when modules are loaded into the target process
+                DEBUG_EVENT_TYPE.UNLOAD_MODULE;        //We want to know when modules are unloaded from the target process
 
             return S_OK;
         }
@@ -39,14 +56,42 @@ namespace ChaosDbg.DbgEng
 
         DEBUG_STATUS IDebugEventCallbacks.CreateProcess(long imageFileHandle, long handle, long baseOffset, int moduleSize, string moduleName,
             string imageName, int checkSum, int timeDateStamp, long initialThreadHandle, long threadDataOffset,
-            long startOffset) => DEBUG_STATUS.NO_CHANGE;
+            long startOffset)
+        {
+            //When WinDbg processes CreateProcess it simulates a call to NotifyLoadModuleEvent(), so we should do the same
+            ((IDebugEventCallbacks)this).LoadModule(
+                imageFileHandle: imageFileHandle,
+                baseOffset: baseOffset,
+                moduleSize: moduleSize,
+                moduleName: moduleName,
+                imageName: imageName,
+                checkSum: checkSum,
+                timeDateStamp: timeDateStamp
+            );
+
+            return DEBUG_STATUS.NO_CHANGE;
+        }
 
         DEBUG_STATUS IDebugEventCallbacks.ExitProcess(int exitCode) => DEBUG_STATUS.NO_CHANGE;
 
-        DEBUG_STATUS IDebugEventCallbacks.LoadModule(long imageFileHandle, long baseOffset, int moduleSize, string moduleName, string imageName,
-            int checkSum, int timeDateStamp) => DEBUG_STATUS.NO_CHANGE;
+        DEBUG_STATUS IDebugEventCallbacks.LoadModule(long imageFileHandle, long baseOffset, int moduleSize, string moduleName, string imageName, int checkSum, int timeDateStamp)
+        {
+            var module = Modules.Add(baseOffset, imageName, moduleName, moduleSize);
 
-        DEBUG_STATUS IDebugEventCallbacks.UnloadModule(string imageBaseName, long baseOffset) => DEBUG_STATUS.NO_CHANGE;
+            HandleEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+
+            return DEBUG_STATUS.NO_CHANGE;
+        }
+
+        DEBUG_STATUS IDebugEventCallbacks.UnloadModule(string imageBaseName, long baseOffset)
+        {
+            var module = Modules.Remove(baseOffset);
+
+            if (module != null)
+                HandleEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+
+            return DEBUG_STATUS.NO_CHANGE;
+        }
 
         DEBUG_STATUS IDebugEventCallbacks.SystemError(int error, int level) => DEBUG_STATUS.NO_CHANGE;
 
@@ -111,10 +156,5 @@ namespace ChaosDbg.DbgEng
         }
 
         #endregion
-
-        private void HandleEvent<T>(EventHandler<T> handler, T args)
-        {
-            handler?.Invoke(this, args);
-        }
     }
 }

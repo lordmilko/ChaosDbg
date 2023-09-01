@@ -45,15 +45,20 @@ namespace ChaosDbg.DbgEng
 
                 return engineClient;
             }
-            set => engineClient = value;
         }
+
+        /// <summary>
+        /// Gets a pointer to the <see cref="EngineClient"/> contained in this session container.<para/>
+        /// While this property can be accessed from any thread, this value should only be used for the purposes of passing the pointer to other DbgEng methods that may want to send a notification to the <see cref="EngineClient"/>,
+        /// such as the <see cref="UiClient"/> sending a notification that the <see cref="EngineClient"/> should stop waiting for events.
+        /// </summary>
+        public IntPtr EngineClientRaw => engineClient.Raw;
 
         /// <summary>
         /// Initializes <see cref="EngineClient"/> by creating a new <see cref="DebugClient"/> from <see cref="UiClient"/> for use
         /// on the <see cref="EngineThread"/>.
         /// </summary>
-        /// <returns>The <see cref="DebugClient"/> that should be used on the <see cref="EngineThread"/>.</returns>
-        public DebugClient CreateEngineClient()
+        public void CreateEngineClient()
         {
             if (Thread.CurrentThread.ManagedThreadId != EngineThread.ManagedThreadId)
                 throw new DebugEngineException($"{nameof(EngineClient)} should only be created on the engine thread");
@@ -65,11 +70,46 @@ namespace ChaosDbg.DbgEng
             //perform the work of waitng on and interacting with DbgEng, we need a new client for the engine thread from
             //our existing UiClient which was created initially from DebugCreate().
             engineClient = uiClient.CreateClient();
-
-            return engineClient;
         }
 
         #endregion
+        #region BufferClient
+
+        private DebugClient bufferClient;
+
+        /// <summary>
+        /// Gets a <see cref="DebugClient"/> that can be used for executing commands that emit their output to a clients' output callbacks.<para/>
+        /// This client can only be used on the <see cref="EngineThread"/>.
+        /// </summary>
+        public DebugClient BufferClient
+        {
+            get
+            {
+                if (Thread.CurrentThread.ManagedThreadId != EngineThread.ManagedThreadId)
+                    throw new DebugEngineException($"Attempted to access {nameof(BufferClient)} outside of the engine thread, however it should only be accessed from within the engine thread.");
+
+                return bufferClient;
+            }
+        }
+
+        /// <summary>
+        /// Initializes <see cref="BufferClient"/> by creating a new <see cref="DebugClient"/> from <see cref="EngineClient"/> for use
+        /// on the <see cref="EngineThread"/>.
+        /// </summary>
+        public void CreateBufferClient()
+        {
+            bufferClient = EngineClient.CreateClient();
+            BufferOutput = new BufferOutputCallbacks();
+
+            //A variety of things are included in the default output mask. We only interested in output that we generate
+            //bufferClient.OutputMask = 0;
+
+            bufferClient.OutputCallbacks = BufferOutput;
+        }
+
+        #endregion
+
+        private BufferOutputCallbacks BufferOutput { get; set; }
 
         /// <summary>
         /// Gets the <see cref="CancellationTokenSource"/> that can be used to terminate all running commands
@@ -90,6 +130,11 @@ namespace ChaosDbg.DbgEng
         /// that the debug engine is shutting down.
         /// </summary>
         public CancellationToken EngineCancellationToken => EngineCancellationTokenSource.Token;
+
+        /// <summary>
+        /// Gets the managed thread ID of the <see cref="EngineThread"/>.
+        /// </summary>
+        public int EngineThreadId => EngineThread.ManagedThreadId;
 
         /// <summary>
         /// Stores a reference to the internal thread that the debugger engine is running on.
@@ -127,6 +172,30 @@ namespace ChaosDbg.DbgEng
         /// Starts the debug session by launching the engine thread.
         /// </summary>
         public void Start() => EngineThread.Start();
+
+        /// <summary>
+        /// Executes a command using <see cref="BufferClient"/> that emits output to
+        /// a clients' output callbacks.
+        /// </summary>
+        /// <param name="action">The action to perform using the <see cref="BuferClient"/>.</param>
+        /// <returns>The output that was emitted to the output callbacks of the <see cref="BufferClient"/>.</returns>
+        public string[] ExecuteBufferedCommand(Action<DebugClient> action)
+        {
+            BufferOutput.Lines.Clear();
+            BufferOutput.Capturing = true;
+
+            try
+            {
+                action(BufferClient);
+
+                return BufferOutput.Lines.ToArray();
+            }
+            finally
+            {
+                BufferOutput.Capturing = false;
+                BufferOutput.Lines.Clear();
+            }
+        }
 
         /// <summary>
         /// Terminates the debugger session, sending notifications to DbgEng that it should wake up (if stuck inside of an internal wait)

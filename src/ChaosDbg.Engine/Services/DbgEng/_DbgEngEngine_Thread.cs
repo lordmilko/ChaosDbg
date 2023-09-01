@@ -17,7 +17,11 @@ namespace ChaosDbg.DbgEng
         {
             //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
             //The real client however exists on the engine thread here
-            Session.EngineClient = Session.CreateEngineClient();
+            Session.CreateEngineClient();
+
+            //Sometimes we need to execute commands that only emit output to the output callbacks (e.g. OutputDisassemblyLines). Rather than pollute our normal output display,
+            //we define a special purpose "buffer client" that has its own output callbacks that write to an array.
+            Session.CreateBufferClient();
 
             /* The DbgEngEngine class will serve as both the output and event handlers. The reason for this is that only the class that owns an event
              * handler is allowed to invoke it. If we had separate classes for our engine, thread and event callbacks, we would have to write a lot of "middleware"
@@ -97,6 +101,9 @@ namespace ChaosDbg.DbgEng
                 //DebugClient.ExitDispatch(). 
                 if (IsEngineCancellationRequested)
                     break;
+
+                //Process any commands that were dispatched to the engine thread
+                Commands.DrainQueue();
             }
         }
 

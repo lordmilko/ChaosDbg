@@ -14,5 +14,10 @@ namespace ChaosDbg
             OldStatus = oldStatus;
             NewStatus = newStatus;
         }
+
+        public override string ToString()
+        {
+            return $"{OldStatus} -> {NewStatus}";
+        }
     }
 }

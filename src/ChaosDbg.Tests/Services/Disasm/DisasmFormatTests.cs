@@ -58,7 +58,7 @@ namespace ChaosDbg.Tests
             else if (typeof(T) == typeof(byte[]))
             {
                 var dis = CreateDisassembler(0, (byte[])(object)value);
-                var instr = dis.Disassemble(1)[0];
+                var instr = dis.Disassemble();
                 actual = dis.Format(instr);
             }
             else
