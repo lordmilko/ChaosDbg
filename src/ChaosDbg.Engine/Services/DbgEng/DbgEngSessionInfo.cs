@@ -52,7 +52,7 @@ namespace ChaosDbg.DbgEng
         /// While this property can be accessed from any thread, this value should only be used for the purposes of passing the pointer to other DbgEng methods that may want to send a notification to the <see cref="EngineClient"/>,
         /// such as the <see cref="UiClient"/> sending a notification that the <see cref="EngineClient"/> should stop waiting for events.
         /// </summary>
-        public IntPtr EngineClientRaw => engineClient.Raw;
+        public IntPtr EngineClientRaw => engineClient?.Raw ?? IntPtr.Zero;
 
         /// <summary>
         /// Initializes <see cref="EngineClient"/> by creating a new <see cref="DebugClient"/> from <see cref="UiClient"/> for use
@@ -218,9 +218,15 @@ namespace ChaosDbg.DbgEng
                 //If the engine is currently waiting on DebugClient.DispatchCallbacks inside InputLoop, wake it up
                 //so it can see that cancellation was requested. The UiClient is set on the UI thread, while the EngineClient is set inside
                 //of the engine thread, so there's no guarantee that just because we have a UiClient we also have an EngineClient
-                if (EngineClient != null)
-                    UiClient.TryExitDispatch(EngineClient.Raw);
+                if (EngineClientRaw != IntPtr.Zero)
+                    UiClient.TryExitDispatch(EngineClientRaw);
             }
+
+            EngineThread.Join();
+            uiClient = null;
+            engineClient = null;
+            bufferClient = null;
+            BufferOutput = null;
 
             disposed = true;
         }

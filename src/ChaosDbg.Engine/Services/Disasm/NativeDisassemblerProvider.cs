@@ -62,10 +62,8 @@ namespace ChaosDbg.Disasm
             var is32Bit = peFile.OptionalHeader.Magic == PEMagic.PE32;
             var entryPoint = peFile.OptionalHeader.AddressOfEntryPoint;
 
-            //If we encounter such a file, we can potentially look at what IDA does with that file, and maybe open the first
-            //section in the file? What if that doesn't contain code?
             if (entryPoint == 0)
-                throw new NotSupportedException("Opening a file without an entry point is not currently supported.");
+                entryPoint = peFile.OptionalHeader.BaseOfCode;
 
             var rvaStream = new PERvaToPhysicalStream(fileStream, peFile);
 

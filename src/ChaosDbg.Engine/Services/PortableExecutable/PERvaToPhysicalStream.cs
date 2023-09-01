@@ -13,7 +13,18 @@ namespace ChaosDbg.Metadata
         public override bool CanSeek => true;
         public override bool CanWrite => false;
         public override long Length => stream.Length;
-        public override long Position { get; set; }
+
+        private long position;
+        public override long Position
+        {
+            get => position;
+            set
+            {
+                var rva = value - (long) peFile.OptionalHeader.ImageBase;
+
+                Seek(rva, SeekOrigin.Begin);
+            }
+        }
 
         private readonly Stream stream;
         private readonly IPEFile peFile;
@@ -43,7 +54,7 @@ namespace ChaosDbg.Metadata
             if (origin != SeekOrigin.Begin)
                 throw new NotSupportedException($"{nameof(PERvaToPhysicalStream)} currently only supports {nameof(SeekOrigin)}.{nameof(SeekOrigin.Begin)}");
 
-            Position = (long) peFile.OptionalHeader.ImageBase + rva;
+            position = (long) peFile.OptionalHeader.ImageBase + rva;
             stream.Seek(physicalOffset, SeekOrigin.Begin);
             return Position;
         }

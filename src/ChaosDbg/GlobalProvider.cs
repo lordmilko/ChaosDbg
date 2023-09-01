@@ -1,7 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
 using ChaosDbg.DbgEng;
+using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
+using ChaosDbg.Metadata;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
 
@@ -47,6 +49,8 @@ namespace ChaosDbg
                 typeof(DbgEngEngine),
                 typeof(NativeLibraryProvider),
 
+                { typeof(IPEFileProvider), typeof(PEFileProvider) },
+                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                 { typeof(IThemeProvider), typeof(ThemeProvider) },
                 { typeof(ITextBufferProvider), typeof(TextBufferProvider) }
             };

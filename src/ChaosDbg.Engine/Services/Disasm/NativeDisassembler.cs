@@ -116,8 +116,24 @@ namespace ChaosDbg.Disasm
                     //Decode a single instruction. This may result in multiple reads
                     var instr = Decoder.Decode();
 
+                    //We've encountered a bad instruction! Is it because we're at the end of the stream?
                     if (instr.Code == Code.INVALID)
-                        yield break;
+                    {
+                        var previousInstr = instr;
+                        var previousInstrBytes = Stream.ExtractReadBytes();
+
+                        //Read another instruction to see whether we progress or not
+                        instr = Decoder.Decode();
+
+                        //The stream didn't move, we must be at the end. Don't emit either of the bad instructions, just break
+                        if (instr.IP == previousInstr.IP)
+                            yield break;
+
+                        //The stream moved. Write out the previous instruction followed by the one we just read
+                        yield return new NativeInstruction(previousInstr, previousInstrBytes);
+
+                        //Fall through to return the second instruction we read as well
+                    }
 
                     //Extract and clear the bytes that were read from the last operation
                     var bytes = Stream.ExtractReadBytes();

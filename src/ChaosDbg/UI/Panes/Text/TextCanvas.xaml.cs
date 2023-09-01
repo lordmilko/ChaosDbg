@@ -19,17 +19,13 @@ namespace ChaosDbg
             nameof(RenderContent),
             typeof(IRenderable),
             typeof(TextCanvas),
-            new PropertyMetadata(null, RenderContentChanged)
+            new PropertyMetadata()
         );
 
         public IRenderable RenderContent
         {
             get => (IRenderable) GetValue(RenderContentProperty);
             set => SetValue(RenderContentProperty, value);
-        }
-
-        private static void RenderContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
         }
 
         #endregion

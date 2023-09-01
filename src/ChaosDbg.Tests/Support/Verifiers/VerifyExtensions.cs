@@ -27,5 +27,9 @@ namespace ChaosDbg.Tests
             for (var i = 0; i < desc.Length; i++)
                 verifiers[i](DrawingInfo.New(desc[i]));
         }
+
+        public static MemoryTextSegmentVerifier Verify(this IMemoryTextSegment segment) => new MemoryTextSegmentVerifier(segment);
+
+        public static CodeNavigatorVerifier Verify(this CodeNavigator nav) => new CodeNavigatorVerifier(nav);
     }
 }

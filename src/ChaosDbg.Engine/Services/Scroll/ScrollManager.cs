@@ -49,7 +49,16 @@ namespace ChaosDbg.Scroll
         /// </summary>
         public double Zoom { get; } = 1;
 
-        public int LinesPerPage => (int) Math.Floor(ViewportHeight / ScrollArea.ScrollLineHeight / Zoom);
+        public int LinesPerPage
+        {
+            get
+            {
+                if (ViewportHeight == 0 || ScrollArea.ScrollAreaHeight == 0)
+                    return 0;
+
+                return (int) Math.Floor(ViewportHeight / ScrollArea.ScrollLineHeight / Zoom);
+            }
+        }
 
         /// <summary>
         /// Gets the effective height of the viewport after accounting for the current zoom level.
@@ -102,7 +111,7 @@ namespace ChaosDbg.Scroll
             RequestInvalidateScrolledArea();
         }
 
-        public void ScrollViewerMouseWheel(object sender, MouseWheelEventArgs e)
+        public virtual void ScrollViewerMouseWheel(object sender, MouseWheelEventArgs e)
         {
             Scroll(0, (double)-e.Delta / 2.5);
             e.Handled = true;
@@ -113,7 +122,7 @@ namespace ChaosDbg.Scroll
         /// </summary>
         /// <param name="xAmount">The additional amount to scroll horizontally.</param>
         /// <param name="yAmount">The additional amount to scroll vertically.</param>
-        public void Scroll(double xAmount, double yAmount)
+        protected void Scroll(double xAmount, double yAmount)
         {
             scrollPosition.X += xAmount;
             scrollPosition.Y += yAmount;
@@ -128,7 +137,7 @@ namespace ChaosDbg.Scroll
 
             return new TextRange(
                 new TextPosition(
-                    (int)Math.Floor(scrollPos.Y / ScrollArea.ScrollLineHeight),
+                    (int)Math.Floor(scrollPos.Y / ScrollArea.ScrollLineHeight), //If Y=160 and LineHeight=16, we're at row 10
                     0
                 ),
                 new TextPosition(
@@ -138,7 +147,7 @@ namespace ChaosDbg.Scroll
             );
         }
 
-        private void RequestInvalidateScrolledArea()
+        public void RequestInvalidateScrolledArea()
         {
             //If we tried to scroll out of bounds, bring the position back in bounds within the valid
             //minimum and maximum scroll positions on each axis
@@ -195,21 +204,21 @@ namespace ChaosDbg.Scroll
         //Note while it may appear that holding down the LineUp or LineDown buttons causes things to hang,
         //this is actually just an artifact of having a debugger attached! If you launch the program standalone,
         //there's no issue
-        public void LineUp() => Scroll(0, -ScrollArea.ScrollLineHeight);
+        public virtual void LineUp() => Scroll(0, -ScrollArea.ScrollLineHeight);
 
-        public void LineDown() => Scroll(0, ScrollArea.ScrollLineHeight);
+        public virtual void LineDown() => Scroll(0, ScrollArea.ScrollLineHeight);
 
-        public void LineLeft() => Scroll(-16, 0);
+        public virtual void LineLeft() => Scroll(-16, 0);
 
-        public void LineRight() => Scroll(16, 0);
+        public virtual void LineRight() => Scroll(16, 0);
 
-        public void PageUp() => Scroll(0, -Math.Max(LinesPerPage - 1, 1) * ScrollArea.ScrollLineHeight);
+        public virtual void PageUp() => Scroll(0, -Math.Max(LinesPerPage - 1, 1) * ScrollArea.ScrollLineHeight);
 
-        public void PageDown() => Scroll(0, Math.Max(LinesPerPage - 1, 1) * ScrollArea.ScrollLineHeight);
+        public virtual void PageDown() => Scroll(0, Math.Max(LinesPerPage - 1, 1) * ScrollArea.ScrollLineHeight);
 
-        public void PageLeft() => Scroll(-ViewportWidth, 0);
+        public virtual void PageLeft() => Scroll(-ViewportWidth, 0);
 
-        public void PageRight() => Scroll(ViewportWidth, 0);
+        public virtual void PageRight() => Scroll(ViewportWidth, 0);
 
         public void MouseWheelUp()
         {
@@ -231,13 +240,13 @@ namespace ChaosDbg.Scroll
             throw new NotImplementedException();
         }
 
-        public void SetHorizontalOffset(double offset)
+        public virtual void SetHorizontalOffset(double offset)
         {
             scrollPosition.X = offset;
             RequestInvalidateScrolledArea();
         }
 
-        public void SetVerticalOffset(double offset)
+        public virtual void SetVerticalOffset(double offset)
         {
             scrollPosition.Y = offset;
             RequestInvalidateScrolledArea();

@@ -1,44 +1,47 @@
 ﻿using System;
 using ChaosDbg.Render;
+using ChaosDbg.Theme;
+using static ChaosDbg.EventExtensions;
 
 namespace ChaosDbg.Text
 {
     /// <summary>
     /// Represents a collection of <see cref="ITextLine"/> items displayed in a single buffer.
     /// </summary>
-    public interface ITextBuffer : IConvertableToRenderable
-    {
-        /// <summary>
-        /// Gets the number of lines contained in the buffer.
-        /// </summary>
-        int LineCount { get; }
-
-        /// <summary>
-        /// Gets the <see cref="ITextLine"/> at the specified index.
-        /// </summary>
-        /// <param name="index">The index of the line to retrieve.</param>
-        /// <returns>The retrieved <see cref="ITextLine"/>.</returns>
-        ITextLine GetLine(int index);
-    }
-
-    /// <summary>
-    /// Represents a collection of <see cref="ITextLine"/> items displayed in a single buffer.
-    /// </summary>
     class TextBuffer : ITextBuffer
     {
+        public event EventHandler<EventArgs> UpdateBuffer;
+
+        public void RaiseUpdateBuffer(EventArgs args) => HandleSimpleEvent(UpdateBuffer, args);
+
+        public Font Font { get; }
+
         public int LineCount => lines.Length;
 
         private ITextLine[] lines;
+        private ITextLine[] subsetLines;
 
-        public TextBuffer(params ITextLine[] lines)
+        public TextBuffer(Font font, params ITextLine[] lines)
         {
+            if (font == null)
+                throw new ArgumentNullException(nameof(font));
+
             if (lines == null)
                 throw new ArgumentNullException(nameof(lines));
 
+            Font = font;
             this.lines = lines;
+            subsetLines = new ITextLine[lines.Length];
         }
 
-        public ITextLine GetLine(int index) => lines[index];
+        public void PrepareLines(int startIndex, int endIndex)
+        {
+            Array.Clear(subsetLines, 0, lines.Length);
+            //0-0 = 0, but we still want that line itself, so we do +1
+            Array.Copy(lines, startIndex, subsetLines, 0, (endIndex - startIndex) + 1);
+        }
+
+        public ITextLine GetLine(int lineIndex) => lines[lineIndex];
 
         public IRenderable ToRenderable() => new UiTextBuffer(this);
     }

@@ -80,6 +80,11 @@ namespace ChaosDbg
             if (disposed)
                 return;
 
+            //If we created any RCWs from a module we're about to unload,
+            //ensure the finalizer runs before the module is unloaded
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
             foreach (var item in loaded)
                 NativeMethods.FreeLibrary(item.Value.Value);
 

@@ -78,7 +78,7 @@ namespace ChaosDbg.DbgEng
         {
             var module = Modules.Add(baseOffset, imageName, moduleName, moduleSize);
 
-            HandleEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+            HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
 
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -88,7 +88,7 @@ namespace ChaosDbg.DbgEng
             var module = Modules.Remove(baseOffset);
 
             if (module != null)
-                HandleEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+                HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
 
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -123,7 +123,7 @@ namespace ChaosDbg.DbgEng
                         Target.Status = newStatus;
 
                         //Notify any external subscribers (such as the UI) that the engine status ic changing
-                        HandleEvent(EngineStatusChanged, new EngineStatusChangedEventArgs(oldStatus, newStatus));
+                        HandleUIEvent(EngineStatusChanged, new EngineStatusChangedEventArgs(oldStatus, newStatus));
                     }
                 }
             }
@@ -151,7 +151,7 @@ namespace ChaosDbg.DbgEng
 
         HRESULT IDebugOutputCallbacks2.Output2(DEBUG_OUTCB which, DEBUG_OUTCBF flags, long arg, string text)
         {
-            HandleEvent(EngineOutput, new EngineOutputEventArgs(text));
+            HandleUIEvent(EngineOutput, new EngineOutputEventArgs(text));
             return S_OK;
         }
 

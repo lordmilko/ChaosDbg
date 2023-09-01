@@ -16,7 +16,7 @@ namespace ChaosDbg
         /// <inheritdoc cref="GlobalProvider.ServiceProvider" />
         protected IServiceProvider ServiceProvider => GlobalProvider.ServiceProvider;
 
-        protected T ViewModel { get; }
+        public T ViewModel { get; }
 
         //The WPF designer will get upset if this constructor is protected
         public ChildUserControl()

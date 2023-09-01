@@ -7,7 +7,7 @@ namespace ChaosDbg.DbgEng
 {
     //Engine startup/state/general code
 
-    public partial class DbgEngEngine
+    public partial class DbgEngEngine : IDisposable
     {
         /// <summary>
         /// Gets the current <see cref="EngineClient"/>. This property should only be accessed on the engine thread.
@@ -99,6 +99,13 @@ namespace ChaosDbg.DbgEng
             var debugClient = new DebugClient(pDebugClient);
 
             return debugClient;
+        }
+
+        public void Dispose()
+        {
+            Session?.Dispose();
+            Session = null;
+            Modules = null;
         }
     }
 }

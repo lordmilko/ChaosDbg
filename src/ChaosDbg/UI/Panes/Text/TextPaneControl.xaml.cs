@@ -65,7 +65,7 @@ namespace ChaosDbg
 
             ScrollManager manager;
 
-            if (e.NewValue is IUiTextBuffer u && u.Buffer is IScrollInterceptor i)
+            if (e.NewValue is IUiTextBuffer u && u.Buffer is ILogicalScrollContent i)
                 manager = new LogicalScrollManager(@this.Canvas, (IScrollArea) e.NewValue, i);
             else
                 manager = new ScrollManager(@this.Canvas, (IScrollArea) e.NewValue);

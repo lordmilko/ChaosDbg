@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Windows;
+using ChaosDbg.Theme;
 
 namespace ChaosDbg.Text
 {
@@ -10,8 +11,17 @@ namespace ChaosDbg.Text
 
     class TextBufferProvider : ITextBufferProvider
     {
+        private IThemeProvider themeProvider;
+
+        public TextBufferProvider(IThemeProvider themeProvider)
+        {
+            this.themeProvider = themeProvider;
+        }
+
         public ITextBuffer GetBuffer()
         {
+            var theme = themeProvider.GetTheme();
+
             var list = new List<ITextLine>();
 
             var decorations = new[]
@@ -19,7 +29,7 @@ namespace ChaosDbg.Text
                 new RightBorderRunDecoration()
             };
 
-            for (var i = 0; i < 1; i++)
+            for (var i = 0; i < 100; i++)
             {
 
                 var arrowsColWidth = 20;
@@ -99,6 +109,7 @@ namespace ChaosDbg.Text
             }
 
             return new TextBuffer(
+                theme.ContentFont,
                 list.ToArray()
             );
         }

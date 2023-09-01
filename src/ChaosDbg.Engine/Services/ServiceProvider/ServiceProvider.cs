@@ -7,11 +7,13 @@ using static System.Linq.Expressions.Expression;
 
 namespace ChaosDbg.Engine
 {
-    public class ServiceProvider : IServiceProvider
+    public class ServiceProvider : IServiceProvider, IDisposable
     {
         private static MethodInfo getServiceMethod;
 
         private readonly Dictionary<Type, ServiceDescriptor> services = new Dictionary<Type, ServiceDescriptor>();
+
+        private List<object> resolutionOrder = new List<object>();
 
         static ServiceProvider()
         {
@@ -24,7 +26,12 @@ namespace ChaosDbg.Engine
         internal ServiceProvider(ServiceDescriptor[] serviceDescriptors)
         {
             foreach (var service in serviceDescriptors)
+            {
                 services[service.ServiceType] = service;
+
+                if (service.Value != null)
+                    resolutionOrder.Add(service.Value);
+            }
 
             AddSingleton<IServiceProvider>(this);
         }
@@ -92,6 +99,8 @@ namespace ChaosDbg.Engine
                         descriptor.Value = ResolveService(descriptor.ImplementationType, resolutionScope);
                 }
 
+                resolutionOrder.Add(descriptor.Value);
+
                 return descriptor.Value;
             }
             finally
@@ -151,6 +160,24 @@ namespace ChaosDbg.Engine
                 //This should be unreachable
                 throw ex.InnerException;
             }
+        }
+
+        private bool disposed;
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            resolutionOrder.Reverse();
+
+            foreach (var item in resolutionOrder)
+            {
+                if (item is IDisposable d)
+                    d.Dispose();
+            }
+
+            disposed = true;
         }
     }
 }
