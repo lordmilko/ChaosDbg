@@ -7,17 +7,19 @@ namespace ChaosDbg.Render
 {
     public class RenderContext
     {
-        public ScrollManager ScrollManager { get; }
+        public FrameworkElement Owner { get; }
+
+        public ScrollManager ScrollManager { get; set; }
 
         public IThemeProvider ThemeProvider { get; }
 
         public DpiScale Dpi { get; }
 
-        public RenderContext(ScrollManager scrollManager, IThemeProvider themeProvider)
+        public RenderContext(FrameworkElement owner, IThemeProvider themeProvider)
         {
-            ScrollManager = scrollManager;
+            Owner = owner;
             ThemeProvider = themeProvider;
-            Dpi = VisualTreeHelper.GetDpi((Visual)scrollManager.Scrollee);
+            Dpi = VisualTreeHelper.GetDpi(owner);
         }
     }
 }

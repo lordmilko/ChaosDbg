@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using ChaosDbg.Render;
 using ChaosDbg.Scroll;
+using ChaosDbg.Theme;
 using ChaosDbg.ViewModel;
 
 namespace ChaosDbg
@@ -19,7 +20,7 @@ namespace ChaosDbg
             nameof(RenderContent),
             typeof(IRenderable),
             typeof(TextCanvas),
-            new PropertyMetadata()
+            new PropertyMetadata(null, RenderContentChanged)
         );
 
         public IRenderable RenderContent
@@ -28,15 +29,22 @@ namespace ChaosDbg
             set => SetValue(RenderContentProperty, value);
         }
 
+        private static void RenderContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((UIElement)d).InvalidateVisual();
+        }
+
         #endregion
 
         public DrawingGroup DrawingGroup { get; } = new DrawingGroup();
         public ScrollManager ScrollManager { get; set; }
-        public RenderContext RenderContext { get; set; }
+        public RenderContext RenderContext { get; }
 
         public TextCanvas()
         {
             InitializeComponent();
+
+            RenderContext = new RenderContext(this, ServiceProvider.GetService<IThemeProvider>());
 
             //In order to display pixel perfect table lines (without any blurring at higher DPIs) we must
             //set the EdgeMode to Aliased

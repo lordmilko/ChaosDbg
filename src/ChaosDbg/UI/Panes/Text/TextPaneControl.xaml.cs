@@ -71,7 +71,7 @@ namespace ChaosDbg
                 manager = new ScrollManager(@this.Canvas, (IScrollArea) e.NewValue);
 
             @this.Canvas.ScrollManager = manager;
-            @this.Canvas.RenderContext = new RenderContext(manager, GlobalProvider.ServiceProvider.GetService<IThemeProvider>());
+            @this.Canvas.RenderContext.ScrollManager = manager;
 
             @this.ScrollViewer.ScrollChanged += manager.ScrollViewerScrollChanged;
             @this.ScrollViewer.PreviewMouseWheel += manager.ScrollViewerMouseWheel;
