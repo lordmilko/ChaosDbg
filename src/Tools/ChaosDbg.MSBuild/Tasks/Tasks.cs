@@ -5,7 +5,11 @@ using Microsoft.Build.Utilities;
 
 namespace ChaosDbg.MSBuild
 {
-    public class GenerateViewModels : Task
+    public class GenerateViewModels : GeneratorTask
+    {
+    }
+
+    public class GeneratorTask : Task
     {
         [Required]
         public string[] Files { get; set; }
@@ -15,7 +19,7 @@ namespace ChaosDbg.MSBuild
 
         public override bool Execute()
         {
-            var appDomain = AppDomain.CreateDomain("ChaosDbgAppDomain");
+            var appDomain = AppDomain.CreateDomain($"ChaosDbgAppDomain_{GetType().Name}");
 
             try
             {
@@ -30,7 +34,7 @@ namespace ChaosDbg.MSBuild
                     null
                 );
 
-                var errors = helper.ExecuteRemote(Files, Output);
+                var errors = helper.ExecuteRemote(Files, Output, GetType().Name);
 
                 if (errors.Length > 0)
                 {

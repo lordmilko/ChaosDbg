@@ -371,6 +371,10 @@ public partial class foo
             {
                 var original = Path.GetTempFileName();
                 var cs = Path.ChangeExtension(original, ".cs");
+
+                if (File.Exists(cs))
+                    File.Delete(cs);
+
                 File.Move(original, cs);
                 return cs;
             }
