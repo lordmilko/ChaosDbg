@@ -9,6 +9,10 @@ namespace ChaosDbg.MSBuild
     {
     }
 
+    public class GenerateDependencyProperties : GeneratorTask
+    {
+    }
+
     public class GeneratorTask : Task
     {
         [Required]

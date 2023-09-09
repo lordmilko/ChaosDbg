@@ -56,7 +56,7 @@ namespace ChaosDbg.ViewModel
         }
     }
 }";
-            TestResult(input, expected);
+            TestVMResult(input, expected);
         }
 
         [TestMethod]
@@ -71,7 +71,7 @@ public class foo
     }
 }";
             AssertEx.Throws<InvalidOperationException>(
-                () => TestResult(input, string.Empty),
+                () => TestVMResult(input, string.Empty),
                 "Type 'foo' must be marked as partial to generate RelayCommand for method 'OnFoo'"
             );
         }
@@ -87,7 +87,7 @@ public partial class foo
     {
     }
 }";
-            TestResult(input, null);
+            TestVMResult(input, null);
         }
 
         [TestMethod]
@@ -102,7 +102,7 @@ public partial class foo
     }
 }";
             AssertEx.Throws<ArgumentNullException>(
-                () => TestResult(input, null),
+                () => TestVMResult(input, null),
                 "Value cannot be null"
             );
         }
@@ -148,7 +148,7 @@ namespace ChaosDbg.ViewModel
     }
 }";
 
-            TestResult(input, expected);
+            TestVMResult(input, expected);
         }
 
         #endregion
@@ -193,7 +193,7 @@ namespace ChaosDbg.ViewModel
         }
     }
 }";
-            TestResult(input, expected);
+            TestVMResult(input, expected);
         }
 
         [TestMethod]
@@ -237,7 +237,7 @@ namespace ChaosDbg.ViewModel
     }
 }";
 
-            TestResult(input, expected);
+            TestVMResult(input, expected);
         }
 
         [TestMethod]
@@ -282,7 +282,7 @@ namespace ChaosDbg.ViewModel
     }
 }";
 
-            TestResult(input, expected);
+            TestVMResult(input, expected);
         }
 
         [TestMethod]
@@ -299,7 +299,7 @@ public partial class foo
     public bool CanFoo(double value) => true;
 }";
             AssertEx.Throws<InvalidOperationException>(
-                () => TestResult(input, string.Empty),
+                () => TestVMResult(input, string.Empty),
                 "Cannot generate RelayCommand: expected method 'foo.CanFoo' to not contain any parameters. Either add a parameter to method 'OnFoo' or remove the parameters from method 'CanFoo'."
             );
         }
@@ -317,7 +317,7 @@ public partial class foo
 }";
 
             AssertEx.Throws<InvalidOperationException>(
-                () => TestResult(input, string.Empty),
+                () => TestVMResult(input, string.Empty),
                 "Cannot generate RelayCommand<T> for method foo.OnFoo: method has multiple parameters."
             );
         }
@@ -336,7 +336,7 @@ public partial class foo
     public bool CanFoo(double value1, double value2) => true;
 }";
             AssertEx.Throws<InvalidOperationException>(
-                () => TestResult(input, string.Empty),
+                () => TestVMResult(input, string.Empty),
                 "Cannot generate RelayCommand<T>: method 'foo.CanFoo' contains multiple parameters."
             );
         }
@@ -355,14 +355,264 @@ public partial class foo
     public bool CanFoo(bool value) => true;
 }";
             AssertEx.Throws<InvalidOperationException>(
-                () => TestResult(input, string.Empty),
+                () => TestVMResult(input, string.Empty),
                 "Cannot generate RelayCommand<T>: expected method 'foo.CanFoo' to contain a parameter of type 'double'."
             );
         }
 
         #endregion
+        #region DependencyProperty
 
-        private void TestResult(string input, string expected)
+        [TestMethod]
+        public void DependencyPropertyGenerator_Success()
+        {
+            var input = @"
+[ChaosDbg.DependencyPropertyAttribute(""Foo"", typeof(bool))]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        public static readonly DependencyProperty FooProperty = DependencyProperty.Register(
+            name: nameof(Foo),
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl)
+        );
+
+        public bool Foo
+        {
+            get => (bool) GetValue(FooProperty);
+            set => SetValue(FooProperty, value);
+        }
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_ReadOnly()
+        {
+            var input = @"
+[DependencyProperty(""Foo"", typeof(bool), IsReadOnly = true)]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        private static readonly DependencyPropertyKey FooPropertyKey = DependencyProperty.RegisterReadOnly(
+            name: nameof(Foo),
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl),
+            typeMetadata: null
+        );
+
+        public static readonly DependencyProperty FooProperty = FooPropertyKey.DependencyProperty;
+
+        public bool Foo
+        {
+            get => (bool) GetValue(FooProperty);
+            private set => SetValue(FooPropertyKey, value);
+        }
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_Attached()
+        {
+            var input = @"
+[ChaosDbg.AttachedDependencyPropertyAttribute(""Foo"", typeof(bool))]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        public static readonly DependencyProperty FooProperty = DependencyProperty.RegisterAttached(
+            name: ""Foo"",
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl)
+        );
+
+        public static bool GetFoo(UIElement element) => (bool) element.GetValue(FooProperty);
+
+        public static void SetFoo(UIElement element, bool value) => element.SetValue(FooProperty, value);
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_AttachedReadOnly()
+        {
+            var input = @"
+[AttachedDependencyProperty(""Foo"", typeof(bool), IsReadOnly = true)]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        private static readonly DependencyPropertyKey FooPropertyKey = DependencyProperty.RegisterAttachedReadOnly(
+            name: ""Foo"",
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl),
+            defaultMetadata: null
+        );
+
+        public static readonly DependencyProperty FooProperty = FooPropertyKey.DependencyProperty;
+
+        public static bool GetFoo(UIElement element) => (bool) element.GetValue(FooProperty);
+
+        private static void SetFoo(UIElement element, bool value) => element.SetValue(FooPropertyKey, value);
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_DefaultValue()
+        {
+            var input = @"
+[DependencyProperty(""Foo"", typeof(bool), DefaultValue = true)]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        public static readonly DependencyProperty FooProperty = DependencyProperty.Register(
+            name: nameof(Foo),
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl),
+            typeMetadata: new FrameworkPropertyMetadata(true)
+        );
+
+        public bool Foo
+        {
+            get => (bool) GetValue(FooProperty);
+            set => SetValue(FooProperty, value);
+        }
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_DefaultValueExpression()
+        {
+            var input = @"
+[DependencyProperty(""Foo"", typeof(bool), DefaultValueExpression = ""new bool()"")]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        public static readonly DependencyProperty FooProperty = DependencyProperty.Register(
+            name: nameof(Foo),
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl),
+            typeMetadata: new FrameworkPropertyMetadata(new bool())
+        );
+
+        public bool Foo
+        {
+            get => (bool) GetValue(FooProperty);
+            set => SetValue(FooProperty, value);
+        }
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        [TestMethod]
+        public void DependencyPropertyGenerator_Flag()
+        {
+            var input = @"
+[DependencyProperty(""Foo"", typeof(bool), DefaultValue = true, AffectsMeasure = true)]
+public partial class UserControl
+{
+}";
+
+            var expected = @"
+namespace ChaosDbg
+{
+    public partial class UserControl
+    {
+        #region Foo
+
+        public static readonly DependencyProperty FooProperty = DependencyProperty.Register(
+            name: nameof(Foo),
+            propertyType: typeof(bool),
+            ownerType: typeof(UserControl),
+            typeMetadata: new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure)
+        );
+
+        public bool Foo
+        {
+            get => (bool) GetValue(FooProperty);
+            set => SetValue(FooProperty, value);
+        }
+
+        #endregion
+    }
+}";
+            TestDPResult(input, expected);
+        }
+
+        #endregion
+
+        private void TestDPResult(string input, string expected) => TestResult(input, expected, new GenerateDependencyProperties());
+
+        private void TestVMResult(string input, string expected) => TestResult(input, expected, new GenerateViewModels());
+
+        private void TestResult(string input, string expected, GeneratorTask task)
         {
             input = "namespace Test {" + Environment.NewLine + input + Environment.NewLine + "}";
             expected = expected?.Trim();
@@ -392,13 +642,9 @@ public partial class foo
 
             try
             {
-                var task = new GenerateViewModels
-                {
-                    Files = new[] { tmpInputFile },
-                    Output = tmpOutputFile,
-
-                    BuildEngine = new MockBuildEngine()
-                };
+                task.Files = new[] { tmpInputFile };
+                task.Output = tmpOutputFile;
+                task.BuildEngine = new MockBuildEngine();
 
                 task.Execute();
 

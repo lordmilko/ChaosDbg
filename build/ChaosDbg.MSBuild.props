@@ -3,16 +3,28 @@
     <TaskFolder Condition="'$(MSBuildRuntimeType)' == 'Core'">net5.0</TaskFolder>
     <TaskFolder Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</TaskFolder>
 
+    <IsUI Condition="'$(MSBuildProjectName)' == 'ChaosDbg'">true</IsUI>
+    <IsUI Condition="'$(IsUI)' == ''">false</IsUI>
+    
+    <IsEngine Condition="'$(MSBuildProjectName)' == 'ChaosDbg.Engine'">true</IsEngine>
+    <IsEngine Condition="'$(IsEngine)' == ''">false</IsEngine>
+
     <ChaosDbgMSBuildProjectPath>$(MSBuildProjectDirectory)\..\Tools\ChaosDbg.MSBuild</ChaosDbgMSBuildProjectPath>
     <ChaosDbgMSBuildOutputPath>$(ChaosDbgMSBuildProjectPath)\bin\$(Configuration)\$(TaskFolder)\ChaosDbg.MSBuild.dll</ChaosDbgMSBuildOutputPath>
-    <GeneratedViewModelsPath>$(MSBuildProjectDirectory)\ViewModel\ViewModels.g.cs</GeneratedViewModelsPath>    
+
+    <GeneratedDependencyPropertiesPath Condition="$(IsUI)">$(MSBuildProjectDirectory)\UI\DependencyProperties.g.cs</GeneratedDependencyPropertiesPath>
+    <GeneratedViewModelsPath Condition="$(IsEngine)">$(MSBuildProjectDirectory)\ViewModel\ViewModels.g.cs</GeneratedViewModelsPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="$(GeneratedViewModelsPath)" />
-    <Compile Include="$(GeneratedViewModelsPath)" Condition="Exists($(GeneratedViewModelsPath))" Visible="false" />
+    <Compile Remove="$(GeneratedDependencyPropertiesPath)" Condition="$(IsUI)" />
+    <Compile Include="$(GeneratedDependencyPropertiesPath)" Condition="$(IsUI) AND Exists($(GeneratedDependencyPropertiesPath))" Visible="false" />
+
+    <Compile Remove="$(GeneratedViewModelsPath)" Condition="$(IsEngine)" />
+    <Compile Include="$(GeneratedViewModelsPath)" Condition="$(IsEngine) AND Exists($(GeneratedViewModelsPath))" Visible="false" />
   </ItemGroup>
 
   <!-- The assembly won't actually be loaded until its needed; thus if we need to compile it, MSBuild won't complain that it doesn't exist here -->
-  <UsingTask TaskName="GenerateViewModels" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
+  <UsingTask Condition="$(IsUI)" TaskName="GenerateDependencyProperties" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
+  <UsingTask Condition="$(IsEngine)" TaskName="GenerateViewModels" AssemblyFile="$(ChaosDbgMSBuildOutputPath)" />
 </Project>

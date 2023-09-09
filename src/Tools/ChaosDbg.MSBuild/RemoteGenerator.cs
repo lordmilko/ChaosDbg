@@ -18,6 +18,9 @@ namespace ChaosDbg.MSBuild
                 case nameof(GenerateViewModels):
                     return new ViewModelGenerator().Generate(files, output);
 
+                case nameof(GenerateDependencyProperties):
+                    return new DependencyPropertyGenerator().Generate(files, output);
+
                 default:
                     throw new NotImplementedException($"Don't know how to handle generator task of type '{kind}'.");
             }
