@@ -101,7 +101,7 @@ namespace ChaosDbg.Tests
         {
             Test(1, v =>
             {
-                v.StepDown(0x1002).StepDown(0x1004).StepDown(0x1006).GetLines(0x1005, 0x1021, "4b281004", "4b281041");
+                v.StepDown(0x1002).StepDown(0x1004).StepDown(0x1006).GetLines(0x1005, 0x1021, "4b281004", "4b281045");
             });
         }
 
@@ -150,8 +150,8 @@ namespace ChaosDbg.Tests
             //Upon going back up beyond the start of the code segment, its last address should be set to 0x1000 again
             Test(v =>
             {
-                v.SeekVertical(0x1000, 0x1000).StepDown(100, 4296);
-                v.SeekVertical(0x300, 0x300).StepDown(0x1000, 0x16af);
+                v.SeekVertical(0x1000, 0x1000).StepDown(100, 4318);
+                v.SeekVertical(0x300, 0x300).StepDown(0x1000, 5825);
             });
         }
 

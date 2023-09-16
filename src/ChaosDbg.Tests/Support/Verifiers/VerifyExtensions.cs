@@ -25,8 +25,10 @@ namespace ChaosDbg.Tests
 
             Assert.AreEqual(verifiers.Length, desc.Length, "Number of drawings in drawing group did not match number of verifiers");
 
-            for (var i = 0; i < desc.Length; i++)
-                verifiers[i](DrawingInfo.New(desc[i]));
+            var infos = desc.Select(DrawingInfo.New).ToArray();
+
+            for (var i = 0; i < infos.Length; i++)
+                verifiers[i](infos[i]);
         }
 
         public static MemoryTextSegmentVerifier Verify(this IMemoryTextSegment segment) => new MemoryTextSegmentVerifier(segment);

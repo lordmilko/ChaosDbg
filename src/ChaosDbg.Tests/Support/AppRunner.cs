@@ -32,21 +32,27 @@ namespace ChaosDbg.Tests
         {
             var thread = new Thread(() =>
             {
+                typeof(Application).GetField("_appCreatedInThisAppDomain", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, false);
                 var app = new App();
-                //app.ShutdownMode = ShutdownMode.OnExplicitShutdown; //We have issues sometimes where we call Shutdown but its already shutting down so we get an exception
                 app.InitializeComponent();
 
-                if (createWindow == null)
-                    app.Run();
-                else
+                using (new PreloadedPackageProtector())
                 {
-                    //Don't start the default window. The StartupUri property won't let us clear its value,
-                    //so we must use reflection
-                    typeof(Application).GetInternalFieldInfo("_startupUri").SetValue(app, null);
+                    if (createWindow == null)
+                        app.Run();
+                    else
+                    {
+                        //Don't start the default window. The StartupUri property won't let us clear its value,
+                        //so we must use reflection
+                        typeof(Application).GetInternalFieldInfo("_startupUri").SetValue(app, null);
 
-                    //Our alternate window must be created on the same thread as the App
-                    app.Run(createWindow());
+                        //Our alternate window must be created on the same thread as the App
+                        app.Run(createWindow());
+                    }
                 }
+
+                //Create a bew GlobalProvider for the next test
+                typeof(GlobalProvider).TypeInitializer.Invoke(null, null);
             });
             thread.Name = "AppRunnerThread";
             thread.SetApartmentState(ApartmentState.STA);
@@ -105,12 +111,13 @@ namespace ChaosDbg.Tests
         public static void WithInProcessApp<T>(
             Func<T> createWindow,
             Action<T> action,
-            Action<ServiceCollection> configureServices = null) where T : Window
+            Action<ServiceCollection> configureServices = null,
+            Func<T, bool> waitFor = null) where T : Window
         {
             WithInProcessAppInternal(createWindow, _ =>
             {
                 Invoke(a => action((T) a.MainWindow));
-            }, configureServices);
+            }, configureServices, waitFor == null ? (Func<Window, bool>) null : w => waitFor((T) w));
         }
 
         #endregion
@@ -142,7 +149,11 @@ namespace ChaosDbg.Tests
 
         #endregion
 
-        private static void WithInProcessAppInternal(Func<Window> createWindow, Action<IntPtr> action, Action<ServiceCollection> configureServices = null)
+        private static void WithInProcessAppInternal(
+            Func<Window> createWindow,
+            Action<IntPtr> action,
+            Action<ServiceCollection> configureServices = null,
+            Func<Window, bool> waitFor = null)
         {
             lock (lockObj)
             {
@@ -192,6 +203,23 @@ namespace ChaosDbg.Tests
                     cts.Token.WaitHandle.WaitOne(10);
                 }
 
+                if (waitFor != null)
+                {
+                    var conditionMet = false;
+
+                    while (!conditionMet)
+                    {
+                        Invoke(a =>
+                        {
+                            if (waitFor(a.MainWindow))
+                                conditionMet = true;
+                        });
+
+                        if (!conditionMet)
+                            cts.Token.WaitHandle.WaitOne(10);
+                    }
+                }
+
                 try
                 {
                     action(hwnd);
@@ -209,6 +237,8 @@ namespace ChaosDbg.Tests
                     {
                     }
                 }
+
+                thread.Join();
             }
         }
 

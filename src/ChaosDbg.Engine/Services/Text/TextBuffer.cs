@@ -41,7 +41,7 @@ namespace ChaosDbg.Text
             Array.Copy(lines, startIndex, subsetLines, 0, (endIndex - startIndex) + 1);
         }
 
-        public ITextLine GetLine(int lineIndex) => lines[lineIndex];
+        public ITextLine GetLine(int lineIndex) => subsetLines[lineIndex];
 
         public IRenderable ToRenderable() => new UiTextBuffer(this);
     }

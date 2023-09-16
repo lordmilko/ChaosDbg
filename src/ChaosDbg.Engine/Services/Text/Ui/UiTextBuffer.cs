@@ -75,7 +75,6 @@ namespace ChaosDbg.Text
 
             for (int i = range.Start.Row, j = 0; i < range.End.Row; i++, j++)
             {
-                
                 var line = Buffer.GetLine(j);
 
                 maxWidth = Math.Max(maxWidth, line.GetLength());

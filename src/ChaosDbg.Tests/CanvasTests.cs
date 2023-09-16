@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ChaosDbg.Scroll;
+using ChaosDbg.Text;
+using ChaosDbg.Theme;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -32,9 +35,15 @@ namespace ChaosDbg.Tests
         public void Canvas_Scroll_LineDown()
         {
             TestScroll(
-                0, 25,
-                m => m.LineDown(),
-                1, 26
+                0, 27,
+                m =>
+                {
+                    //After point to pixels on a single line down, we're at 15.2 but a single line is 15.8, so we do another line down to get us over
+                    //the threshold for the purposes of the test
+                    m.LineDown();
+                    m.LineDown();
+                },
+                1, 29
             );
         }
 
@@ -43,7 +52,23 @@ namespace ChaosDbg.Tests
             Action<ScrollManager> action,
             int finalStartIndex, int finalEndIndex)
         {
-            AppRunner.WithInProcessApp(w =>
+            Func<TestWindow> createWindow = () =>
+            {
+                var window = new TestWindow();
+
+                var pane = new TextPaneControl();
+                var lines = Enumerable.Range(0, 60).Select(v => (ITextLine) new TextLine(new TextRun(v.ToString()))).ToArray();
+
+                //UiTextLine will get its font from the current ITheme, so we can't make up some random font to use for the test
+                var font = GlobalProvider.ServiceProvider.GetService<IThemeProvider>().GetTheme().ContentFont;
+
+                pane.RawContent = new TextBuffer(font, lines);
+                window.Content = pane;
+
+                return window;
+            };
+
+            AppRunner.WithInProcessApp(createWindow, w =>
             {
                 var group = w.GetDrawingGroup<TextCanvas>();
 
@@ -52,7 +77,7 @@ namespace ChaosDbg.Tests
                 for (var i = initialStartIndex; i < initialEndIndex; i++)
                 {
                     var i1 = i;
-                    verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
+                    verifiers.Add(v => v.HasText(i1.ToString(), 13.5, "Consolas", Brushes.Black, 0, 0));
                 }
 
                 group.Verify(verifiers.ToArray());
@@ -68,7 +93,7 @@ namespace ChaosDbg.Tests
                     for (var i = finalStartIndex; i < finalEndIndex; i++)
                     {
                         var i1 = i;
-                        verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
+                        verifiers.Add(v => v.HasText(i1.ToString(), 13.5, "Consolas", Brushes.Black, 0, 0));
                     }
 
                     group.Verify(verifiers.ToArray());
