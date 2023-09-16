@@ -4,6 +4,14 @@
              xmlns:local="clr-namespace:ChaosDbg"
              StartupUri="UI/MainWindow.xaml" Exit="App_Exit">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <DataTemplate DataType="{x:Type local:SplitterItemsDockContainer}">
+                <local:SplitterItemsControl Orientation="{Binding Orientation}" ItemsSource="{Binding Children}" />
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type local:TabControlDockContainer}">
+                <local:TabControlEx ItemsSource="{Binding Children}" />
+            </DataTemplate>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

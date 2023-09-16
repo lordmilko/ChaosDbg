@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Windows.Controls;
 using System.Windows.Media;
 using ChaosDbg.Disasm;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -31,5 +32,16 @@ namespace ChaosDbg.Tests
         public static MemoryTextSegmentVerifier Verify(this IMemoryTextSegment segment) => new MemoryTextSegmentVerifier(segment);
 
         public static CodeNavigatorVerifier Verify(this CodeNavigator nav) => new CodeNavigatorVerifier(nav);
+
+        #region Pane
+
+        public static void Verify(this SplitterItemsDockContainerInfo info, double dockedWidth, double dockedHeight, Orientation orientation, params Action<IPaneItem[]>[] splitterItemDescendantVerifier)
+        {
+            Assert.AreEqual(dockedWidth, info.DockedWidth.Value);
+            Assert.AreEqual(dockedHeight, info.DockedHeight.Value);
+            Assert.AreEqual(orientation, info.Orientation);
+        }
+
+        #endregion
     }
 }

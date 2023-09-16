@@ -11,7 +11,7 @@ namespace ChaosDbg.ViewModel
 
         public TextCanvasViewModel(IThemeProvider themeProvider)
         {
-            BackgroundColor = new SolidColorBrush(themeProvider.GetTheme().BackgroundColor);
+            BackgroundColor = new SolidColorBrush(themeProvider.GetTheme().PaneBackgroundColor);
         }
     }
 }

@@ -100,6 +100,8 @@ namespace ChaosDbg.MSBuild
 
         protected override void GenerateInternal(SyntaxWriter writer, HashSet<string> usings, List<DependencyPropertyInfo> infos)
         {
+            usings = usings.Where(u => u == "System.Windows" || u == "System.Windows.Controls").ToHashSet();
+
             var classGroup = infos.GroupBy(v => v.ClassName).ToArray();
 
             var sortedUsings = SortUsings(usings);
@@ -166,6 +168,9 @@ namespace ChaosDbg.MSBuild
 
             //CLR Property
             writer
+                .WriteLine("/// <summary>")
+                .WriteLine($"/// Gets or sets the value of the <see cref=\"{item.PropertyName}Property\" /> dependency property.")
+                .WriteLine("/// </summary>")
                 .WriteLine($"public {item.PropertyType} {item.PropertyName}")
                 .WriteLine("{")
                 .Indent()
@@ -194,6 +199,10 @@ namespace ChaosDbg.MSBuild
 
             //Getter Method
             writer
+                .WriteLine("/// <summary>")
+                .WriteLine($"/// Gets the value of the attached <see cref=\"{item.PropertyName}Property\" /> dependency property for a particular element.")
+                .WriteLine("/// </summary>")
+                .WriteLine("/// <param name=\"element\">The element to get the attached property from.</param>")
                 .WriteLine($"public static {item.PropertyType} Get{item.PropertyName}(UIElement element) => ({item.PropertyType}) element.GetValue({item.PropertyName}Property);");
 
             writer.WriteLine();
@@ -214,6 +223,11 @@ namespace ChaosDbg.MSBuild
 
             //Setter method
             writer
+                .WriteLine("/// <summary>")
+                .WriteLine($"/// Sets the value of the attached <see cref=\"{item.PropertyName}Property\" /> dependency property for a particular element.")
+                .WriteLine("/// </summary>")
+                .WriteLine("/// <param name=\"element\">The element to set the attached property on.</param>")
+                .WriteLine("/// <param name=\"value\">The value to set the attached property to.</param>")
                 .WriteLine($"{setterVisibility} static void Set{item.PropertyName}(UIElement element, {item.PropertyType} value) => element.SetValue({setterDP}, value);");
         }
 

@@ -12,6 +12,7 @@ namespace ChaosDbg.Tests
     //Unit tests for validating that we can properly detect things which happen on a canvas
 
     [TestClass]
+    [DoNotParallelize]
     public class CanvasTests
     {
         [TestMethod]
@@ -42,43 +43,40 @@ namespace ChaosDbg.Tests
             Action<ScrollManager> action,
             int finalStartIndex, int finalEndIndex)
         {
-            AppRunner.WithInProcessApp(_ =>
+            AppRunner.WithInProcessApp(w =>
             {
-                AppRunner.Invoke(a =>
+                var group = w.GetDrawingGroup<TextCanvas>();
+
+                var verifiers = new List<Action<DrawingInfo>>();
+
+                for (var i = initialStartIndex; i < initialEndIndex; i++)
                 {
-                    var group = a.MainWindow.GetDrawingGroup<TextCanvas>();
+                    var i1 = i;
+                    verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
+                }
 
-                    var verifiers = new List<Action<DrawingInfo>>();
+                group.Verify(verifiers.ToArray());
 
-                    for (var i = initialStartIndex; i < initialEndIndex; i++)
+                var canvas = w.GetLogicalDescendant<TextCanvas>();
+
+                action(canvas.ScrollManager);
+
+                var op = Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                {
+                    verifiers = new List<Action<DrawingInfo>>();
+
+                    for (var i = finalStartIndex; i < finalEndIndex; i++)
                     {
                         var i1 = i;
                         verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
                     }
 
                     group.Verify(verifiers.ToArray());
+                }), DispatcherPriority.ContextIdle, null);
 
-                    var canvas = a.MainWindow.GetLogicalDescendant<TextCanvas>();
+                canvas.ScrollManager.ForceInvalidateScrolledArea();
 
-                    action(canvas.ScrollManager);
-
-                    var op = Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                    {
-                        verifiers = new List<Action<DrawingInfo>>();
-
-                        for (var i = finalStartIndex; i < finalEndIndex; i++)
-                        {
-                            var i1 = i;
-                            verifiers.Add(v => v.HasText(i1.ToString(), 14, "Consolas", Brushes.Black, 0, 0));
-                        }
-
-                        group.Verify(verifiers.ToArray());
-                    }), DispatcherPriority.ContextIdle, null);
-
-                    canvas.ScrollManager.ForceInvalidateScrolledArea();
-
-                    op.Wait();
-                });
+                op.Wait();
             });
         }
 

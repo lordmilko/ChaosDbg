@@ -1,12 +1,15 @@
 using System;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Markup;
 using ChaosDbg.Engine;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 using FlaUIWindow = FlaUI.Core.AutomationElements.Window;
+using Window = System.Windows.Window;
 
 namespace ChaosDbg.Tests
 {
@@ -22,25 +25,51 @@ namespace ChaosDbg.Tests
 
         private static object lockObj = new object();
 
-        public static Thread Run(CancellationToken token)
+        public static Thread Run(CancellationToken token) =>
+            Run(null, token);
+
+        public static Thread Run(Func<Window> createWindow, CancellationToken token)
         {
-            var ap = Application.Current;
-            var thread = new Thread(App.Main);
+            var thread = new Thread(() =>
+            {
+                var app = new App();
+                //app.ShutdownMode = ShutdownMode.OnExplicitShutdown; //We have issues sometimes where we call Shutdown but its already shutting down so we get an exception
+                app.InitializeComponent();
+
+                if (createWindow == null)
+                    app.Run();
+                else
+                {
+                    //Don't start the default window. The StartupUri property won't let us clear its value,
+                    //so we must use reflection
+                    typeof(Application).GetInternalFieldInfo("_startupUri").SetValue(app, null);
+
+                    //Our alternate window must be created on the same thread as the App
+                    app.Run(createWindow());
+                }
+            });
             thread.Name = "AppRunnerThread";
             thread.SetApartmentState(ApartmentState.STA);
 
             thread.Start();
 
-            token.Register(() => Invoke(a =>
+            token.Register(() =>
             {
-                try
+                if ((bool) typeof(Application).GetProperty("IsShuttingDown", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null))
+                    return;
+
+                Invoke(a =>
                 {
-                    a?.Shutdown();
-                }
-                catch
-                {
-                }
-            }));
+                    try
+                    {
+                        Debug.WriteLine("calling shutdown");
+                        a?.Shutdown();
+                    }
+                    catch
+                    {
+                    }
+                });
+            });
 
             return thread;
         }
@@ -68,19 +97,59 @@ namespace ChaosDbg.Tests
         private static T Invoke<T>(Func<Application, T> func) =>
             Application.Current.Dispatcher.Invoke(() => func(Application.Current));
 
+        #region WPF
+
+        public static void WithInProcessApp(Action<MainWindow> action, Action<ServiceCollection> configureServices = null) =>
+            WithInProcessApp(null, action, configureServices);
+
+        public static void WithInProcessApp<T>(
+            Func<T> createWindow,
+            Action<T> action,
+            Action<ServiceCollection> configureServices = null) where T : Window
+        {
+            WithInProcessAppInternal(createWindow, _ =>
+            {
+                Invoke(a => action((T) a.MainWindow));
+            }, configureServices);
+        }
+
+        #endregion
+        #region FlaUI
+
         /// <summary>
         /// Executes an application within the current process, allowing modifications to its internal services prior to startup.
         /// </summary>
         /// <param name="action">The action to perform during the lifetime of the application.</param>
         /// <param name="configureServices">An optional action that allows modifying or mocking the services of the application prior to startup.</param>
-        public static void WithInProcessApp(Action<FlaUIWindow> action, Action<ServiceCollection> configureServices = null)
+        public static void WithInProcessApp(Action<FlaUIWindow> action, Action<ServiceCollection> configureServices = null) =>
+            WithInProcessApp(null, action, configureServices);
+
+        public static void WithInProcessApp(
+            Func<Window> createWindow,
+            Action<FlaUIWindow> action,
+            Action<ServiceCollection> configureServices = null)
+        {
+            WithInProcessAppInternal(createWindow, hwnd =>
+            {
+                using (var automation = new UIA3Automation())
+                {
+                    var flaWindow = automation.FromHandle(hwnd).AsWindow();
+
+                    action(flaWindow);
+                }
+            }, configureServices);
+        }
+
+        #endregion
+
+        private static void WithInProcessAppInternal(Func<Window> createWindow, Action<IntPtr> action, Action<ServiceCollection> configureServices = null)
         {
             lock (lockObj)
             {
                 GlobalProvider.ConfigureServices = configureServices;
 
                 var cts = new CancellationTokenSource();
-                var thread = Run(cts.Token);
+                var thread = Run(createWindow, cts.Token);
 
                 var attempts = 0;
 
@@ -125,12 +194,7 @@ namespace ChaosDbg.Tests
 
                 try
                 {
-                    using (var automation = new UIA3Automation())
-                    {
-                        var window = automation.FromHandle(hwnd).AsWindow();
-
-                        action(window);
-                    }
+                    action(hwnd);
                 }
                 finally
                 {
@@ -178,6 +242,37 @@ namespace ChaosDbg.Tests
                     app.Close();
                 }
             }
+        }
+
+        /// <summary>
+        /// Executes an application in process with a dummy window containing the specified content.
+        /// </summary>
+        /// <param name="element">The content to include in the window.</param>
+        /// <param name="action">The action to perform during the lifetime of the application.</param>
+        public static void WithCustomXaml(XamlElement element, Action<Window> action)
+        {
+            Func<Window> createWindow = () =>
+            {
+                var window = new TestWindow();
+
+                var context = new ParserContext()
+                {
+                    XmlnsDictionary =
+                    {
+                        { string.Empty, "http://schemas.microsoft.com/winfx/2006/xaml/presentation" },
+                        { "x", "http://schemas.microsoft.com/winfx/2006/xaml" },
+                        { "local", "clr-namespace:ChaosDbg;assembly=ChaosDbg" }
+                    }
+                };
+
+                var result = XamlReader.Parse(element.ToString(), context);
+
+                window.Content = result;
+
+                return window;
+            };
+
+            WithInProcessApp(createWindow, action);
         }
     }
 }

@@ -11,7 +11,9 @@ namespace ChaosDbg.Theme
 
         Brush TableBorderBrush { get; }
 
-        Color BackgroundColor { get; }
+        Color PaneBackgroundColor { get; }
+
+        Color WindowBackgroundColor { get; }
     }
 
     class Theme : ITheme
@@ -20,13 +22,16 @@ namespace ChaosDbg.Theme
 
         public Brush TableBorderBrush { get; }
 
-        public Color BackgroundColor { get; }
+        public Color PaneBackgroundColor { get; }
+
+        public Color WindowBackgroundColor { get; }
 
         public Theme()
         {
             ContentFont = new Font("Consolas", 13.5);
             TableBorderBrush = Brushes.Gray;
-            BackgroundColor = Color.FromRgb(0xFF, 0xF8, 0xF0);
+            PaneBackgroundColor = Color.FromRgb(0xFF, 0xF8, 0xF0);
+            WindowBackgroundColor = Color.FromRgb(0xEE, 0xEE, 0xF2);
         }
     }
 }

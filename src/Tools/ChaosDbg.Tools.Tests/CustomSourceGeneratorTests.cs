@@ -385,6 +385,9 @@ namespace ChaosDbg
             ownerType: typeof(UserControl)
         );
 
+        /// <summary>
+        /// Gets or sets the value of the <see cref=""FooProperty"" /> dependency property.
+        /// </summary>
         public bool Foo
         {
             get => (bool) GetValue(FooProperty);
@@ -422,6 +425,9 @@ namespace ChaosDbg
 
         public static readonly DependencyProperty FooProperty = FooPropertyKey.DependencyProperty;
 
+        /// <summary>
+        /// Gets or sets the value of the <see cref=""FooProperty"" /> dependency property.
+        /// </summary>
         public bool Foo
         {
             get => (bool) GetValue(FooProperty);
@@ -456,8 +462,17 @@ namespace ChaosDbg
             ownerType: typeof(UserControl)
         );
 
+        /// <summary>
+        /// Gets the value of the attached <see cref=""FooProperty"" /> dependency property for a particular element.
+        /// </summary>
+        /// <param name=""element"">The element to get the attached property from.</param>
         public static bool GetFoo(UIElement element) => (bool) element.GetValue(FooProperty);
 
+        /// <summary>
+        /// Sets the value of the attached <see cref=""FooProperty"" /> dependency property for a particular element.
+        /// </summary>
+        /// <param name=""element"">The element to set the attached property on.</param>
+        /// <param name=""value"">The value to set the attached property to.</param>
         public static void SetFoo(UIElement element, bool value) => element.SetValue(FooProperty, value);
 
         #endregion
@@ -491,8 +506,17 @@ namespace ChaosDbg
 
         public static readonly DependencyProperty FooProperty = FooPropertyKey.DependencyProperty;
 
+        /// <summary>
+        /// Gets the value of the attached <see cref=""FooProperty"" /> dependency property for a particular element.
+        /// </summary>
+        /// <param name=""element"">The element to get the attached property from.</param>
         public static bool GetFoo(UIElement element) => (bool) element.GetValue(FooProperty);
 
+        /// <summary>
+        /// Sets the value of the attached <see cref=""FooProperty"" /> dependency property for a particular element.
+        /// </summary>
+        /// <param name=""element"">The element to set the attached property on.</param>
+        /// <param name=""value"">The value to set the attached property to.</param>
         private static void SetFoo(UIElement element, bool value) => element.SetValue(FooPropertyKey, value);
 
         #endregion
@@ -524,6 +548,9 @@ namespace ChaosDbg
             typeMetadata: new FrameworkPropertyMetadata(true)
         );
 
+        /// <summary>
+        /// Gets or sets the value of the <see cref=""FooProperty"" /> dependency property.
+        /// </summary>
         public bool Foo
         {
             get => (bool) GetValue(FooProperty);
@@ -559,6 +586,9 @@ namespace ChaosDbg
             typeMetadata: new FrameworkPropertyMetadata(new bool())
         );
 
+        /// <summary>
+        /// Gets or sets the value of the <see cref=""FooProperty"" /> dependency property.
+        /// </summary>
         public bool Foo
         {
             get => (bool) GetValue(FooProperty);
@@ -594,6 +624,9 @@ namespace ChaosDbg
             typeMetadata: new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure)
         );
 
+        /// <summary>
+        /// Gets or sets the value of the <see cref=""FooProperty"" /> dependency property.
+        /// </summary>
         public bool Foo
         {
             get => (bool) GetValue(FooProperty);

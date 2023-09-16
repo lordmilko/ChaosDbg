@@ -86,6 +86,17 @@ namespace ChaosDbg
 
         public static IEnumerable<DependencyObject> GetVisualDescendants(this DependencyObject parent)
         {
+            foreach (var child in GetVisualChildren(parent))
+            {
+                yield return child;
+
+                foreach (var grandchild in GetVisualChildren(child))
+                    yield return grandchild;
+            }
+        }
+
+        public static IEnumerable<DependencyObject> GetVisualChildren(this DependencyObject parent)
+        {
             if (parent != null)
             {
                 for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -93,14 +104,45 @@ namespace ChaosDbg
                     var child = VisualTreeHelper.GetChild(parent, i);
 
                     if (child != null)
-                    {
                         yield return child;
-
-                        foreach (var grandchild in GetVisualDescendants(child))
-                            yield return grandchild;
-                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets the bounds of an element within the main window.
+        /// </summary>
+        /// <param name="element">The element to get the absolute position of.</param>
+        /// <returns>The bounds of the specified element.</returns>
+        public static IndependentRect GetBounds(this FrameworkElement element)
+        {
+            //Get the absolute position of the element on the entire screen
+            var elementPos = element.PointToScreen(new Point(0, 0));
+
+            //Get the absolute position of the main window on the entire screen
+            var mainWindowPos = Application.Current.MainWindow.PointToScreen(new Point(0, 0));
+
+            //Get the relative offset of the element within the main window
+            var relativePos = new Point(elementPos.X - mainWindowPos.X, elementPos.Y - mainWindowPos.Y);
+
+            //Our point on the screen is expressed relative to the current DPI. The width/height of the element however
+            //are expressed DPI unaware - so if we're at 1.25 scaling, we need to multiply these by 1.25 to get the actual
+            //lengths they represent
+            var dpi = VisualTreeHelper.GetDpi(element);
+
+            var scaledWidth = element.ActualWidth * dpi.PixelsPerDip;
+            var scaledHeight = element.ActualHeight * dpi.PixelsPerDip;
+
+            var rect = new Rect(relativePos.X, relativePos.Y, scaledWidth, scaledHeight);
+
+            if (dpi.PixelsPerDip != 1)
+            {
+                var independentRect = new Rect(relativePos.X / dpi.PixelsPerDip, relativePos.Y / dpi.PixelsPerDip, element.ActualWidth, element.ActualHeight);
+
+                return new IndependentRect(independentRect, rect, dpi.PixelsPerDip);
+            }
+
+            return new IndependentRect(rect, rect, dpi.PixelsPerDip);
         }
     }
 }

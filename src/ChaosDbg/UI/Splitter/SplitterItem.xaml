@@ -1,0 +1,91 @@
+﻿<ContentControl x:Class="ChaosDbg.SplitterItem"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:ChaosDbg"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800" Style="{DynamicResource ContentControlStyle}">
+    <ContentControl.Resources>
+        <Style x:Key="ContentControlStyle" TargetType="{x:Type ContentControl}">
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContentControl}">
+                        <ControlTemplate.Resources>
+                            <RelativeSource x:Key="SplitterBindingSource" Mode="FindAncestor" AncestorType="{x:Type local:SplitterPanel}" />
+                            <local:SplitterItemMinimalLengthConverter x:Key="MinimalLengthConverter" />
+                        </ControlTemplate.Resources>
+                        
+                        <DockPanel LastChildFill="True">
+                            <local:SplitterGrip x:Name="Splitter" Background="Transparent"
+                                             Width="{TemplateBinding local:SplitterItemsControl.SplitterGripSize}"
+                                             Height="{TemplateBinding local:SplitterItemsControl.SplitterGripSize}"
+                                             Orientation="{Binding Path=Orientation, RelativeSource={StaticResource SplitterBindingSource}}"/>
+                            <ContentPresenter ContentSource="{TemplateBinding ContentControl.Content}"/>
+                        </DockPanel>
+                        <ControlTemplate.Triggers>
+                            <!-- When we embed objects of type DockContainer in the SplitterItemsControl, they will be encapsulated in a SplitterItem instance. As such, we must relay
+                                 any DockedHeight or DockedWidth properties to the SplitterItem so that the PaneLength will have a non-default value when the SplitterItem is
+                                 measured within the SplitterPanel
+                            
+                                 The bindings against MinimumLength below are identical except that we bind to either MinimumHeight or MinimumWidth specified for the DockContainer
+                                 being encapsulated in this SplitterItem depending on our orientation -->
+                            <DataTrigger Binding="{Binding Orientation, RelativeSource={StaticResource SplitterBindingSource}}" Value="Vertical">
+                                <Setter Property="local:SplitterPanel.PaneLength" Value="{Binding DockedHeight}" />
+
+                                <!-- Set a binding to calculate the minimum width from a combination of the size of the splitter grip, the width of the control being wrapped in
+                                     the SplitterItem and whether the current SplitterItem has been marked as last in the parent SplitterPanel -->
+                                <Setter Property="local:SplitterPanel.MinimumLength">
+                                    <Setter.Value>
+                                        <MultiBinding Converter="{StaticResource MinimalLengthConverter}">
+                                            <!-- Much like DockedHeight/DockedWidth above, the data context of this binding is the control that is being wrapped in the SplitterItem -->
+                                            <Binding Path="MinimumHeight" />
+
+                                            <!-- SplitterGripSize is defined as an "inherited" property, so it automatically bubbles up from the splitter grip to the SplitterItem -->
+                                            <Binding Path="(local:SplitterItemsControl.SplitterGripSize)" RelativeSource="{RelativeSource Self}" />
+
+                                            <Binding Path="(local:SplitterPanel.IsLast)" RelativeSource="{RelativeSource Self}" />
+                                        </MultiBinding>
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Orientation, RelativeSource={StaticResource SplitterBindingSource}}" Value="Horizontal">
+                                <Setter Property="local:SplitterPanel.PaneLength" Value="{Binding DockedWidth}" />
+
+                                <!-- Set a binding to calculate the minimum width from a combination of the size of the splitter grip, the width of the control being wrapped in
+                                     the SplitterItem and whether the current SplitterItem has been marked as last in the parent SplitterPanel -->
+                                <Setter Property="local:SplitterPanel.MinimumLength">
+                                    <Setter.Value>
+                                        <MultiBinding Converter="{StaticResource MinimalLengthConverter}">
+                                            <!-- Much like DockedHeight/DockedWidth above, the data context of this binding is the control that is being wrapped in the SplitterItem -->
+                                            <Binding Path="MinimumWidth" />
+
+                                            <!-- SplitterGripSize is defined as an "inherited" property, so it automatically bubbles up from the splitter grip to the SplitterItem -->
+                                            <Binding Path="(local:SplitterItemsControl.SplitterGripSize)" RelativeSource="{RelativeSource Self}" />
+                                            
+                                            <Binding Path="(local:SplitterPanel.IsLast)" RelativeSource="{RelativeSource Self}" />
+                                        </MultiBinding>
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                            
+                            <Trigger SourceName="Splitter" Property="local:SplitterGrip.Orientation" Value="Horizontal">
+                                <Setter TargetName="Splitter" Property="FrameworkElement.Height" Value="Auto"/>
+                                <Setter TargetName="Splitter" Property="DockPanel.Dock" Value="Right"/>
+                            </Trigger>
+                            <Trigger SourceName="Splitter" Property="local:SplitterGrip.Orientation" Value="Vertical">
+                                <Setter TargetName="Splitter" Property="FrameworkElement.Width" Value="Auto"/>
+                                <Setter TargetName="Splitter" Property="DockPanel.Dock" Value="Bottom"/>
+                            </Trigger>
+                            <!-- Hide the splitter grip if there's no more panes after us -->
+                            <Trigger Property="local:SplitterPanel.IsLast" Value="True">
+                                <Setter TargetName="Splitter" Property="UIElement.Visibility" Value="Collapsed"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </ContentControl.Resources>
+</ContentControl>
