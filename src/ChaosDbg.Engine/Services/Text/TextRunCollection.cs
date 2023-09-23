@@ -25,6 +25,8 @@ namespace ChaosDbg.Text
 
         public ITextRunDecoration[] Decorations { get; set; }
 
+        public ITextBehavior Behavior { get; }
+
         public IEnumerable<ITextRun> Runs { get; }
 
         public TextRunCollection(params ITextRun[] runs)

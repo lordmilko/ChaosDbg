@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ChaosDbg.Disasm;
+using ChaosDbg.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -34,6 +35,13 @@ namespace ChaosDbg.Tests
         public static MemoryTextSegmentVerifier Verify(this IMemoryTextSegment segment) => new MemoryTextSegmentVerifier(segment);
 
         public static CodeNavigatorVerifier Verify(this CodeNavigator nav) => new CodeNavigatorVerifier(nav);
+
+        public static void Verify(this SelectionChangedEventArgs e, TextPosition start, TextPosition end, string text)
+        {
+            Assert.AreEqual(start, e.SelectedRange.Start);
+            Assert.AreEqual(end, e.SelectedRange.End);
+            Assert.AreEqual(text, e.SelectedText);
+        }
 
         #region Pane
 

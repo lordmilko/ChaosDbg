@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 using ChaosDbg.Render;
@@ -25,6 +25,8 @@ namespace ChaosDbg.Text
         void RaiseUpdateBuffer(EventArgs args);
 
         ITextBuffer Buffer { get; }
+
+        TextPosition GetTextPositionFromPoint(Point point, bool roundDown);
     }
 
     /// <summary>
@@ -37,6 +39,8 @@ namespace ChaosDbg.Text
         public void RaiseUpdateBuffer(EventArgs args) => HandleSimpleEvent(UpdateBuffer, args);
 
         public ITextBuffer Buffer { get; }
+
+        private Dictionary<int, IUiTextLine> lineCache = new Dictionary<int, IUiTextLine>();
 
         public UiTextBuffer(ITextBuffer buffer)
         {
@@ -51,6 +55,8 @@ namespace ChaosDbg.Text
 
         public void Render(DrawingContext drawingContext, RenderContext renderContext)
         {
+            lineCache.Clear();
+
             var scrollManager = renderContext.ScrollManager;
 
             var range = scrollManager.GetVisibleTextRange();
@@ -81,6 +87,8 @@ namespace ChaosDbg.Text
 
                 var uiLine = new UiTextLine(line);
 
+                lineCache[i] = uiLine;
+
                 //The IUiTextLine doesn't know what its Y coordinate should be. We apply a transform
                 //to the Y axis such that each line will be displayed further and further down the page
 
@@ -96,6 +104,67 @@ namespace ChaosDbg.Text
             drawingContext.Pop();
 
             ScrollAreaWidth = maxWidth;
+        }
+
+        public TextPosition GetTextPositionFromPoint(Point point, bool roundDown)
+        {
+            int col;
+            var row = (int) Math.Floor(point.Y / ScrollLineHeight);
+
+            if (row < 0)
+                return default;
+
+            if (Buffer.LineCount > 0)
+            {
+                if (row > Buffer.LineCount)
+                    row = Buffer.LineCount - 1;
+
+                var line = lineCache[row];
+
+                var charPositions = line.CharPositions;
+
+                //The first glyph is always at position 0 so no point starting at 0
+                for (col = 1; col < charPositions.Length; col++)
+                {
+                    var charPos = charPositions[col];
+
+                    if (charPos > point.X)
+                    {
+                        if (roundDown)
+                        {
+                            col--;
+                            break;
+                        }
+                        else
+                        {
+                            //We need to see whether we're the closest character to the desired position
+
+                            var currentDiff = charPositions[col] - point.X;
+                            var previousDiff = point.X - charPositions[col - 1] + 2;
+
+                            if (currentDiff > previousDiff)
+                            {
+                                col--;
+                                break;
+                            }
+                        }
+                    }
+                    
+                }
+
+                //After the last character position, we store its end position.
+                //There are no further characters after this end position, thus if we're
+                //at the end position then we actually want the character that came before us
+                if (col == charPositions.Length)
+                    col = charPositions.Length - 1;
+            }
+            else
+            {
+                row = 0;
+                col = 0;
+            }
+
+            return new TextPosition(row, col);
         }
 
         #endregion

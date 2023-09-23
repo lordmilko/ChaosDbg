@@ -14,7 +14,9 @@ namespace ChaosDbg.Text
 
         public double Height { get; private set; }
 
-        public IEnumerable<IUiTextRun> Runs
+        public double[] CharPositions { get; private set; }
+
+        public IUiTextRun[] Runs
         {
             get
             {
@@ -75,6 +77,27 @@ namespace ChaosDbg.Text
                     //offset each line correctly
                     uiRun = new UiTextRun(run, font, startingPosition);
                 }
+
+                //TextRunCollection computes its Text, so we should store it in a variable
+                var text = run.Text;
+
+                double xPos = 0;
+
+                var charPositions = new double[text.Length + 1];
+
+                for (var i = 0; i < text.Length; i++)
+                {
+                    charPositions[i] = xPos;
+
+                    var charWidth = font.GetCharWidth(text[i]);
+                    xPos += charWidth;
+                }
+
+                //We store the X coordinate after the final character so that GetTextPositionFromPoint() can ascertain
+                //whether we're before the last character or have gone beyond it
+                charPositions[text.Length] = xPos;
+
+                CharPositions = charPositions;
 
                 list.Add(uiRun);
 

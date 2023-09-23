@@ -1,5 +1,8 @@
-﻿namespace ChaosDbg.Text
+﻿using System.Diagnostics;
+
+namespace ChaosDbg.Text
 {
+    [DebuggerDisplay("Row = {Row}, Column = {Column}")]
     public struct TextPosition
     {
         /// <summary>
@@ -16,6 +19,24 @@
         {
             Row = row;
             Column = column;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is TextPosition p)
+                return Row.Equals(p.Row) && Column.Equals(p.Column);
+
+            return false;
+        }
+
+        public override int GetHashCode()
+        {
+            return Row.GetHashCode() ^ Column.GetHashCode();
+        }
+
+        public override string ToString()
+        {
+            return $"({Row},{Column})";
         }
     }
 }

@@ -38,7 +38,8 @@ namespace ChaosDbg.Text
         /// Gets the <see cref="ITextLine"/> at the specified index.
         /// </summary>
         /// <param name="lineIndex">The index of the line to retrieve, relative to the subset of lines collected in <see cref="PrepareLines(int, int)"/>.</param>
+        /// <param name="lineMode">How the value of <paramref name="lineIndex"/> should be interpreted.</param>
         /// <returns>The retrieved <see cref="ITextLine"/>.</returns>
-        ITextLine GetLine(int lineIndex);
+        ITextLine GetLine(int lineIndex, LineMode lineMode = LineMode.RelativeToZero);
     }
 }

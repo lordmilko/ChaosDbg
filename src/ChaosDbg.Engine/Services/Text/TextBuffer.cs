@@ -38,10 +38,11 @@ namespace ChaosDbg.Text
         {
             Array.Clear(subsetLines, 0, lines.Length);
             //0-0 = 0, but we still want that line itself, so we do +1
-            Array.Copy(lines, startIndex, subsetLines, 0, (endIndex - startIndex) + 1);
+            var length = Math.Min(lines.Length, (endIndex - startIndex) + 1);
+            Array.Copy(lines, startIndex, subsetLines, 0, length);
         }
 
-        public ITextLine GetLine(int lineIndex) => subsetLines[lineIndex];
+        public ITextLine GetLine(int lineIndex, LineMode lineMode) => subsetLines[lineIndex];
 
         public IRenderable ToRenderable() => new UiTextBuffer(this);
     }

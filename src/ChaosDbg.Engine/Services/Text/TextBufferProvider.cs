@@ -24,7 +24,7 @@ namespace ChaosDbg.Text
 
             var list = new List<ITextLine>();
 
-            var decorations = new[]
+            var decorations = new ITextRunDecoration[]
             {
                 new RightBorderRunDecoration()
             };

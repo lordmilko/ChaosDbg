@@ -10,7 +10,7 @@
         /// <summary>
         /// Gets the end position of the text range.
         /// </summary>
-        public TextPosition End { get; }
+        public TextPosition End { get; set; }
 
         public TextRange(TextPosition start, TextPosition end)
         {

@@ -19,6 +19,8 @@ namespace ChaosDbg.Text
         ITextStyle Style { get; }
 
         ITextRunDecoration[] Decorations { get; set; }
+
+        ITextBehavior Behavior { get; }
     }
 
     /// <summary>
@@ -36,6 +38,8 @@ namespace ChaosDbg.Text
         public ITextStyle Style { get; set; }
 
         public ITextRunDecoration[] Decorations { get; set; }
+
+        public ITextBehavior Behavior { get; }
 
         public TextRun(string text)
         {

@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using ChaosDbg.Render;
+﻿using ChaosDbg.Render;
 
 namespace ChaosDbg.Text
 {
@@ -8,7 +7,9 @@ namespace ChaosDbg.Text
     /// </summary>
     interface IUiTextLine : IRenderable
     {
-        IEnumerable<IUiTextRun> Runs { get; }
+        double[] CharPositions { get; }
+
+        IUiTextRun[] Runs { get; }
     }
 
     /// <summary>

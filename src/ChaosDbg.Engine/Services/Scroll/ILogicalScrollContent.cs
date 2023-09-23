@@ -1,4 +1,4 @@
-﻿namespace ChaosDbg.DbgEng
+﻿namespace ChaosDbg.Scroll
 {
     public interface ILogicalScrollContent
     {

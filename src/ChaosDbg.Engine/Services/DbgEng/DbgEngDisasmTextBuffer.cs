@@ -1,5 +1,6 @@
 ﻿using System;
 using ChaosDbg.Render;
+using ChaosDbg.Scroll;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
 
@@ -29,15 +30,20 @@ namespace ChaosDbg.DbgEng
             this.navigator = navigator;
         }
 
+        private int startIndex;
         private ITextLine[] lines;
 
         public void PrepareLines(int startIndex, int endIndex)
         {
+            this.startIndex = startIndex;
             lines = navigator.GetLines(startIndex, endIndex);
         }
 
-        public ITextLine GetLine(int lineIndex)
+        public ITextLine GetLine(int lineIndex, LineMode lineMode)
         {
+            if (lineMode == LineMode.Absolute)
+                lineIndex -= startIndex;
+
             if (lineIndex >= lines.Length)
                 return new TextLine(new TextRun(string.Empty));
 

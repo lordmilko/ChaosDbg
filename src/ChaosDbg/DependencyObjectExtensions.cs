@@ -54,15 +54,15 @@ namespace ChaosDbg
             return VisualTreeHelper.GetParent(child);
         }
 
-        public static T GetLogicalDescendant<T>(this DependencyObject child)
+        public static T GetLogicalDescendant<T>(this DependencyObject parent)
         {
-            if (child == null)
-                throw new ArgumentNullException(nameof(child));
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
 
-            var desc = child.GetLogicalDescendants().OfType<T>().SingleOrDefault();
+            var desc = parent.GetLogicalDescendants().OfType<T>().SingleOrDefault();
 
             if (desc == null)
-                throw new InvalidOperationException($"Could not find descendant of type '{typeof(T).Name}' on control '{child}'.");
+                throw new InvalidOperationException($"Could not find descendant of type '{typeof(T).Name}' on control '{parent}'.");
 
             return desc;
         }
@@ -84,13 +84,26 @@ namespace ChaosDbg
             }
         }
 
+        public static T GetVisualDescendant<T>(this DependencyObject parent)
+        {
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
+
+            var desc = parent.GetVisualDescendants().OfType<T>().SingleOrDefault();
+
+            if (desc == null)
+                throw new InvalidOperationException($"Could not find descendant of type '{typeof(T).Name}' on control '{parent}'.");
+
+            return desc;
+        }
+
         public static IEnumerable<DependencyObject> GetVisualDescendants(this DependencyObject parent)
         {
             foreach (var child in GetVisualChildren(parent))
             {
                 yield return child;
 
-                foreach (var grandchild in GetVisualChildren(child))
+                foreach (var grandchild in GetVisualDescendants(child))
                     yield return grandchild;
             }
         }

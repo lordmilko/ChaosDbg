@@ -1,18 +1,28 @@
 ﻿using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using ChaosDbg.Render;
 using ChaosDbg.Scroll;
+using ChaosDbg.Select;
 using ChaosDbg.Theme;
 using ChaosDbg.ViewModel;
 
 namespace ChaosDbg
 {
+    class TextCanvasAutomationPeer : FrameworkElementAutomationPeer
+    {
+        public TextCanvasAutomationPeer(FrameworkElement owner) : base(owner)
+        {
+        }
+    }
+
     /// <summary>
     /// Interaction logic for TextCanvasControl.xaml
     /// </summary>
-    public partial class TextCanvas : CanvasBase<TextCanvasViewModel>, IDrawable, IScrollInfo
+    public partial class TextCanvas : CanvasBase<TextCanvasViewModel>, IDrawable, IScrollInfo, IScrollable
     {
         #region Content
 
@@ -37,6 +47,7 @@ namespace ChaosDbg
         #endregion
 
         public DrawingGroup DrawingGroup { get; } = new DrawingGroup();
+        public MouseManager MouseManager { get; }
         public ScrollManager ScrollManager { get; set; }
         public RenderContext RenderContext { get; }
 
@@ -44,6 +55,7 @@ namespace ChaosDbg
         {
             InitializeComponent();
 
+            MouseManager = new MouseManager(this);
             RenderContext = new RenderContext(this, ServiceProvider.GetService<IThemeProvider>());
 
             //In order to display pixel perfect table lines (without any blurring at higher DPIs) we must
@@ -78,6 +90,29 @@ namespace ChaosDbg
             return base.ArrangeOverride(arrangeSize);
         }
 
+        protected override AutomationPeer OnCreateAutomationPeer() => new TextCanvasAutomationPeer(this);
+
+        #region Mouse
+
+        protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e) =>
+            MouseManager.OnLeftDown(e);
+
+        protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e) =>
+            MouseManager.OnLeftUp(e);
+
+        protected override void OnMouseRightButtonDown(MouseButtonEventArgs e) =>
+            MouseManager.OnRightDown(e);
+
+        protected override void OnMouseMove(MouseEventArgs e) =>
+            MouseManager.OnMove(e);
+
+        protected override void OnMouseLeave(MouseEventArgs e) =>
+            MouseManager.OnLeave(e);
+
+        protected override void OnLostMouseCapture(MouseEventArgs e) =>
+            MouseManager.OnLostCapture(e);
+
+        #endregion
         #region IScrollInfo
 
         public ScrollViewer ScrollOwner { get; set; }
