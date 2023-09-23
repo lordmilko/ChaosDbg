@@ -1,4 +1,4 @@
-﻿using ChaosDbg.Metadata;
+﻿using ChaosLib.Metadata;
 
 namespace ChaosDbg.Tests
 {

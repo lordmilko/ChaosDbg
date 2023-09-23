@@ -10,13 +10,15 @@
   <!-- Package Versions -->
 
   <PropertyGroup>
-	  <EnvDTEVersion>8.0.3</EnvDTEVersion>
+    <EnvDTEVersion>8.0.3</EnvDTEVersion>
     <ClrDebugVersion>0.3.0</ClrDebugVersion>
+    <ChaosLibVersion>0.1.0</ChaosLibVersion>
     <DbgEngVersion>20230731.1609.0</DbgEngVersion>
-	  <FlaUIVersion>4.0.0</FlaUIVersion>
+    <FlaUIVersion>4.0.0</FlaUIVersion>
 
-		<TestSDKVersion>16.9.4</TestSDKVersion>
-	  <MSTestVersion>2.2.3</MSTestVersion>
-	  <CoverletVersion>3.0.2</CoverletVersion>
+    <TestSDKVersion>16.9.4</TestSDKVersion>
+    <MSTestVersion>2.2.3</MSTestVersion>
+    <CoverletVersion>3.0.2</CoverletVersion>
+
   </PropertyGroup>
 </Project>

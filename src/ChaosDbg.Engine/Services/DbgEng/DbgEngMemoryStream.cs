@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using ChaosLib.Memory;
 using ClrDebug;
 using ClrDebug.DbgEng;
 

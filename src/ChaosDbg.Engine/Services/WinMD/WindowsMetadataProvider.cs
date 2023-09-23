@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ChaosDbg.Metadata;
+using ChaosLib;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD

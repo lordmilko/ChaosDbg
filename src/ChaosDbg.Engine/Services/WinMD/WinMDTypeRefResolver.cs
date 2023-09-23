@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD

@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using ChaosDbg.Metadata;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD

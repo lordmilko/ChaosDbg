@@ -3,8 +3,9 @@ using System.IO;
 using System.Text.RegularExpressions;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
-using ChaosDbg.Metadata;
+using ChaosLib.Memory;
 using ClrDebug.DbgEng;
+using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests

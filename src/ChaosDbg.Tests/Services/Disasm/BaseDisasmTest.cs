@@ -1,6 +1,6 @@
 ﻿using System.IO;
 using ChaosDbg.Disasm;
-using ChaosDbg.Metadata;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg.Tests
 {

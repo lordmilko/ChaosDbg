@@ -28,5 +28,6 @@
   </ItemGroup>
 
   <Import Project="$(Build)ClrDebug.props" />
+  <Import Project="$(Build)ChaosLib.props" />
 
 </Project>

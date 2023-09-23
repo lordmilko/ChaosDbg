@@ -1,8 +1,8 @@
 ﻿using System;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
-using ChaosDbg.Metadata;
 using ChaosDbg.Text;
+using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests

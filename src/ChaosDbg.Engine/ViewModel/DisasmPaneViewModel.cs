@@ -2,11 +2,12 @@
 using System.IO;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
-using ChaosDbg.Metadata;
 using ChaosDbg.Reactive;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
+using ChaosLib.Memory;
 using ClrDebug.DbgEng;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg.ViewModel
 {

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.IO;
-using ChaosDbg.Metadata;
+using ChaosLib.Metadata;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm

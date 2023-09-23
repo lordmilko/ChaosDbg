@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosDbg.Metadata;
 using ChaosDbg.Text;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg
 {

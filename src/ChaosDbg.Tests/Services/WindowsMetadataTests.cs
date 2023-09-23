@@ -1,5 +1,5 @@
-﻿using ChaosDbg.Metadata;
-using ChaosDbg.WinMD;
+﻿using ChaosDbg.WinMD;
+using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests

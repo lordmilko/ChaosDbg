@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using ChaosDbg.Metadata;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.WinMD

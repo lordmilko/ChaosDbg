@@ -3,9 +3,9 @@ using System.ComponentModel;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
-using ChaosDbg.Metadata;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg
 {
