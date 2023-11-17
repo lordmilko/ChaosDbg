@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <LocalChaosLib>$(MSBuildThisFileDirectory)\..\..\ChaosLib\src\ChaosLib\bin\Debug\ChaosLib.dll</LocalChaosLib>
+    <LocalChaosLib>$(MSBuildThisFileDirectory)\..\..\ChaosLib\src\ChaosLib\bin\Debug\net472\ChaosLib.dll</LocalChaosLib>
   </PropertyGroup>
   
   <ItemGroup>

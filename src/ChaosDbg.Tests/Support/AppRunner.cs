@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using ChaosDbg.Engine;
+using ChaosLib;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 using FlaUIWindow = FlaUI.Core.AutomationElements.Window;
@@ -258,7 +259,7 @@ namespace ChaosDbg.Tests
                 try
                 {
                     if (debug)
-                        VsDebugger.Attach(Process.GetProcessById(app.ProcessId));
+                        VsDebugger.Attach(Process.GetProcessById(app.ProcessId), VsDebuggerType.Managed);
 
                     using (var automation = new UIA3Automation())
                     {

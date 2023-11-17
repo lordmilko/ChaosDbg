@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using ChaosLib;
 using ClrDebug;
 using ClrDebug.DbgEng;
 
@@ -68,7 +69,7 @@ namespace ChaosDbg.DbgEng
             {
                 //Go to sleep and wait for an event to occur. We can force the debugger to wake up
                 //via our UiClient by calling DebugControl.SetInterrupt()
-                EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, NativeMethods.INFINITE);
+                EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, Kernel32.INFINITE);
 
                 //When disposing our debug session on the UI thread, we will cancel our CTS and then attempt to call DebugControl.SetInterrupt().
                 //If we can see cancellation was requested, the engine is shutting down, and we should break out of the engine loop
@@ -95,7 +96,7 @@ namespace ChaosDbg.DbgEng
             {
                 //Go to sleep and wait for a command to be enqueued on the UI thread. We will wake up
                 //when the UiClient calls DebugClient.ExitDispatch()
-                EngineClient.DispatchCallbacks(NativeMethods.INFINITE);
+                EngineClient.DispatchCallbacks(Kernel32.INFINITE);
 
                 //Similar to breakint out of the EngineLoop, when we want to end the debugger session we'll cancel our CTS and then attempt to call
                 //DebugClient.ExitDispatch(). 
@@ -112,9 +113,6 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private DbgEngTargetInfo CreateDebugTarget(DbgEngLaunchInfo launchInfo)
         {
-            var processAttribs = new SECURITY_ATTRIBUTES();
-            var threadAttribs = new SECURITY_ATTRIBUTES();
-
             var si = new STARTUPINFOW
             {
                 cb = Marshal.SizeOf<STARTUPINFOW>()
@@ -137,12 +135,8 @@ namespace ChaosDbg.DbgEng
 
             PROCESS_INFORMATION pi;
 
-            var result = NativeMethods.CreateProcessW(
-                null,
+            Kernel32.CreateProcessW(
                 launchInfo.ProcessName,
-                ref processAttribs,
-                ref threadAttribs,
-                true,
                 creationFlags,
                 IntPtr.Zero,
                 Environment.CurrentDirectory,
@@ -150,21 +144,14 @@ namespace ChaosDbg.DbgEng
                 out pi
             );
 
-            if (!result)
-            {
-                var hr = (HRESULT)Marshal.GetHRForLastWin32Error();
-
-                throw new DebugEngineException($"Failed to start process '{launchInfo.ProcessName}': CreateProcess returned {hr}");
-            }
-
-            var is32Bit = NativeMethods.IsWow64Process(pi.hProcess, out var isWow64) && isWow64;
+            var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
             var target = new DbgEngTargetInfo(launchInfo.ProcessName, pi.dwProcessId, is32Bit);
 
             //We have everything we need, now finally close the process and thread handles we were given.
             //We don't need to resume the thread before closing it, DbgEng can get its own handle when its ready to resume
-            NativeMethods.CloseHandle(pi.hProcess);
-            NativeMethods.CloseHandle(pi.hThread);
+            Kernel32.CloseHandle(pi.hProcess);
+            Kernel32.CloseHandle(pi.hThread);
 
             return target;
         }

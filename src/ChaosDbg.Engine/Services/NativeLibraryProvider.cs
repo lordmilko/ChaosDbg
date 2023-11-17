@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
-using ClrDebug;
+using ChaosLib;
 
 namespace ChaosDbg
 {
@@ -25,11 +25,11 @@ namespace ChaosDbg
         public NativeLibraryProvider()
         {
             root = Path.Combine(
-                Path.GetDirectoryName(typeof(NativeLibraryProvider).Assembly.Location),
+                AppContext.BaseDirectory,
                 IntPtr.Size == 4 ? "x86" : "x64"
             );
 
-            NativeMethods.SetDllDirectory(root);
+            Kernel32.SetDllDirectory(root);
         }
 
         public IntPtr GetModuleHandle(string name)
@@ -42,19 +42,9 @@ namespace ChaosDbg
                 if (!File.Exists(path))
                     throw new FileNotFoundException($"Failed to find module file '{path}'", path);
 
-                var hModule = NativeMethods.LoadLibrary(path);
+                var hModule = Kernel32.LoadLibrary(path);
 
-                if (hModule != IntPtr.Zero)
-                    return hModule;
-
-                var hr = (HRESULT)Marshal.GetHRForLastWin32Error();
-
-                if (hr == HRESULT.ERROR_BAD_EXE_FORMAT)
-                    throw new BadImageFormatException($"Failed to load module '{path}'. Module may target an architecture different from the current process.");
-
-                var ex = Marshal.GetExceptionForHR((int)hr);
-
-                throw new DllNotFoundException($"Unable to load DLL '{path}' or one of its dependencies: {ex.Message}");
+                return hModule;
             });
         }
 
@@ -67,12 +57,9 @@ namespace ChaosDbg
 
         public T GetExport<T>(IntPtr hModule, string name)
         {
-            var result = NativeMethods.GetProcAddress(hModule, name);
+            var result = Kernel32.GetProcAddress(hModule, name);
 
-            if (result != IntPtr.Zero)
-                return Marshal.GetDelegateForFunctionPointer<T>(result);
-
-            throw new EntryPointNotFoundException($"Unable to find entry point named '{name}' in DLL: {(HRESULT)Marshal.GetHRForLastWin32Error()}");
+            return Marshal.GetDelegateForFunctionPointer<T>(result);
         }
 
         public void Dispose()
@@ -86,7 +73,7 @@ namespace ChaosDbg
             GC.WaitForPendingFinalizers();
 
             foreach (var item in loaded)
-                NativeMethods.FreeLibrary(item.Value.Value);
+                Kernel32.FreeLibrary(item.Value.Value);
 
             loaded.Clear();
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using ChaosLib.Memory;
 
 namespace ChaosDbg.Disasm
 {
