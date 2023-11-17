@@ -4,19 +4,19 @@
     <Exec Command="dotnet build $(ChaosDbgMSBuildProjectPath) -c $(Configuration)" Condition="!Exists($(ChaosDbgMSBuildOutputPath))" />
     
     <ItemGroup>
-      <ViewModelFiles Condition="$(IsEngine)" Include="$(MSBuildProjectDirectory)\ViewModel\**\*.cs" />
-      <ControlFiles Condition="$(IsUI)" Include="$(MSBuildProjectDirectory)\UI\**\*.cs" />
+      <ViewModelFiles Condition="$(IsUI)" Include="$(MSBuildProjectDirectory)\Modules\**\*ViewModel.cs" />
+      <ControlFiles Condition="$(IsUI)" Include="$(MSBuildProjectDirectory)\UI\**\*.cs;$(MSBuildProjectDirectory)\Modules\**\*.cs" />
     </ItemGroup>
 
     <GenerateDependencyProperties Condition="$(IsUI)" Files="@(ControlFiles)" Output="$(GeneratedDependencyPropertiesPath)" />
-    <GenerateViewModels Condition="$(IsEngine)" Files="@(ViewModelFiles)" Output="$(GeneratedViewModelsPath)" />
+    <GenerateViewModels Condition="$(IsUI)" Files="@(ViewModelFiles)" Output="$(GeneratedViewModelsPath)" />
 
     <ItemGroup Condition="$(IsUI) AND Exists($(GenerateDependencyProperties))">
       <Compile Remove="$(GenerateDependencyProperties)" />
       <Compile Include="$(GenerateDependencyProperties)" Visible="false" />
     </ItemGroup>
 
-    <ItemGroup Condition="$(IsEngine) AND Exists($(GeneratedViewModelsPath))">
+    <ItemGroup Condition="$(IsUI) AND Exists($(GeneratedViewModelsPath))">
       <Compile Remove="$(GeneratedViewModelsPath)" />
       <Compile Include="$(GeneratedViewModelsPath)" Visible="false" />
     </ItemGroup>

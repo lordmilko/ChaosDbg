@@ -1,5 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(Build)ClrDebug.props" />
+  <Import Project="$(Build)ChaosLib.props" />
+  <Import Project="$(Build)ChaosDbg.MSBuild.props" />
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net472</TargetFramework>
@@ -9,5 +13,11 @@
   <ItemGroup>
     <ProjectReference Include="..\ChaosDbg.Engine\ChaosDbg.Engine.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="**\*.DotSettings" />
+  </ItemGroup>
+
+  <Import Project="$(Build)ChaosDbg.MSBuild.targets" />
 
 </Project>

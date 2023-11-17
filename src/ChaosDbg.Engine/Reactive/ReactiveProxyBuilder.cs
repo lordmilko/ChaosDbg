@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using ChaosDbg.Dynamic;
-using ChaosDbg.ViewModel;
 
 namespace ChaosDbg.Reactive
 {
@@ -17,9 +16,6 @@ namespace ChaosDbg.Reactive
     {
         public static ReactiveProxyInfo Build(Type type, params object[] args)
         {
-            if (!typeof(ReactiveObject).IsAssignableFrom(type) && !typeof(ViewModelBase).IsAssignableFrom(type))
-                throw new InvalidOperationException($"Cannot create reactive proxy for type '{type.Name}': type does not derive from '{nameof(ReactiveObject)}' or '{nameof(ViewModelBase)}'.");
-
             var baseCtor = FindBestConstructor(type, args.Select(a => a.GetType()).ToArray());
 
             var assembly = DynamicAssembly.Instance;

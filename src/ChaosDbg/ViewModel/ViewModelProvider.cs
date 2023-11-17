@@ -8,7 +8,7 @@ namespace ChaosDbg.ViewModel
     /// <summary>
     /// Provides facilities for creating reactive proxies around view models.
     /// </summary>
-    class ViewModelProvider
+    public class ViewModelProvider
     {
         private static ConcurrentDictionary<Type, ReactiveProxyInfo> proxyCache = new ConcurrentDictionary<Type, ReactiveProxyInfo>();
         private static object objLock = new object();
