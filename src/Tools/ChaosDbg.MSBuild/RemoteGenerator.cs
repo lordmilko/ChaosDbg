@@ -42,6 +42,9 @@ namespace ChaosDbg.MSBuild
             return null;
         }
 
+#if NET
+        [Obsolete]
+#endif
         public override object InitializeLifetimeService() => null;
     }
 }

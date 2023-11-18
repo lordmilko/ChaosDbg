@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
+#if NET
+using System.Runtime.Loader;
+#endif
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -23,7 +27,47 @@ namespace ChaosDbg.MSBuild
 
         public override bool Execute()
         {
-            var appDomain = AppDomain.CreateDomain($"ChaosDbgAppDomain_{GetType().Name}");
+            var name = $"ChaosDbgAppDomain_{GetType().Name}";
+
+#if NET
+            var loadContext = new AssemblyLoadContext(name, true);
+
+            try
+            {
+                var assembly = loadContext.LoadFromAssemblyPath(GetType().Assembly.Location);
+
+                var remoteGeneratorType = assembly.GetType(typeof(RemoteGenerator).FullName, true);
+
+                var helper = Activator.CreateInstance(remoteGeneratorType);
+
+                var executeRemote = helper.GetType().GetMethod(nameof(RemoteGenerator.ExecuteRemote));
+
+                if (executeRemote == null)
+                    throw new MissingMethodException(typeof(RemoteGenerator).FullName, nameof(RemoteGenerator.ExecuteRemote));
+
+                try
+                {
+                    var errors = (string[]) executeRemote.Invoke(helper, new object[] { Files, Output, GetType().Name });
+
+                    if (errors.Length > 0)
+                    {
+                        foreach (var item in errors)
+                            Log.LogError(item);
+
+                        return false;
+                    }
+                }
+                catch (TargetInvocationException ex)
+                {
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                }
+            }
+            finally
+            {
+                loadContext.Unload();
+            }
+#else
+            var appDomain = AppDomain.CreateDomain(name);
 
             try
             {
@@ -52,6 +96,7 @@ namespace ChaosDbg.MSBuild
             {
                 AppDomain.Unload(appDomain);
             }
+#endif
 
             return true;
         }

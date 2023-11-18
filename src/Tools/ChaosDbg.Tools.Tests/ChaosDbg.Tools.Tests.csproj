@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFrameworks>net472;net5.0</TargetFrameworks>
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
 
     <IsPackable>false</IsPackable>
@@ -22,12 +22,9 @@
     
     <!-- We seem to be getting package conflicts between version 5 and 6 of this (probably due to Roslyn in ChaosDbg.MSBuild), so force version 6 to resolve the conflict -->
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Support\" />
-  </ItemGroup>
-
+  
   <ItemGroup>
     <ProjectReference Include="..\ChaosDbg.MSBuild\ChaosDbg.MSBuild.csproj" />
   </ItemGroup>
