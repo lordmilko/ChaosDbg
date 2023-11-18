@@ -119,6 +119,8 @@ namespace ChaosDbg.Text
                 if (row > Buffer.LineCount)
                     row = Buffer.LineCount - 1;
 
+                //todo: if you scroll down while moving the mouse down, this crashes
+                //also seems to crash scrolling down then back up with the mouse
                 var line = lineCache[row];
 
                 var charPositions = line.CharPositions;
