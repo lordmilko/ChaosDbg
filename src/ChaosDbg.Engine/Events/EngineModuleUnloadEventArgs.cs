@@ -1,13 +1,12 @@
 ﻿using System;
-using ChaosDbg.DbgEng;
 
 namespace ChaosDbg
 {
     public class EngineModuleUnloadEventArgs : EventArgs
     {
-        public DbgEngModule Module { get; }
+        public IDbgModule Module { get; }
 
-        public EngineModuleUnloadEventArgs(DbgEngModule module)
+        public EngineModuleUnloadEventArgs(IDbgModule module)
         {
             Module = module;
         }

@@ -14,7 +14,7 @@ namespace ChaosDbg.DbgEng
         /// Represents the entry point of the DbgEng Engine Thread. The thread containing this entry point is created inside of <see cref="DbgEngSessionInfo"/>.
         /// </summary>
         /// <param name="launchInfo">Information about the debug target that should be launched.</param>
-        private void ThreadProc(DbgEngLaunchInfo launchInfo)
+        private void ThreadProc(DbgLaunchInfo launchInfo)
         {
             //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
             //The real client however exists on the engine thread here
@@ -30,6 +30,10 @@ namespace ChaosDbg.DbgEng
              * of events as well as accessing engine resources */
             EngineClient.OutputCallbacks = this;
             EngineClient.EventCallbacks = this;
+
+            //We also serve as our input handler. This is the same thing that WinDbg does. Inside our input handler we call ReturnInput()
+            //against the UI Client
+            EngineClient.InputCallbacks = this;
 
             EngineClient.Control.EngineOptions =
                 DEBUG_ENGOPT.INITIAL_BREAK | //Break immediately upon starting the debug session
@@ -111,7 +115,7 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Launches the specified target (e.g. creates the target process) and creates a <see cref="DbgEngTargetInfo"/> that provides key information about the target.
         /// </summary>
-        private DbgEngTargetInfo CreateDebugTarget(DbgEngLaunchInfo launchInfo)
+        private DbgEngTargetInfo CreateDebugTarget(DbgLaunchInfo launchInfo)
         {
             var si = new STARTUPINFOW
             {

@@ -14,6 +14,7 @@
     <ClrDebugVersion>0.3.0</ClrDebugVersion>
     <ChaosLibVersion>0.1.0</ChaosLibVersion>
     <DbgEngVersion>20230731.1609.0</DbgEngVersion>
+    <DbgShimVersion>8.0.452401</DbgShimVersion>
     <FlaUIVersion>4.0.0</FlaUIVersion>
 
     <TestSDKVersion>16.9.4</TestSDKVersion>
@@ -21,4 +22,11 @@
     <CoverletVersion>3.0.2</CoverletVersion>
 
   </PropertyGroup>
+
+  <Target Name="RemoveDbgShim" AfterTargets="Build">
+    <!-- When targeting .NET Framework, MSBuild will assume we are win7-x86, and will copy the x86 dbgshim.dll
+         to the output directory. We don't want this, we want to resolve our dbgshim.dll from either our x86 or x64
+         subdirectories. As such, we ensure to delete this file from the output directory if it gets created -->
+    <Delete Files="$(OutDir)\dbgshim.dll" />
+  </Target>
 </Project>

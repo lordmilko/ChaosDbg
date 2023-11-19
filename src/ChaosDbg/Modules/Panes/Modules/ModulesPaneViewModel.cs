@@ -5,7 +5,7 @@ namespace ChaosDbg.ViewModel
 {
     public class ModulesPaneViewModel : ViewModelBase
     {
-        public ObservableCollection<DbgEngModule> Modules { get; } = new ObservableCollection<DbgEngModule>();
+        public ObservableCollection<IDbgModule> Modules { get; } = new ObservableCollection<IDbgModule>();
 
         public ModulesPaneViewModel(DbgEngEngine engine)
         {

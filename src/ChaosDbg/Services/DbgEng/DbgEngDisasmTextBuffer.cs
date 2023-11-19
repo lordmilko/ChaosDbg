@@ -10,11 +10,11 @@ namespace ChaosDbg.DbgEng
     {
         public event EventHandler<EventArgs> UpdateBuffer;
 
-        public void RaiseUpdateBuffer(EventArgs args) => EventExtensions.HandleSimpleEvent(UpdateBuffer, args);
+        public void RaiseUpdateBuffer(EventArgs args) => EventExtensions.HandleEvent(UpdateBuffer, args);
 
         public Font Font { get; }
 
-        public int LineCount => module.ModuleSize;
+        public int LineCount => module.Size;
 
         private DbgEngModule module;
 

@@ -13,18 +13,18 @@ namespace ChaosDbg.ViewModel
     {
         public event EventHandler<EventArgs> Changed;
 
-        private List<DbgEngModule> modules = new List<DbgEngModule>();
+        private List<IDbgModule> modules = new List<IDbgModule>();
 
-        public void AddModule(DbgEngModule module)
+        public void AddModule(IDbgModule module)
         {
             modules.Add(module);
-            EventExtensions.HandleSimpleEvent(Changed, EventArgs.Empty);
+            EventExtensions.HandleEvent(Changed, EventArgs.Empty);
         }
 
-        public void RemoveModule(DbgEngModule module)
+        public void RemoveModule(IDbgModule module)
         {
             modules.Remove(module);
-            EventExtensions.HandleSimpleEvent(Changed, EventArgs.Empty);
+            EventExtensions.HandleEvent(Changed, EventArgs.Empty);
         }
 
         public void Render(DrawingContext drawingContext, RenderContext renderContext)
@@ -39,15 +39,15 @@ namespace ChaosDbg.ViewModel
 
             var width = renderContext.Owner.ActualWidth;
 
-            var moduleWidths = modules.Sum(m => m.ModuleSize);
+            var moduleWidths = modules.Sum(m => m.Size);
             var maxLines = width / thickness;
 
             var relativeModules = modules.Select(m => new
             {
                 M = m,
-                Percentage = ((double)m.ModuleSize / moduleWidths),
-                Pixels = width * ((double)m.ModuleSize / moduleWidths),
-                Lines = Math.Round(maxLines * ((double)m.ModuleSize / moduleWidths))
+                Percentage = ((double)m.Size / moduleWidths),
+                Pixels = width * ((double)m.Size / moduleWidths),
+                Lines = Math.Round(maxLines * ((double)m.Size / moduleWidths))
             }).ToArray();
 
             for (var i = 0; i < relativeModules.Length; i++)

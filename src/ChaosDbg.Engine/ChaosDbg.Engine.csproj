@@ -19,6 +19,8 @@
          For now, we won't bother with docs -->
 		<!--<PackageReference Include="Microsoft.Windows.SDK.Win32Docs" Version="0.1.42-alpha" />-->
 		<PackageReference Include="Microsoft.Windows.SDK.Win32Metadata" Version="54.0.44-preview" />
+
+    <PackageReference Include="Microsoft.Diagnostics.DbgShim" Version="$(DbgShimVersion)" />
 	</ItemGroup>
 
   <ItemGroup>
@@ -32,6 +34,10 @@
     <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbgeng.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
     <None Include="$(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbghelp.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
     <None Include="$(MicrosoftDebuggingPlatformSymSrvContent)amd64\symsrv.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+
+    <!-- Copy DbgShim -->
+    <None Include="$(NuGetPackageRoot)Microsoft.Diagnostics.DbgShim.win-x86\$(DbgShimVersion)\runtimes\win-x86\native\dbgshim.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
+    <None Include="$(NuGetPackageRoot)Microsoft.Diagnostics.DbgShim.win-x64\$(DbgShimVersion)\runtimes\win-x64\native\dbgshim.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
 
     <!-- Copy the winmd metadata file -->
     <None Include="@(ProjectionMetadataWinmd->'%(FullPath)')" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="winmd\%(FileName)%(Extension)" />

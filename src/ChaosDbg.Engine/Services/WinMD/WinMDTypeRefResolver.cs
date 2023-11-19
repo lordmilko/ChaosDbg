@@ -8,7 +8,12 @@ namespace ChaosDbg.WinMD
     {
         public HashSet<mdTypeRef> ToRemove { get; } = new HashSet<mdTypeRef>();
 
-        protected override bool ShouldResolveAssemblyRef(mdTypeRef typeRef, string assemblyRef, string typeName)
+        public WinMDTypeRefResolver()
+        {
+            ShouldResolveAssemblyRef = DoShouldResolveAssemblyRef;
+        }
+
+        protected bool DoShouldResolveAssemblyRef(mdTypeRef typeRef, string assemblyRef, string typeName)
         {
             switch (assemblyRef)
             {

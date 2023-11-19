@@ -47,7 +47,7 @@ namespace ChaosDbg.Select
             lastLeftDownPos = cursorPos;
             lastLeftDownRun = textRun;
 
-            HandleSimpleEvent(SelectionChanged, new SelectionChangedEventArgs(selection, Content.Buffer.GetTextForRange(selection)));
+            HandleEvent(SelectionChanged, new SelectionChangedEventArgs(selection, Content.Buffer.GetTextForRange(selection)));
         }
 
         public void OnLeftUp(MouseButtonEventArgs mouseButtonEventArgs)
@@ -74,7 +74,7 @@ namespace ChaosDbg.Select
 
                 var text = Content.Buffer.GetTextForRange(selection);
 
-                HandleSimpleEvent(SelectionChanged, new SelectionChangedEventArgs(selection, text));
+                HandleEvent(SelectionChanged, new SelectionChangedEventArgs(selection, text));
             }
 
             var textRun = GetAbsoluteTextRunAtPoint(pos);

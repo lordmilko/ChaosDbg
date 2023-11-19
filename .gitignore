@@ -3,6 +3,7 @@
 #################
 
 design/
+src/ChaosDbg/Modules/Shell/
 
 # Build results
 [Bb]in/

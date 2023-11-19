@@ -50,6 +50,11 @@ namespace ChaosDbg.DbgEng
         public DbgEngModuleStore Modules { get; private set; }
 
         /// <summary>
+        /// Gets the container containing the threads that have been loaded into the current process.
+        /// </summary>
+        public DbgEngThreadStore Threads { get; private set; }
+
+        /// <summary>
         /// Gets the container that manages the commands that should be dispatched and processed in the engine thread.
         /// </summary>
         private DbgEngCommandStore Commands { get; }
@@ -74,7 +79,7 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         /// <param name="launchInfo">Information about the debug target that should be launched.</param>
         /// <param name="cancellationToken">A cancellation token that can be used to terminate the debugger engine.</param>
-        public void Launch(DbgEngLaunchInfo launchInfo, CancellationToken cancellationToken = default)
+        public void Launch(DbgLaunchInfo launchInfo, CancellationToken cancellationToken = default)
         {
             if (Session != null)
                 throw new InvalidOperationException($"Cannot launch target {launchInfo}: an existing session is already running.");
@@ -86,6 +91,7 @@ namespace ChaosDbg.DbgEng
             );
 
             Modules = new DbgEngModuleStore();
+            Threads = new DbgEngThreadStore();
 
             Session.Start();
         }
@@ -106,6 +112,7 @@ namespace ChaosDbg.DbgEng
             Session?.Dispose();
             Session = null;
             Modules = null;
+            Threads = null;
         }
     }
 }

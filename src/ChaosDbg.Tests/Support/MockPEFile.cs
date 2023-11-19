@@ -10,6 +10,7 @@ namespace ChaosDbg.Tests
         public IImageOptionalHeader OptionalHeader { get; set; }
         public IImageSectionHeader[] SectionHeaders { get; }
         public IImageExportDirectory ExportDirectory { get; }
+        public IImageImportDescriptorInfo[] ImportDirectory { get; }
         public IImageCor20Header Cor20Header { get; }
         public IImageDebugDirectoryInfo DebugDirectoryInfo { get; }
         public IImageResourceDirectoryInfo ResourceDirectoryInfo { get; }

@@ -3,7 +3,7 @@
     /// <summary>
     /// Represents a module that has been loaded into a DbgEng debugger.
     /// </summary>
-    public class DbgEngModule
+    public class DbgEngModule : IDbgModule
     {
         public long BaseAddress { get; }
 
@@ -11,16 +11,16 @@
 
         public string ModuleName { get; }
 
-        public int ModuleSize { get; }
+        public int Size { get; }
 
-        public long EndAddress => BaseAddress + ModuleSize;
+        public long EndAddress => BaseAddress + Size;
 
         public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize)
         {
             BaseAddress = baseAddress;
             FileName = fileName;
             ModuleName = moduleName;
-            ModuleSize = moduleSize;
+            Size = moduleSize;
         }
 
         public override string ToString()

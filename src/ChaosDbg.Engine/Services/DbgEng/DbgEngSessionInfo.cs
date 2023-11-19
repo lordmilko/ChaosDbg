@@ -109,6 +109,11 @@ namespace ChaosDbg.DbgEng
 
         #endregion
 
+        /// <summary>
+        /// Gets or sets whether a DbgEng command is currently blocked and waiting for input.
+        /// </summary>
+        public bool InputStarted { get; set; }
+
         private BufferOutputCallbacks BufferOutput { get; set; }
 
         /// <summary>
