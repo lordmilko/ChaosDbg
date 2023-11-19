@@ -6,7 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ChaosDbg.Tests
 {
     [TestClass]
-    public class ExeTypeDetectorTests
+    public class ExeTypeDetectorTests : BaseTest
     {
         [TestMethod]
         public void ExeTypeDetector_NetFramework()
@@ -33,7 +33,7 @@ namespace ChaosDbg.Tests
         {
             //PowerShell Core
 
-            Test("C:\\Program Files\\PowerShell\\7\\pwsh.exe", ExeKind.NetCore);
+            Test("\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"", ExeKind.NetCore);
         }
 
         [TestMethod]
@@ -62,16 +62,7 @@ namespace ChaosDbg.Tests
 
         private void Test(string fileName, ExeKind expected)
         {
-            var serviceCollection = new ServiceCollection
-            {
-                { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
-                { typeof(IPEFileProvider), typeof(PEFileProvider) },
-                { typeof(ISigReader), typeof(SigReader) }
-            };
-
-            var serviceProvider = serviceCollection.Build();
-
-            var exeTypeDetector = serviceProvider.GetService<IExeTypeDetector>();
+            var exeTypeDetector = GetService<IExeTypeDetector>();
 
             var kind = exeTypeDetector.Detect(fileName);
 

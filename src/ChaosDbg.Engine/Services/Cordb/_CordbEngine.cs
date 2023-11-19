@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using ChaosDbg.Metadata;
 
@@ -63,6 +64,16 @@ namespace ChaosDbg.Cordb
 
         public void Dispose()
         {
+            try
+            {
+                if (Target != null)
+                    Process.GetProcessById(Target.ProcessId).Kill();
+            }
+            catch
+            {
+                //Ignore
+            }
+
             Session?.Dispose();
             Session = null;
             Modules = null;

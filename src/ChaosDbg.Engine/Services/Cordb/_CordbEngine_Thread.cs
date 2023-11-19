@@ -26,7 +26,7 @@ namespace ChaosDbg.Cordb
         {
             //Is the target executable a .NET Framework or .NET Core process?
 
-            var kind = exeTypeDetector.Detect(launchInfo.ProcessName);
+            var kind = exeTypeDetector.Detect(launchInfo.CommandLine);
 
             switch (kind)
             {
@@ -142,7 +142,7 @@ namespace ChaosDbg.Cordb
 
             var process = corDebug.DebugActiveProcess(pi.dwProcessId, false);
 
-            Target = new CordbTargetInfo(launchInfo.ProcessName, pi.dwProcessId, process, is32Bit);
+            Target = new CordbTargetInfo(launchInfo.CommandLine, pi.dwProcessId, process, is32Bit);
         }
 
         #endregion
@@ -166,7 +166,7 @@ namespace ChaosDbg.Cordb
 
             var process = corDebug.CreateProcess(
                 lpApplicationName: null,
-                lpCommandLine: launchInfo.ProcessName,
+                lpCommandLine: launchInfo.CommandLine,
                 lpProcessAttributes: default,
                 lpThreadAttributes: default,
                 bInheritHandles: true,
@@ -184,7 +184,7 @@ namespace ChaosDbg.Cordb
             {
                 var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-                Target = new CordbTargetInfo(launchInfo.ProcessName, pi.dwProcessId, process, is32Bit);
+                Target = new CordbTargetInfo(launchInfo.CommandLine, pi.dwProcessId, process, is32Bit);
 
                 //We are now going to resume the process. Any required setup must now be complete or we will encounter a race
                 Kernel32.ResumeThread(pi.hThread);
@@ -206,7 +206,7 @@ namespace ChaosDbg.Cordb
             GetCreateProcessArgs(launchInfo, out var creationFlags, out var si);
 
             Kernel32.CreateProcessW(
-                launchInfo.ProcessName,
+                launchInfo.CommandLine,
                 creationFlags,
                 IntPtr.Zero,
                 Environment.CurrentDirectory,

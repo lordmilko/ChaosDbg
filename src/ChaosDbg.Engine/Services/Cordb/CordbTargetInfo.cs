@@ -8,9 +8,9 @@ namespace ChaosDbg.Cordb
     public class CordbTargetInfo
     {
         /// <summary>
-        /// Gets the process name of the debug target.
+        /// Gets the command line that was used to launch the debug target.
         /// </summary>
-        public string ProcessName { get; }
+        public string CommandLine { get; }
 
         /// <summary>
         /// Gets the process ID of the debug target.
@@ -32,9 +32,9 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool Is32Bit { get; }
 
-        public CordbTargetInfo(string processName, int processId, CorDebugProcess process, bool is32Bit)
+        public CordbTargetInfo(string commandLine, int processId, CorDebugProcess process, bool is32Bit)
         {
-            ProcessName = processName;
+            CommandLine = commandLine;
             ProcessId = processId;
             Process = process;
             Is32Bit = is32Bit;

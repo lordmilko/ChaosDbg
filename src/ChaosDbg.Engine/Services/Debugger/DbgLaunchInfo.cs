@@ -5,13 +5,13 @@
     /// </summary>
     public class DbgLaunchInfo
     {
-        public string ProcessName { get; }
+        public string CommandLine { get; }
 
         public bool StartMinimized { get; set; }
 
-        public DbgLaunchInfo(string processName)
+        public DbgLaunchInfo(string commandLine)
         {
-            ProcessName = processName;
+            CommandLine = commandLine;
         }
     }
 }

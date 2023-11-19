@@ -140,7 +140,7 @@ namespace ChaosDbg.DbgEng
             PROCESS_INFORMATION pi;
 
             Kernel32.CreateProcessW(
-                launchInfo.ProcessName,
+                launchInfo.CommandLine,
                 creationFlags,
                 IntPtr.Zero,
                 Environment.CurrentDirectory,
@@ -150,7 +150,7 @@ namespace ChaosDbg.DbgEng
 
             var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-            var target = new DbgEngTargetInfo(launchInfo.ProcessName, pi.dwProcessId, is32Bit);
+            var target = new DbgEngTargetInfo(launchInfo.CommandLine, pi.dwProcessId, is32Bit);
 
             //We have everything we need, now finally close the process and thread handles we were given.
             //We don't need to resume the thread before closing it, DbgEng can get its own handle when its ready to resume

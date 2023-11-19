@@ -8,9 +8,9 @@ namespace ChaosDbg.DbgEng
     public class DbgEngTargetInfo
     {
         /// <summary>
-        /// Gets the process name of the debug target.
+        /// Gets the command line that was used to launch the debug target.
         /// </summary>
-        public string ProcessName { get; }
+        public string CommandLine { get; }
 
         /// <summary>
         /// Gets the process ID of the debug target.
@@ -27,9 +27,9 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         public bool Is32Bit { get; }
 
-        public DbgEngTargetInfo(string processName, int processId, bool is32Bit)
+        public DbgEngTargetInfo(string commandLine, int processId, bool is32Bit)
         {
-            ProcessName = processName;
+            CommandLine = commandLine;
             ProcessId = processId;
             Is32Bit = is32Bit;
         }

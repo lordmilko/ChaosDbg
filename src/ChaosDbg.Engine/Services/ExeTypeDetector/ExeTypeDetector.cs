@@ -30,20 +30,27 @@ namespace ChaosDbg.Metadata
             this.sigReader = sigReader;
         }
 
-        public ExeKind Detect(string fileName)
+        public ExeKind Detect(string commandLine)
         {
+            var args = Shell32.CommandLineToArgvW(commandLine);
+
+            if (args.Length == 0)
+                throw new ArgumentException("Command line was empty", nameof(commandLine));
+
+            var filePath = GetFullPath(args[0]);
+
             //Is this a .NET executable? And if so what kind of .NET executable is it?
 
             //Does it have an IMAGE_COR20_HEADER?
-            var pe = peFileProvider.ReadFile(fileName);
+            var pe = peFileProvider.ReadFile(filePath);
 
             if (pe.Cor20Header != null)
-                return DetectDotnetType(fileName);
+                return DetectDotnetType(filePath);
 
             if (pe.ImportDirectory != null && pe.ImportDirectory.Any(v => v.Name.Equals("mscoree.dll", StringComparison.OrdinalIgnoreCase)))
                 return ExeKind.NetFramework;
 
-            var directory = Path.GetDirectoryName(fileName);
+            var directory = Path.GetDirectoryName(filePath);
 
             if (directory != null && Directory.EnumerateFiles(directory).Any(v => Path.GetFileName(v).Equals("coreclr.dll", StringComparison.OrdinalIgnoreCase)))
                 return ExeKind.NetCore;
@@ -83,6 +90,39 @@ namespace ChaosDbg.Metadata
 
             //Couldn't find the attribute or a suitable value; assume it's .NET Framework
             return ExeKind.NetFramework;
+        }
+
+        private string GetFullPath(string exe)
+        {
+            var extension = Path.GetExtension(exe);
+
+            if (string.IsNullOrEmpty(extension))
+                exe += ".exe";
+
+            var directoryName = Path.GetDirectoryName(exe);
+
+            if (string.IsNullOrWhiteSpace(directoryName))
+            {
+                var path = Environment.GetEnvironmentVariable("Path").Split(';');
+
+                foreach (var item in path)
+                {
+                    if (item != string.Empty)
+                    {
+                        var candidate = Path.Combine(item, exe);
+
+                        if (File.Exists(candidate))
+                            return candidate;
+                    }
+                }
+            }
+            else
+            {
+                if (File.Exists(exe))
+                    return exe;
+            }
+
+            throw new FileNotFoundException($"Could not locate executable file '{exe}'");
         }
     }
 }

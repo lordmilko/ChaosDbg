@@ -2,9 +2,9 @@
 {
     public static class DbgEngEngineExtensions
     {
-        public static void Launch(this DbgEngEngine engine, string processName, bool startMinimized = false)
+        public static void Launch(this DbgEngEngine engine, string commandLine, bool startMinimized = false)
         {
-            engine.Launch(new DbgLaunchInfo(processName)
+            engine.Launch(new DbgLaunchInfo(commandLine)
             {
                 StartMinimized = startMinimized
             });
