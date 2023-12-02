@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using ChaosLib;
 
@@ -37,7 +40,7 @@ namespace ChaosDbg
             //GetOrAdd is not thread safe unless using Lazy<T>
             return loaded.GetOrAddSafe(name, () =>
             {
-                var path = Path.Combine(root, name);
+                var path = GetModuleRoot(name);
 
                 if (!File.Exists(path))
                     throw new FileNotFoundException($"Failed to find module file '{path}'", path);
@@ -60,6 +63,22 @@ namespace ChaosDbg
             var result = Kernel32.GetProcAddress(hModule, name);
 
             return Marshal.GetDelegateForFunctionPointer<T>(result);
+        }
+
+        private string GetModuleRoot(string moduleName)
+        {
+#if DEBUG
+            switch (moduleName)
+            {
+                case WellKnownNativeLibrary.DbgEng:
+                case WellKnownNativeLibrary.DbgHelp:
+                    if (DbgEngResolver.TryGetDbgEngPath(out var path))
+                        return Path.Combine(path, moduleName);
+                    break;
+            }
+#endif
+
+            return Path.Combine(root, moduleName);
         }
 
         public void Dispose()

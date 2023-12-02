@@ -36,7 +36,7 @@ namespace chaos
         /// An optional hook that allows modifying services.
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static Action<ServiceCollection>? ConfigureServices { get; set; }
+        public static Action<ServiceCollection> ConfigureServices { get; set; }
 
         static GlobalProvider()
         {
@@ -47,6 +47,10 @@ namespace chaos
         {
             var services = new ServiceCollection
             {
+                typeof(DbgEngClient),
+                typeof(CordbClient),
+                typeof(CommandBuilder),
+
                 typeof(DbgEngEngine),
                 typeof(CordbEngine),
                 typeof(NativeLibraryProvider),

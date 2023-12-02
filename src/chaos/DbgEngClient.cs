@@ -10,21 +10,21 @@ namespace chaos
     {
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
-        public void Execute(string executable)
+        public void Execute(string executable, bool minimized)
         {
             var engine = GlobalProvider.ServiceProvider.GetService<DbgEngEngine>();
 
             engine.EngineOutput += Engine_EngineOutput;
 
             engine.EngineStatusChanged += Engine_EngineStatusChanged;
-            engine.Launch(executable);
+            engine.CreateProcess(executable, minimized);
 
             EngineLoop(engine);
         }
 
         private void Engine_EngineStatusChanged(object sender, EngineStatusChangedEventArgs e)
         {
-            if (e.NewStatus == DEBUG_STATUS.BREAK)
+            if (e.NewStatus == EngineStatus.Break)
                 wakeEvent.Set();
         }
 
@@ -47,7 +47,7 @@ namespace chaos
         {
             var client = engine.Session.UiClient;
 
-            while (engine.Target.Status == DEBUG_STATUS.BREAK)
+            while (engine.Target.Status == EngineStatus.Break)
             {
                 client.Control.OutputPrompt(DEBUG_OUTCTL.ALL_CLIENTS | DEBUG_OUTCTL.NOT_LOGGED, " ");
 

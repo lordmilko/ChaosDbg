@@ -167,11 +167,16 @@ namespace ChaosDbg.DbgEng
                 var oldStatus = Target.Status;
 
                 //It's a real event that we need to be notified of
-                var newStatus = (DEBUG_STATUS) argument;
+                var newStatus = ToEngineStatus((DEBUG_STATUS) argument);
 
                 //Only react to the status if it's different than our current status
                 if (oldStatus != newStatus)
                 {
+                    if (newStatus == EngineStatus.Break)
+                        Session.BreakEvent.Set();
+                    else
+                        Session.BreakEvent.Reset();
+
                     //Something actually interesting has happened
                     Target.Status = newStatus;
 
@@ -229,5 +234,19 @@ namespace ChaosDbg.DbgEng
         }
 
         #endregion
+
+        private EngineStatus ToEngineStatus(DEBUG_STATUS status)
+        {
+            if (status == DEBUG_STATUS.NO_CHANGE)
+                return EngineStatus.None;
+
+            if (status == DEBUG_STATUS.GO)
+                return EngineStatus.Continue;
+
+            if (status == DEBUG_STATUS.BREAK)
+                return EngineStatus.Break;
+
+            throw new UnknownEnumValueException(status);
+        }
     }
 }

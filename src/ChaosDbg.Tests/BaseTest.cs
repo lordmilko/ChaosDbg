@@ -20,11 +20,11 @@ namespace ChaosDbg.Tests
                 {
                     var serviceCollection = new ServiceCollection
                     {
-                        typeof(CordbEngine),
                         typeof(DbgEngEngine),
                         typeof(NativeLibraryProvider),
 
                         { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
+                        { typeof(ICordbEngine), typeof(CordbEngine) },
                         { typeof(IPEFileProvider), typeof(PEFileProvider) },
                         { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                         { typeof(ISigReader), typeof(SigReader) }

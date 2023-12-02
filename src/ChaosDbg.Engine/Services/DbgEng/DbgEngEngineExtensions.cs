@@ -2,11 +2,25 @@
 {
     public static class DbgEngEngineExtensions
     {
-        public static void Launch(this DbgEngEngine engine, string commandLine, bool startMinimized = false)
+        public static void CreateProcess(
+            this DbgEngEngine engine,
+            string commandLine,
+            bool startMinimized = false)
         {
-            engine.Launch(new DbgLaunchInfo(commandLine)
+            engine.CreateProcess(new CreateProcessOptions(commandLine)
             {
                 StartMinimized = startMinimized
+            });
+        }
+
+        public static void Attach(
+            this DbgEngEngine engine,
+            int processId,
+            bool nonInvasive = false)
+        {
+            engine.Attach(new AttachProcessOptions(processId)
+            {
+                NonInvasive = nonInvasive
             });
         }
     }

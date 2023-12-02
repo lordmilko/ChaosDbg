@@ -146,6 +146,8 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private Thread EngineThread { get; }
 
+        public ManualResetEventSlim BreakEvent { get; } = new ManualResetEventSlim(false);
+
         private bool disposed;
 
         /// <summary>
@@ -193,7 +195,9 @@ namespace ChaosDbg.DbgEng
             {
                 action(BufferClient);
 
-                return BufferOutput.Lines.ToArray();
+                var output = string.Join(string.Empty, BufferOutput.Lines);
+
+                return output.Split(new[]{'\n'}, StringSplitOptions.RemoveEmptyEntries);
             }
             finally
             {

@@ -8,6 +8,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Engine", "src\ChaosDbg.Engine\ChaosDbg.Engine.csproj", "{14EB146E-9F40-44F5-9C85-5F9A4E7E13ED}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Tests", "src\ChaosDbg.Tests\ChaosDbg.Tests.csproj", "{4B2014D7-04BF-4103-881B-64F0B2347397}"
+	ProjectSection(ProjectDependencies) = postProject
+		{3604A798-6634-4ACE-B45C-AB1410EDA1CF} = {3604A798-6634-4ACE-B45C-AB1410EDA1CF}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B59D2025-ED8A-49F1-AF72-BEE25FF5864B}"
 	ProjectSection(SolutionItems) = preProject
@@ -24,6 +27,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{285EA220
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "chaos", "src\chaos\chaos.csproj", "{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestApp", "src\TestApp\TestApp.csproj", "{3604A798-6634-4ACE-B45C-AB1410EDA1CF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,6 +52,10 @@ Global
 		{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3604A798-6634-4ACE-B45C-AB1410EDA1CF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3604A798-6634-4ACE-B45C-AB1410EDA1CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3604A798-6634-4ACE-B45C-AB1410EDA1CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3604A798-6634-4ACE-B45C-AB1410EDA1CF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

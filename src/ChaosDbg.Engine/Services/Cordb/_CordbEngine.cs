@@ -7,9 +7,11 @@ namespace ChaosDbg.Cordb
 {
     //Engine startup/state/general code
 
-    public partial class CordbEngine : IDbgEngine, IDisposable
+    public partial class CordbEngine : ICordbEngine, IDisposable
     {
         #region State
+
+        public CordbProcess ActiveProcess => Session.Process;
 
         /// <summary>
         /// Gets the container containing the entities used to manage the current <see cref="CordbEngine"/> session.
@@ -22,16 +24,6 @@ namespace ChaosDbg.Cordb
         public CordbTargetInfo Target { get; private set; }
 
         /// <summary>
-        /// Gets the container containing the modules that have been loaded into the current process.
-        /// </summary>
-        public CordbModuleStore Modules { get; private set; }
-
-        /// <summary>
-        /// Gets the container containing the threads that have been loaded into the current process.
-        /// </summary>
-        public CordbThreadStore Threads { get; private set; }
-
-        /// <summary>
         /// Gets the container that manages the commands that should be dispatched and processed in the engine thread.
         /// </summary>
         private CordbCommandStore Commands { get; }
@@ -40,26 +32,31 @@ namespace ChaosDbg.Cordb
 
         private readonly IExeTypeDetector exeTypeDetector;
 
-        public CordbEngine(IExeTypeDetector exeTypeDetector)
+        public CordbEngine(IExeTypeDetector exeTypeDetector, NativeLibraryProvider nativeLibraryProvider)
         {
+            //Ensure the right DbgHelp gets loaded before we need it
+            nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+
             this.exeTypeDetector = exeTypeDetector;
             Commands = new CordbCommandStore(this);
         }
 
-        public void Launch(DbgLaunchInfo launchInfo, CancellationToken cancellationToken = default)
+        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default)
         {
             if (Session != null)
-                throw new InvalidOperationException($"Cannot launch target {launchInfo}: an existing session is already running.");
+                throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
 
             Session = new CordbSessionInfo(
-                () => ThreadProc(launchInfo),
+                () => ThreadProc(options),
                 cancellationToken
             );
 
-            Modules = new CordbModuleStore();
-            Threads = new CordbThreadStore();
-
             Session.Start();
+        }
+
+        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
 
         public void Dispose()
@@ -67,7 +64,7 @@ namespace ChaosDbg.Cordb
             try
             {
                 if (Target != null)
-                    Process.GetProcessById(Target.ProcessId).Kill();
+                    Process.GetProcessById(ActiveProcess.Id).Kill();
             }
             catch
             {
@@ -76,8 +73,6 @@ namespace ChaosDbg.Cordb
 
             Session?.Dispose();
             Session = null;
-            Modules = null;
-            Threads = null;
         }
     }
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using ClrDebug;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
@@ -16,6 +18,9 @@ namespace ChaosDbg.DbgEng
         public T ExecuteCommand<T>(Func<DebugClient, T> func) =>
             Commands.ExecuteInEngine(func);
 
+        public void ExecuteCommand(Action<DebugClient> action) =>
+            Commands.ExecuteInEngine(action);
+
         /// <summary>
         /// Executes a command that emits string values to output callbacks that should be captured and returned
         /// without affecting the output of the primary output callbacks.
@@ -24,5 +29,35 @@ namespace ChaosDbg.DbgEng
         /// <returns>The text that was emitted by the command to the output callbacks.</returns>
         public string[] ExecuteBufferedCommand(Action<DebugClient> action) =>
             Commands.ExecuteInEngine(_ => Session.ExecuteBufferedCommand(action));
+
+        public void WaitForBreak() => Session.BreakEvent.Wait();
+
+        public DbgEngFrame[] GetStackTrace()
+        {
+            return Commands.ExecuteInEngine(engine =>
+            {
+                //g_DefaultStackTraceDepth is 256 (0x100) in modern versions of DbgEng
+                var frames = engine.Control.GetStackTrace(0, 0, 0, 256);
+
+                var results = new List<DbgEngFrame>();
+
+                foreach (var frame in frames)
+                {
+                    string name = null;
+
+                    if (engine.Symbols.TryGetNameByOffset(frame.InstructionOffset, out var symbol) == HRESULT.S_OK)
+                    {
+                        name = symbol.NameBuffer;
+
+                        if (symbol.Displacement > 0)
+                            name = $"{name}+{symbol.Displacement:X}";
+                    }
+
+                    results.Add(new DbgEngFrame(name, frame));
+                }
+
+                return results.ToArray();
+            });
+        }
     }
 }

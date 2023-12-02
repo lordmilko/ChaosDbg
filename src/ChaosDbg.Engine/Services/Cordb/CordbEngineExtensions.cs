@@ -2,12 +2,21 @@
 {
     public static class CordbEngineExtensions
     {
-        public static void Launch(this CordbEngine engine, string commandLine, bool startMinimized = false)
+        public static void CreateProcess(this ICordbEngine engine, string commandLine, bool startMinimized = false)
         {
-            engine.Launch(new DbgLaunchInfo(commandLine)
-            {
-                StartMinimized = startMinimized
-            });
+            engine.CreateProcess(
+                new CreateProcessOptions(commandLine)
+                {
+                    StartMinimized = startMinimized
+                }
+            );
+        }
+
+        public static void Attach(this CordbEngine engine, int processId)
+        {
+            engine.Attach(
+                new AttachProcessOptions(processId)
+            );
         }
     }
 }

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -53,5 +54,7 @@ namespace ChaosDbg.Tests
         }
 
         #endregion
+
+        public static CordbThreadVerifier Verify(this CordbThread thread) => new CordbThreadVerifier(thread);
     }
 }

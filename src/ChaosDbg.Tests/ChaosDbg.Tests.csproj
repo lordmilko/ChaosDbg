@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestApp\TestType.cs" Link="TestType.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
 	  <PackageReference Include="envdte80" Version="$(EnvDTEVersion)" />
     <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSDKVersion)" />

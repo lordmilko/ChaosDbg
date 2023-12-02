@@ -45,7 +45,23 @@ namespace ChaosDbg.DbgEng
 
                 command.Semaphore.Wait();
 
-                return (T)command.Result;
+                return (T) command.Result;
+            }
+        }
+
+        public void ExecuteInEngine(Action<DebugClient> action)
+        {
+            if (engine.Session.EngineThreadId == Thread.CurrentThread.ManagedThreadId)
+                action(engine.Session.EngineClient);
+            else
+            {
+                var command = new DebugEngineCommand(action);
+
+                queue.Add(command);
+
+                engine.WakeEngineForInput();
+
+                command.Semaphore.Wait();
             }
         }
 

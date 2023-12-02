@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="$(Build)ClrDebug.props" />
   <Import Project="$(Build)ChaosLib.props" />
@@ -7,8 +7,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net472</TargetFramework>
     <SatelliteResourceLanguages>en-US</SatelliteResourceLanguages>
-    <LangVersion>8.0</LangVersion>
-    <Nullable>enable</Nullable>
+    <LangVersion>9.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

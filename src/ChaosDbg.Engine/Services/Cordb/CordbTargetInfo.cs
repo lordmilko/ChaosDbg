@@ -13,31 +13,21 @@ namespace ChaosDbg.Cordb
         public string CommandLine { get; }
 
         /// <summary>
-        /// Gets the process ID of the debug target.
+        /// Gets or sets the current status of the target.
         /// </summary>
-        public int ProcessId { get; }
+        public EngineStatus Status { get; set; }
 
-        /// <summary>
-        /// Gets the <see cref="CorDebugProcess"/> that is being debugged.
-        /// </summary>
-        public CorDebugProcess Process { get; }
+        public CordbProcess Process { get; }
 
         /// <summary>
         /// Gets or sets the last thread that was seen by a debug event.
         /// </summary>
         public CorDebugThread ActiveThread { get; set; }
 
-        /// <summary>
-        /// Gets whether the target is a 32-bit process.
-        /// </summary>
-        public bool Is32Bit { get; }
-
         public CordbTargetInfo(string commandLine, int processId, CorDebugProcess process, bool is32Bit)
         {
             CommandLine = commandLine;
-            ProcessId = processId;
-            Process = process;
-            Is32Bit = is32Bit;
+            Process = new CordbProcess(process, is32Bit);
         }
     }
 }

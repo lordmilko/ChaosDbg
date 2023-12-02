@@ -2,7 +2,7 @@
 
 namespace ChaosDbg.Cordb
 {
-    class CordbModule : IDbgModule
+    public class CordbModule : IDbgModule
     {
         long IDbgModule.BaseAddress => BaseAddress;
         long IDbgModule.EndAddress => EndAddress;

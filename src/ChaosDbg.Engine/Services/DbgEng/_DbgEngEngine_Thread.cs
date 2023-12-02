@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ChaosLib;
 using ClrDebug;
@@ -14,7 +15,7 @@ namespace ChaosDbg.DbgEng
         /// Represents the entry point of the DbgEng Engine Thread. The thread containing this entry point is created inside of <see cref="DbgEngSessionInfo"/>.
         /// </summary>
         /// <param name="launchInfo">Information about the debug target that should be launched.</param>
-        private void ThreadProc(DbgLaunchInfo launchInfo)
+        private void ThreadProc(object launchInfo)
         {
             //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
             //The real client however exists on the engine thread here
@@ -57,8 +58,20 @@ namespace ChaosDbg.DbgEng
             //Launch the target process and get some basic information about it
             Target = CreateDebugTarget(launchInfo);
 
+            var attachFlags = DEBUG_ATTACH.DEFAULT;
+
+            if (launchInfo is AttachProcessOptions a && a.NonInvasive)
+                attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+
             //Now let's attach to it
-            EngineClient.AttachProcess(0, Target.ProcessId, DEBUG_ATTACH.DEFAULT);
+            var hr = EngineClient.TryAttachProcess(0, Target.ProcessId, attachFlags);
+
+            switch (hr)
+            {
+                case HRESULT.ERROR_NOT_SUPPORTED:
+                case (HRESULT) 0xD00000BB: //DbgEng corrupts the NTSTATUS code STATUS_NOT_SUPPORTED by OR'ing it with the ImageBase for some reason, giving a C instead of a C
+                    throw new DebuggerInitializationException($"Failed to attach to process: process most likely does not match architecture of debugger ({(IntPtr.Size == 4 ? "x86" : "x64")}).", hr);
+            }
 
             //Enter the main engine loop. This method will not return until the debugger ends
             EngineLoop();
@@ -96,7 +109,7 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private void InputLoop()
         {
-            while (!IsEngineCancellationRequested && Target.Status == DEBUG_STATUS.BREAK)
+            while (!IsEngineCancellationRequested && Target.Status == EngineStatus.Break)
             {
                 //Go to sleep and wait for a command to be enqueued on the UI thread. We will wake up
                 //when the UiClient calls DebugClient.ExitDispatch()
@@ -115,14 +128,30 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Launches the specified target (e.g. creates the target process) and creates a <see cref="DbgEngTargetInfo"/> that provides key information about the target.
         /// </summary>
-        private DbgEngTargetInfo CreateDebugTarget(DbgLaunchInfo launchInfo)
+        private DbgEngTargetInfo CreateDebugTarget(object launchInfo)
         {
+            bool is32Bit;
+            DbgEngTargetInfo target;
+
+            if (launchInfo is AttachProcessOptions a)
+            {
+                var process = Process.GetProcessById(a.ProcessId);
+
+                is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+
+                target = new DbgEngTargetInfo(null, a.ProcessId, is32Bit);
+
+                return target;
+            }
+
+            var c = (CreateProcessOptions) launchInfo;
+
             var si = new STARTUPINFOW
             {
                 cb = Marshal.SizeOf<STARTUPINFOW>()
             };
 
-            if (launchInfo.StartMinimized)
+            if (c.StartMinimized)
             {
                 //Specifies that CreateProcess should look at the settings specified in wShowWindow
                 si.dwFlags = STARTF.STARTF_USESHOWWINDOW;
@@ -140,7 +169,7 @@ namespace ChaosDbg.DbgEng
             PROCESS_INFORMATION pi;
 
             Kernel32.CreateProcessW(
-                launchInfo.CommandLine,
+                c.CommandLine,
                 creationFlags,
                 IntPtr.Zero,
                 Environment.CurrentDirectory,
@@ -148,9 +177,9 @@ namespace ChaosDbg.DbgEng
                 out pi
             );
 
-            var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
+            is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-            var target = new DbgEngTargetInfo(launchInfo.CommandLine, pi.dwProcessId, is32Bit);
+            target = new DbgEngTargetInfo(c.CommandLine, pi.dwProcessId, is32Bit);
 
             //We have everything we need, now finally close the process and thread handles we were given.
             //We don't need to resume the thread before closing it, DbgEng can get its own handle when its ready to resume

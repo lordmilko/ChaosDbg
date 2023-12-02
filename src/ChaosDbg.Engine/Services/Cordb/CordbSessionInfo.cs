@@ -13,6 +13,21 @@ namespace ChaosDbg.Cordb
 
         public CordbManagedCallback ManagedCallback { get; set; }
 
+        public CordbProcess Process { get; set; }
+
+        /// <summary>
+        /// Gets the current number of times a managed callback has been entered or Stop() has been called
+        /// without subsequently calling Continue(). Any time this value is not 0, the process is not freely running.
+        /// </summary>
+        public int CurrentStopCount { get; set; }
+
+        /// <summary>
+        /// Gets the total number of times that Continue() has been called in the current debug session, ever,
+        /// whether it be due to a managed callback completing, or Continue() manually being called by the user
+        /// in response to a previous Stop()
+        /// </summary>
+        public int TotalContinueCount { get; set; }
+
         /// <summary>
         /// Gets the <see cref="CancellationTokenSource"/> that can be used to terminate all running commands
         /// and shutdown the debug engine and wraps the <see cref="CancellationToken"/> that may have been supplied by the user.<para/>

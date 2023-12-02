@@ -20,7 +20,7 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Gets or sets the current status of the target.
         /// </summary>
-        public DEBUG_STATUS Status { get; set; }
+        public EngineStatus Status { get; set; }
 
         /// <summary>
         /// Gets whether the target is a 32-bit process.

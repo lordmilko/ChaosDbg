@@ -66,6 +66,10 @@ namespace ChaosDbg.DbgEng
         public DbgEngEngine(NativeLibraryProvider nativeLibraryProvider)
         {
             this.nativeLibraryProvider = nativeLibraryProvider;
+
+            Modules = new DbgEngModuleStore();
+            Threads = new DbgEngThreadStore();
+
             Commands = new DbgEngCommandStore(this);
         }
 
@@ -74,24 +78,22 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         internal void WakeEngineForInput() => Session.UiClient.ExitDispatch(Session.EngineClientRaw);
 
-        /// <summary>
-        /// Launches the specified target and attaches the debugger to it.
-        /// </summary>
-        /// <param name="launchInfo">Information about the debug target that should be launched.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used to terminate the debugger engine.</param>
-        public void Launch(DbgLaunchInfo launchInfo, CancellationToken cancellationToken = default)
+        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default) =>
+            CreateSession(options, cancellationToken);
+
+        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default) =>
+            CreateSession(options, cancellationToken);
+
+        private void CreateSession(object options, CancellationToken cancellationToken)
         {
             if (Session != null)
-                throw new InvalidOperationException($"Cannot launch target {launchInfo}: an existing session is already running.");
+                throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
 
             Session = new DbgEngSessionInfo(
-                () => ThreadProc(launchInfo),
+                () => ThreadProc(options),
                 CreateDebugClient(),
                 cancellationToken
             );
-
-            Modules = new DbgEngModuleStore();
-            Threads = new DbgEngThreadStore();
 
             Session.Start();
         }

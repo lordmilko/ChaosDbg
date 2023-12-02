@@ -20,5 +20,11 @@ namespace ChaosDbg.DbgEng
             Action = func;
             Semaphore = new SemaphoreSlim(0, 1);
         }
+
+        public DebugEngineCommand(Action<DebugClient> action)
+        {
+            Action = action;
+            Semaphore = new SemaphoreSlim(0, 1);
+        }
     }
 }

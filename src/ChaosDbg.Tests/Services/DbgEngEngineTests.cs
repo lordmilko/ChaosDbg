@@ -11,7 +11,7 @@ namespace ChaosDbg.Tests
         {
             using var engine = GetService<DbgEngEngine>();
 
-            engine.Launch("notepad", true);
+            engine.CreateProcess("notepad", true);
         }
     }
 }

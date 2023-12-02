@@ -36,7 +36,7 @@ namespace ChaosDbg.ViewModel
 
         private void Engine_EngineStatusChanged(object sender, EngineStatusChangedEventArgs e)
         {
-            if (e.NewStatus == DEBUG_STATUS.BREAK)
+            if (e.NewStatus == EngineStatus.Break)
             {
                 //We've broken into the debugger! Find out what module we're in, create a buffer for displaying disassembly
                 //and notify the UI that the active address of our buffer has changed

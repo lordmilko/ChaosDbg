@@ -1,5 +1,4 @@
-﻿using System;
-using System.CommandLine;
+﻿using System.CommandLine;
 using ChaosDbg;
 using ChaosDbg.Metadata;
 
@@ -12,30 +11,35 @@ namespace chaos
             var executableArgument = new Argument<string>("executable", "The command line of an executable process to launch and debug");
 
             var engineOption = new Option<DbgEngineKind?>(new[]{"-e", "--engine"}, "The debug engine to use");
+            var minimizedOption = new Option<bool>("--minimized", "Whether to start the process minimized");
 
             var root = new RootCommand("ChaosDbg CLI")
             {
                 executableArgument,
-                engineOption
+                engineOption,
+                minimizedOption
             };
-            root.SetHandler((executable, engineKind) =>
-            {
-                var kind = GetEngineKind(executable, engineKind);
-
-                switch (kind)
+            root.SetHandler(
+                (executable, engineKind, minimized) =>
                 {
-                    case DbgEngineKind.DbgEng:
-                        new DbgEngClient().Execute(executable);
-                        break;
+                    var kind = GetEngineKind(executable, engineKind);
 
-                    case DbgEngineKind.Cordb:
-                        new CordbClient().Execute(executable);
-                        break;
+                    switch (kind)
+                    {
+                        case DbgEngineKind.DbgEng:
+                            GlobalProvider.ServiceProvider.GetService<DbgEngClient>().Execute(executable, minimized);
+                            break;
 
-                    default:
-                        throw new UnknownEnumValueException(kind);
-                }
-            }, executableArgument, engineOption);
+                        case DbgEngineKind.Cordb:
+                            GlobalProvider.ServiceProvider.GetService<CordbClient>().Execute(executable, minimized);
+                            break;
+
+                        default:
+                            throw new UnknownEnumValueException(kind);
+                    }
+                },
+                executableArgument, engineOption, minimizedOption
+            );
 
             root.Invoke(args);
         }
