@@ -14,6 +14,8 @@ namespace ChaosDbg.Cordb
 
         public CordbManagedCallback ManagedCallback { get; set; }
 
+        public CordbUnmanagedCallback UnmanagedCallback { get; set; }
+
         public CordbProcess Process { get; set; }
 
         /// <summary>
@@ -78,6 +80,10 @@ namespace ChaosDbg.Cordb
 
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();
+
+            //The unmanaged callback has thread responsible for dispatching
+            //in band callbacks that needs to be disposed
+            UnmanagedCallback?.Dispose();
 
             //Wait for the engine thread to end
             EngineThread.Dispose();

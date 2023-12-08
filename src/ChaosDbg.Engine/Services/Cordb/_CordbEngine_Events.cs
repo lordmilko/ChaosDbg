@@ -19,6 +19,14 @@ namespace ChaosDbg.Cordb
             cb.OnAnyEvent += AnyEvent;
         }
 
+        private void RegisterUnmanagedCallbacks(CordbUnmanagedCallback ucb)
+        {
+            if (ucb == null)
+                return;
+
+            ucb.OnAnyEvent += AnyUnmanagedEvent;
+        }
+
         #region ChaosDbg Event Handlers
 
 #pragma warning disable CS0067 //Event is never used
@@ -103,11 +111,16 @@ namespace ChaosDbg.Cordb
 
         private void AnyEvent(object sender, CorDebugManagedCallbackEventArgs e)
         {
+            //If we're already disposed, no point trying to handle this incoming event.
+            //Session may be null now too
+            if (disposed)
+                return;
+
             //Even when we call Stop() to break into the process, if we're in the middle of processing an event, we'll end up calling
             //Continue() again here.
             if (Target.Process.HasQueuedCallbacks)
             {
-                DoContinue(e.Controller);
+                DoContinue(e.Controller, false);
                 return;
             }
 
@@ -115,12 +128,17 @@ namespace ChaosDbg.Cordb
             //to continuing, the will have set Continue to false
             if (e.Continue)
             {
-                DoContinue(e.Controller);
+                DoContinue(e.Controller, false);
             }
             else
             {
                 OnStopping();
             }
+        }
+
+        private void AnyUnmanagedEvent(object sender, bool fOutOfBand)
+        {
+            DoContinue(ActiveProcess.CorDebugProcess, fOutOfBand, isUnmanaged: true);
         }
 
         private void OnStopping()

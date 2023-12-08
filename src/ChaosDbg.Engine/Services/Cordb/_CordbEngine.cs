@@ -26,6 +26,7 @@ namespace ChaosDbg.Cordb
         #endregion
 
         private readonly IExeTypeDetector exeTypeDetector;
+        private bool disposed;
 
         public CordbEngine(IExeTypeDetector exeTypeDetector, NativeLibraryProvider nativeLibraryProvider)
         {
@@ -53,6 +54,13 @@ namespace ChaosDbg.Cordb
 
         public void Dispose()
         {
+            if (disposed)
+                return;
+
+            //To avoid races with the managed callback thread, we say that we're disposed
+            //immediately just in case an event comes in
+            disposed = true;
+
             try
             {
                 if (Target != null)

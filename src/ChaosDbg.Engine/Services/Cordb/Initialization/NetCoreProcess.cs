@@ -150,14 +150,21 @@ namespace ChaosDbg.Cordb
             corDebug.Initialize();
 
             var cb = new CordbManagedCallback();
-
             corDebug.SetManagedHandler(cb);
+
+            CordbUnmanagedCallback ucb = null;
+
+            if (useInterop)
+            {
+                ucb = new CordbUnmanagedCallback();
+                corDebug.SetUnmanagedHandler(ucb);
+            }
 
             var process = corDebug.DebugActiveProcess(processId, useInterop);
 
             var target = new CordbTargetInfo(commandLine, process, is32Bit, useInterop);
 
-            initCallback(cb, corDebug, target);
+            initCallback(cb, ucb, corDebug, target);
         }
 
         private static void ValidateTargetArchitecture(int pid, bool is32Bit)

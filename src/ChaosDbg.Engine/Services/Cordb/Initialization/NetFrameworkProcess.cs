@@ -17,6 +17,14 @@ namespace ChaosDbg.Cordb
             var cb = new CordbManagedCallback();
             corDebug.SetManagedHandler(cb);
 
+            CordbUnmanagedCallback ucb = null;
+
+            if (createProcessOptions.UseInterop)
+            {
+                ucb = new CordbUnmanagedCallback();
+                corDebug.SetUnmanagedHandler(ucb);
+            }
+
             //Create the process
 
             GetCreateProcessArgs(createProcessOptions, out var creationFlags, out var si);
@@ -53,7 +61,7 @@ namespace ChaosDbg.Cordb
 
                 var target = new CordbTargetInfo(createProcessOptions.CommandLine, process, is32Bit, createProcessOptions.UseInterop);
 
-                initCallback(cb, corDebug, target);
+                initCallback(cb, ucb, corDebug, target);
 
                 //We are now going to resume the process. Any required setup must now be complete or we will encounter a race
                 Kernel32.ResumeThread(pi.hThread);
@@ -81,6 +89,14 @@ namespace ChaosDbg.Cordb
             var cb = new CordbManagedCallback();
             corDebug.SetManagedHandler(cb);
 
+            CordbUnmanagedCallback ucb = null;
+
+            if (attachProcessOptions.UseInterop)
+            {
+                ucb = new CordbUnmanagedCallback();
+                corDebug.SetUnmanagedHandler(ucb);
+            }
+
             //Do the attach
             var hr = corDebug.TryDebugActiveProcess(pid, attachProcessOptions.UseInterop, out var process);
 
@@ -90,7 +106,7 @@ namespace ChaosDbg.Cordb
 
             var target = new CordbTargetInfo(null, process, is32Bit, attachProcessOptions.UseInterop);
 
-            initCallback(cb, corDebug, target);
+            initCallback(cb, ucb, corDebug, target);
         }
 
         private static void ValidateCreateOrAttach(HRESULT hr, string action)

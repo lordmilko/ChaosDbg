@@ -8,7 +8,7 @@ namespace ChaosDbg.Cordb
 {
     abstract class NetInitCommon
     {
-        public delegate void InitCallback(CordbManagedCallback cb, CorDebug corDebug, CordbTargetInfo target);
+        public delegate void InitCallback(CordbManagedCallback cb, CordbUnmanagedCallback ucb, CorDebug corDebug, CordbTargetInfo target);
 
         public static void Create(
             CreateProcessOptions createProcessOptions,

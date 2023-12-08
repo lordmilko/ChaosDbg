@@ -48,11 +48,14 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        private void InitCallback(CordbManagedCallback cb, CorDebug corDebug, CordbTargetInfo target)
+        private void InitCallback(CordbManagedCallback cb, CordbUnmanagedCallback ucb, CorDebug corDebug, CordbTargetInfo target)
         {
             RegisterCallbacks(cb);
+            RegisterUnmanagedCallbacks(ucb);
+
             Session.CorDebug = corDebug;
             Session.ManagedCallback = cb;
+            Session.UnmanagedCallback = ucb;
             Session.Process = target.Process;
 
             Target = target;

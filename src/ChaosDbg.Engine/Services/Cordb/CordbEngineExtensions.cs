@@ -2,12 +2,17 @@
 {
     public static class CordbEngineExtensions
     {
-        public static void CreateProcess(this ICordbEngine engine, string commandLine, bool startMinimized = false)
+        public static void CreateProcess(
+            this ICordbEngine engine,
+            string commandLine,
+            bool startMinimized = false,
+            bool useInterop = false)
         {
             engine.CreateProcess(
                 new CreateProcessOptions(commandLine)
                 {
-                    StartMinimized = startMinimized
+                    StartMinimized = startMinimized,
+                    UseInterop = useInterop
                 }
             );
         }

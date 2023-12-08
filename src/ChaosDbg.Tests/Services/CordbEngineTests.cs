@@ -114,8 +114,6 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
-                matchCurrentProcess: true,
-                netCore: false,
                 engine =>
                 {
                     var thread = engine.ActiveProcess.Threads.Single();
@@ -135,8 +133,6 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
-                matchCurrentProcess: true,
-                netCore: false,
                 engine =>
                 {
                     var thread = engine.ActiveProcess.Threads.Single();
@@ -159,8 +155,6 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
-                matchCurrentProcess: true,
-                netCore: false,
                 engine =>
                 {
                     var cordbFrames = engine.ActiveProcess.Threads.Single().StackTrace;
@@ -183,7 +177,8 @@ namespace ChaosDbg.Tests
                         else
                             Assert.AreEqual(cdbFrame.ToString(), deFrame.ToString());
                     }
-                }
+                },
+                useInterop: true
             );
         }
 
@@ -205,9 +200,10 @@ namespace ChaosDbg.Tests
 
         private void TestCreate(
             TestType testType,
-            bool matchCurrentProcess,
-            bool netCore,
-            Action<CordbEngine> action)
+            Action<CordbEngine> action,
+            bool matchCurrentProcess = true,
+            bool netCore = false,
+            bool useInterop = false)
         {
             using var engine = (CordbEngine) GetService<ICordbEngine>();
 
@@ -215,7 +211,7 @@ namespace ChaosDbg.Tests
 
             Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
-            engine.CreateProcess($"\"{path}\" {testType} {EventName}");
+            engine.CreateProcess($"\"{path}\" {testType} {EventName}", useInterop: useInterop);
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
