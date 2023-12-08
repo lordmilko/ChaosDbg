@@ -74,7 +74,7 @@ namespace ChaosDbg.Cordb
                 var corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
 
                 //Initialize ICorDebug, setup our managed callback and attach to the existing process. We attach while the CLR is blocked waiting for the "continue" event to be called
-                SetupCorDebug(createProcessOptions.CommandLine, corDebug, pi.dwProcessId, is32Bit, initCallback);
+                SetupCorDebug(createProcessOptions.CommandLine, corDebug, pi.dwProcessId, is32Bit, createProcessOptions.UseInterop, initCallback);
 
                 /* There exists a structure CLR_ENGINE_METRICS within in coreclr.dll which is exported at ordinal 2. This structure indicates the RVA of the actual continue event that should be signalled
                  * to indicate the CLR can continue starting. But how does the CLR know to wait on this event at all? In debugger.cpp!NotifyDebuggerOfStartup() it calls
@@ -133,7 +133,7 @@ namespace ChaosDbg.Cordb
                 var corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
 
                 //Now do the rest of the normal setup that we normally do in the CreateProcess pathway
-                SetupCorDebug(null, corDebug, pid, is32Bit, initCallback);
+                SetupCorDebug(null, corDebug, pid, is32Bit, attachProcessOptions.UseInterop, initCallback);
             });
         }
 
@@ -144,6 +144,7 @@ namespace ChaosDbg.Cordb
             CorDebug corDebug,
             int processId,
             bool is32Bit,
+            bool useInterop,
             InitCallback initCallback)
         {
             corDebug.Initialize();
@@ -152,9 +153,9 @@ namespace ChaosDbg.Cordb
 
             corDebug.SetManagedHandler(cb);
 
-            var process = corDebug.DebugActiveProcess(processId, false);
+            var process = corDebug.DebugActiveProcess(processId, useInterop);
 
-            var target = new CordbTargetInfo(commandLine, processId, process, is32Bit);
+            var target = new CordbTargetInfo(commandLine, process, is32Bit, useInterop);
 
             initCallback(cb, corDebug, target);
         }

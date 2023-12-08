@@ -51,7 +51,7 @@ namespace ChaosDbg.Tests
         public void CordbEngine_NetCore_Create_WrongArchitecture()
         {
             AssertEx.Throws<DebuggerInitializationException>(
-                () => NetCoreProcess.Create(new CreateProcessOptions(GetTestAppPath(true)), null),
+                () => NetCoreProcess.Create(new CreateProcessOptions(GetTestAppPath(matchCurrentProcess: false, netCore: true)), null),
                 "however debugger process is"
             );
         }
@@ -85,7 +85,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_NetCore_Attach_WrongArchitecture()
         {
-            var path = GetTestAppPath(true);
+            var path = GetTestAppPath(matchCurrentProcess: false, netCore: true);
 
             var psi = new ProcessStartInfo(path, EventName)
             {
@@ -114,7 +114,8 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
-                false,
+                matchCurrentProcess: true,
+                netCore: false,
                 engine =>
                 {
                     var thread = engine.ActiveProcess.Threads.Single();
@@ -134,7 +135,8 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
-                false,
+                matchCurrentProcess: true,
+                netCore: false,
                 engine =>
                 {
                     var thread = engine.ActiveProcess.Threads.Single();
@@ -157,7 +159,8 @@ namespace ChaosDbg.Tests
         {
             TestCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
-                false,
+                matchCurrentProcess: true,
+                netCore: false,
                 engine =>
                 {
                     var cordbFrames = engine.ActiveProcess.Threads.Single().StackTrace;
@@ -202,12 +205,13 @@ namespace ChaosDbg.Tests
 
         private void TestCreate(
             TestType testType,
+            bool matchCurrentProcess,
             bool netCore,
             Action<CordbEngine> action)
         {
             using var engine = (CordbEngine) GetService<ICordbEngine>();
 
-            var path = GetTestAppPath(netCore);
+            var path = GetTestAppPath(matchCurrentProcess, netCore);
 
             Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
@@ -222,9 +226,13 @@ namespace ChaosDbg.Tests
             action(engine);
         }
 
-        private string GetTestAppPath(bool netCore)
+        private string GetTestAppPath(bool matchCurrentProcess, bool netCore)
         {
             var dllPath = GetType().Assembly.Location;
+
+            var suffix = matchCurrentProcess ?
+                IntPtr.Size == 4 ? "x86" : "x64" :
+                IntPtr.Size == 4 ? "x64" : "x86";
 
 #if DEBUG
             var configuration = "Debug";
@@ -232,7 +240,7 @@ namespace ChaosDbg.Tests
             var configuration = "Release";
 #endif
 
-            var dir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dllPath), "..", "..", "..", "TestApp", "bin", configuration, netCore ? "net5.0" : "net472", "TestApp.exe"));
+            var dir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dllPath), "..", "..", "..", $"TestApp.{suffix}", "bin", configuration, netCore ? "net5.0" : "net472", $"TestApp.{suffix}.exe"));
 
             return dir;
         }

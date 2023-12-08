@@ -24,10 +24,10 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CorDebugThread ActiveThread { get; set; }
 
-        public CordbTargetInfo(string commandLine, int processId, CorDebugProcess process, bool is32Bit)
+        public CordbTargetInfo(string commandLine, CorDebugProcess process, bool is32Bit, bool isInterop)
         {
             CommandLine = commandLine;
-            Process = new CordbProcess(process, is32Bit);
+            Process = new CordbProcess(process, is32Bit, isInterop);
         }
     }
 }

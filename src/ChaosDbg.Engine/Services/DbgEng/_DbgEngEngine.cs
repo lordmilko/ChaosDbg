@@ -54,11 +54,6 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         public DbgEngThreadStore Threads { get; private set; }
 
-        /// <summary>
-        /// Gets the container that manages the commands that should be dispatched and processed in the engine thread.
-        /// </summary>
-        private DbgEngCommandStore Commands { get; }
-
         #endregion
 
         private readonly NativeLibraryProvider nativeLibraryProvider;
@@ -69,8 +64,6 @@ namespace ChaosDbg.DbgEng
 
             Modules = new DbgEngModuleStore();
             Threads = new DbgEngThreadStore();
-
-            Commands = new DbgEngCommandStore(this);
         }
 
         /// <summary>
@@ -94,8 +87,6 @@ namespace ChaosDbg.DbgEng
                 CreateDebugClient(),
                 cancellationToken
             );
-
-            Session.Start();
         }
 
         private DebugClient CreateDebugClient()

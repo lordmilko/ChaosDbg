@@ -121,7 +121,7 @@ namespace ChaosDbg.DbgEng
                     break;
 
                 //Process any commands that were dispatched to the engine thread
-                Commands.DrainQueue();
+                Session.EngineThread.Dispatcher.DrainQueue();
             }
         }
 

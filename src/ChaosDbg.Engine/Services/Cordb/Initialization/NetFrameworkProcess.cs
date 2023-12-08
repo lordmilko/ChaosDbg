@@ -21,6 +21,13 @@ namespace ChaosDbg.Cordb
 
             GetCreateProcessArgs(createProcessOptions, out var creationFlags, out var si);
 
+            if (createProcessOptions.UseInterop)
+            {
+                //Required for interop debugging. MSDN claims you need to do DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS however
+                //rsmain.cpp!Cordb::CreateProcessCommon says this is wrong
+                creationFlags |= CreateProcessFlags.DEBUG_ONLY_THIS_PROCESS;
+            }
+
             var pi = new PROCESS_INFORMATION();
 
             var hr = corDebug.TryCreateProcess(
@@ -44,7 +51,7 @@ namespace ChaosDbg.Cordb
             {
                 var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-                var target = new CordbTargetInfo(createProcessOptions.CommandLine, pi.dwProcessId, process, is32Bit);
+                var target = new CordbTargetInfo(createProcessOptions.CommandLine, process, is32Bit, createProcessOptions.UseInterop);
 
                 initCallback(cb, corDebug, target);
 
@@ -75,13 +82,13 @@ namespace ChaosDbg.Cordb
             corDebug.SetManagedHandler(cb);
 
             //Do the attach
-            var hr = corDebug.TryDebugActiveProcess(pid, false, out var process);
+            var hr = corDebug.TryDebugActiveProcess(pid, attachProcessOptions.UseInterop, out var process);
 
             ValidateCreateOrAttach(hr, $"attach to process {pid}");
 
             var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
 
-            var target = new CordbTargetInfo(null, pid, process, is32Bit);
+            var target = new CordbTargetInfo(null, process, is32Bit, attachProcessOptions.UseInterop);
 
             initCallback(cb, corDebug, target);
         }

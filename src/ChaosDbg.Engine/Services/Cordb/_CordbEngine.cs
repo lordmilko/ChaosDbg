@@ -23,11 +23,6 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbTargetInfo Target { get; private set; }
 
-        /// <summary>
-        /// Gets the container that manages the commands that should be dispatched and processed in the engine thread.
-        /// </summary>
-        private CordbCommandStore Commands { get; }
-
         #endregion
 
         private readonly IExeTypeDetector exeTypeDetector;
@@ -38,7 +33,6 @@ namespace ChaosDbg.Cordb
             nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
 
             this.exeTypeDetector = exeTypeDetector;
-            Commands = new CordbCommandStore(this);
         }
 
         public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default)
@@ -50,8 +44,6 @@ namespace ChaosDbg.Cordb
                 () => ThreadProc(options),
                 cancellationToken
             );
-
-            Session.Start();
         }
 
         public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default)

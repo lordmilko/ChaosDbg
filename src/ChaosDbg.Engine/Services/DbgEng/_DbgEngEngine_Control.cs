@@ -15,11 +15,11 @@ namespace ChaosDbg.DbgEng
         /// <typeparam name="T">The type of value that is returned from the command.</typeparam>
         /// <param name="func">The command to execute.</param>
         /// <returns>The result of the executed command.</returns>
-        public T ExecuteCommand<T>(Func<DebugClient, T> func) =>
-            Commands.ExecuteInEngine(func);
+        public T Invoke<T>(Func<DebugClient, T> func) =>
+            Session.EngineThread.Invoke(() => func(Session.EngineClient));
 
-        public void ExecuteCommand(Action<DebugClient> action) =>
-            Commands.ExecuteInEngine(action);
+        public void Invoke(Action<DebugClient> action) =>
+            Session.EngineThread.Invoke(() => action(Session.EngineClient));
 
         /// <summary>
         /// Executes a command that emits string values to output callbacks that should be captured and returned
@@ -28,13 +28,13 @@ namespace ChaosDbg.DbgEng
         /// <param name="action">The action to perform.</param>
         /// <returns>The text that was emitted by the command to the output callbacks.</returns>
         public string[] ExecuteBufferedCommand(Action<DebugClient> action) =>
-            Commands.ExecuteInEngine(_ => Session.ExecuteBufferedCommand(action));
+            Session.EngineThread.Invoke(() => Session.ExecuteBufferedCommand(action));
 
         public void WaitForBreak() => Session.BreakEvent.Wait();
 
         public DbgEngFrame[] GetStackTrace()
         {
-            return Commands.ExecuteInEngine(engine =>
+            return Invoke(engine =>
             {
                 //g_DefaultStackTraceDepth is 256 (0x100) in modern versions of DbgEng
                 var frames = engine.Control.GetStackTrace(0, 0, 0, 256);

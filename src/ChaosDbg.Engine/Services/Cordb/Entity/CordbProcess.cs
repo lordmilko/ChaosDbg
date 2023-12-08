@@ -29,6 +29,11 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool Is32Bit { get; }
 
+        /// <summary>
+        /// Gets whether both managed and native code are being debugged in the process.
+        /// </summary>
+        public bool IsInterop { get; }
+
         public IMAGE_FILE_MACHINE MachineType => Is32Bit ? IMAGE_FILE_MACHINE.I386 : IMAGE_FILE_MACHINE.AMD64;
 
         /// <summary>
@@ -62,13 +67,14 @@ namespace ChaosDbg.Cordb
 
         private bool disposed;
 
-        public CordbProcess(CorDebugProcess corDebugProcess, bool is32Bit)
+        public CordbProcess(CorDebugProcess corDebugProcess, bool is32Bit, bool isInterop)
         {
             if (corDebugProcess == null)
                 throw new ArgumentNullException(nameof(corDebugProcess));
 
             CorDebugProcess = corDebugProcess;
             Is32Bit = is32Bit;
+            IsInterop = isInterop;
 
             Threads = new CordbThreadStore(this);
             Modules = new CordbModuleStore(this);

@@ -17,7 +17,7 @@ namespace ChaosDbg.Cordb
 
             while (!Session.IsEngineCancellationRequested) //temp
             {
-                Commands.DrainQueue();
+                Session.EngineThread.Dispatcher.DrainQueue();
 
                 Thread.Sleep(100); //temp
             }

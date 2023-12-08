@@ -101,7 +101,10 @@ namespace ChaosDbg.Cordb
 
                 var process = thread.Process;
 
-                return ResolveNativeFrames(process.Handle, thread.Handle, process.DAC.DataTarget, process.DbgHelp, results);
+                if (process.IsInterop)
+                    return ResolveNativeFrames(process.Handle, thread.Handle, process.DAC.DataTarget, process.DbgHelp, results);
+
+                return results.ToArray();
             }
 
             private static CordbFrame[] ResolveNativeFrames(

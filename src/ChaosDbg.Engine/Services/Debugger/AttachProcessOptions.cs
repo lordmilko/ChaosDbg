@@ -6,6 +6,8 @@
 
         public bool NonInvasive { get; set; }
 
+        public bool UseInterop { get; set; }
+
         public AttachProcessOptions(int processId)
         {
             ProcessId = processId;

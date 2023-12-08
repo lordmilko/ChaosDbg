@@ -5,10 +5,8 @@ namespace ChaosDbg.Cordb
 {
     partial class CordbEngine
     {
-        public void ExecuteCommand(Action action)
-        {
-            Commands.ExecuteInEngine(action);
-        }
+        public void Invoke(Action action) =>
+            Session.EngineThread.Invoke(action);
 
         /// <inheritdoc />
         public void Continue()

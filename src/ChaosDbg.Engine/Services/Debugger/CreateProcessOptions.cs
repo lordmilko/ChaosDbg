@@ -6,6 +6,8 @@
 
         public bool StartMinimized { get; set; }
 
+        public bool UseInterop { get; set; }
+
         public CreateProcessOptions(string commandLine)
         {
             CommandLine = commandLine;

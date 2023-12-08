@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -55,7 +56,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Stores a reference to the internal thread that the debugger engine is running on.
         /// </summary>
-        private Thread EngineThread { get; }
+        internal DispatcherThread EngineThread { get; }
 
         private bool disposed;
 
@@ -64,19 +65,11 @@ namespace ChaosDbg.Cordb
             if (threadProc == null)
                 throw new ArgumentNullException(nameof(threadProc));
 
-            EngineThread = new Thread(threadProc)
-            {
-                Name = "Cordb Engine Thread"
-            };
+            EngineThread = new DispatcherThread("Cordb Engine Thread", threadProc);
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         }
-
-        /// <summary>
-        /// Starts the debug session by launching the engine thread.
-        /// </summary>
-        public void Start() => EngineThread.Start();
 
         public void Dispose()
         {
@@ -87,7 +80,7 @@ namespace ChaosDbg.Cordb
             EngineCancellationTokenSource?.Cancel();
 
             //Wait for the engine thread to end
-            EngineThread.Join();
+            EngineThread.Dispose();
 
             //Clear out essential debugger objects
             CorDebug = null;

@@ -59,7 +59,7 @@ namespace chaos
                 //won't return until you hit enter - which means we're now deadlocked! The way you escape this is via the IDebugInputCallbacks.
                 //In your input callbacks, you should attempt to get input from the user as normal so that you may end whatever is blocking Execute()
                 //and things can get back to normal
-                engine.ExecuteCommand(c => c.Control.TryExecute(DEBUG_OUTCTL.ALL_CLIENTS, command, DEBUG_EXECUTE.NOT_LOGGED));
+                engine.Invoke(c => c.Control.TryExecute(DEBUG_OUTCTL.ALL_CLIENTS, command, DEBUG_EXECUTE.NOT_LOGGED));
             }
         }
 

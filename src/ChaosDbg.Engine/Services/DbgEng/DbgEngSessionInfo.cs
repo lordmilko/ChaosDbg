@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using ChaosLib;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
@@ -144,7 +145,7 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Stores a reference to the internal thread that the debugger engine is running on.
         /// </summary>
-        private Thread EngineThread { get; }
+        internal DispatcherThread EngineThread { get; }
 
         public ManualResetEventSlim BreakEvent { get; } = new ManualResetEventSlim(false);
 
@@ -164,9 +165,11 @@ namespace ChaosDbg.DbgEng
             if (uiClient == null)
                 throw new ArgumentNullException(nameof(uiClient));
 
-            EngineThread = new Thread(threadProc)
+            EngineThread = new DispatcherThread("DbgEng Engine Thread", threadProc);
+            EngineThread.Dispatcher.OperationQueued += (s, e) =>
             {
-                Name = "DbgEng Engine Thread"
+                if (Thread.CurrentThread.ManagedThreadId != EngineThread.ManagedThreadId)
+                    UiClient.ExitDispatch(EngineClientRaw);
             };
 
             UiClient = uiClient;
@@ -174,11 +177,6 @@ namespace ChaosDbg.DbgEng
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         }
-
-        /// <summary>
-        /// Starts the debug session by launching the engine thread.
-        /// </summary>
-        public void Start() => EngineThread.Start();
 
         /// <summary>
         /// Executes a command using <see cref="BufferClient"/> that emits output to
@@ -231,7 +229,7 @@ namespace ChaosDbg.DbgEng
                     UiClient.TryExitDispatch(EngineClientRaw);
             }
 
-            EngineThread.Join();
+            EngineThread.Dispose();
             uiClient = null;
             engineClient = null;
             bufferClient = null;
