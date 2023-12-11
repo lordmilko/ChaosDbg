@@ -45,6 +45,9 @@ namespace ChaosDbg.Cordb
                 () => ThreadProc(options),
                 cancellationToken
             );
+
+            //We must start the debugger thread AFTER the Session variable has been assigned to
+            Session.Start();
         }
 
         public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default)

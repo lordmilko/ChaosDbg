@@ -30,8 +30,21 @@ namespace ChaosDbg.WinMD
             Type = type;
             CustomAttributes = customAttributes;
 
+            //Note that the true element type is stored in pdwCPlusTypeFlag. The Types stored
+            //in WindowsMetadataPrimitiveType and WindowsMetadataPrimitiveType aren't necessarily
+            //correct. Any time a value is a "pointer", it will specifically either be I4 or I8
+
+            CorElementType ValueOrDefault(CorElementType value, CorElementType @default)
+            {
+                //Sometimes a pointer might have a type of "void". This happened once, and ppValue was 0
+                if (value == CorElementType.Void)
+                    return @default;
+
+                return value;
+            }
+
             if (type is WindowsMetadataPrimitiveType p)
-                Value = ReadPrimitiveType(p.Type, props.ppValue,  props.pcchValue);
+                Value = ReadPrimitiveType(ValueOrDefault(props.pdwCPlusTypeFlag, p.Type), props.ppValue,  props.pcchValue);
             else
             {
                 if (props.ppValue != IntPtr.Zero)
@@ -41,9 +54,9 @@ namespace ChaosDbg.WinMD
                         var underlying = t.ValueField.Type;
 
                         if (underlying is WindowsMetadataPointerType)
-                            Value = ReadValue<IntPtr>(props.ppValue);
+                            Value = ReadPrimitiveType(props.pdwCPlusTypeFlag, props.ppValue, props.pcchValue);
                         else if (underlying is WindowsMetadataPrimitiveType tp)
-                            Value = ReadPrimitiveType(tp.Type, props.ppValue, props.pcchValue);
+                            Value = ReadPrimitiveType(ValueOrDefault(props.pdwCPlusTypeFlag, tp.Type), props.ppValue, props.pcchValue);
                         else
                             throw new InvalidOperationException($"Cannot read default value for type {underlying.GetType().Name} inside transparent struct representing type {type}");
                     }

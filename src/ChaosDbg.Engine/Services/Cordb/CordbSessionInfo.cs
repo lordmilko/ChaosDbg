@@ -73,6 +73,11 @@ namespace ChaosDbg.Cordb
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         }
 
+        /// <summary>
+        /// Starts the debug session by launching the engine thread.
+        /// </summary>
+        public void Start() => EngineThread.Start();
+
         public void Dispose()
         {
             if (disposed)

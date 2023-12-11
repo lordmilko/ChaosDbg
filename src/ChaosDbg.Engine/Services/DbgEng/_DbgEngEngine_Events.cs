@@ -237,10 +237,11 @@ namespace ChaosDbg.DbgEng
 
         private EngineStatus ToEngineStatus(DEBUG_STATUS status)
         {
-            if (status == DEBUG_STATUS.NO_CHANGE)
+            if (status == DEBUG_STATUS.NO_CHANGE || status == DEBUG_STATUS.NO_DEBUGGEE)
                 return EngineStatus.None;
 
-            if (status == DEBUG_STATUS.GO)
+            //I think GO_HANDLED and GO_NOT_HANDLED relate to exception handling. GO_HANDLED is also generated when EndSession() is called
+            if (status == DEBUG_STATUS.GO || status == DEBUG_STATUS.GO_HANDLED)
                 return EngineStatus.Continue;
 
             if (status == DEBUG_STATUS.BREAK)

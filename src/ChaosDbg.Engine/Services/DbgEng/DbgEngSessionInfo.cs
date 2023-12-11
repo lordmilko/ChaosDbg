@@ -166,16 +166,31 @@ namespace ChaosDbg.DbgEng
                 throw new ArgumentNullException(nameof(uiClient));
 
             EngineThread = new DispatcherThread("DbgEng Engine Thread", threadProc);
-            EngineThread.Dispatcher.OperationQueued += (s, e) =>
-            {
-                if (Thread.CurrentThread.ManagedThreadId != EngineThread.ManagedThreadId)
-                    UiClient.ExitDispatch(EngineClientRaw);
-            };
-
             UiClient = uiClient;
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        }
+
+        /// <summary>
+        /// Starts the debug session by launching the engine thread.
+        /// </summary>
+        public void Start()
+        {
+            EngineThread.Start();
+
+            EngineThread.Dispatcher.OperationQueued += (s, e) =>
+            {
+                if (Thread.CurrentThread.ManagedThreadId != EngineThread.ManagedThreadId)
+                {
+                    //If we're disposing, we're simply trying to dispatch the Shutdown command to the dispatcher
+                    //thread. We don't care if ExitDispatch fails
+                    if (disposed)
+                        UiClient.TryExitDispatch(EngineClientRaw);
+                    else
+                        UiClient.ExitDispatch(EngineClientRaw);
+                }
+            };
         }
 
         /// <summary>
@@ -213,6 +228,8 @@ namespace ChaosDbg.DbgEng
             if (disposed)
                 return;
 
+            disposed = true;
+
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();
 
@@ -234,8 +251,6 @@ namespace ChaosDbg.DbgEng
             engineClient = null;
             bufferClient = null;
             BufferOutput = null;
-
-            disposed = true;
         }
     }
 }

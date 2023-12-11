@@ -23,6 +23,7 @@ namespace ChaosDbg.Cordb
         public CordbUnmanagedCallback()
         {
             InBandThread = new DispatcherThread($"{nameof(CordbUnmanagedCallback)} In Band Thread");
+            InBandThread.Start();
         }
 
         HRESULT ICorDebugUnmanagedCallback.DebugEvent(ref DEBUG_EVENT pDebugEvent, bool fOutOfBand)

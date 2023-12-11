@@ -19,7 +19,7 @@ namespace ChaosDbg.Cordb
                 CreateProcess(createProcessOptions, out var pi);
 
                 var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
-                ValidateTargetArchitecture(pi.dwProcessId, is32Bit);
+                ValidateTargetArchitecture(pi.dwProcessId, is32Bit, false);
 
                 try
                 {
@@ -116,7 +116,7 @@ namespace ChaosDbg.Cordb
 
             var process = Process.GetProcessById(pid);
             var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
-            ValidateTargetArchitecture(pid, is32Bit);
+            ValidateTargetArchitecture(pid, is32Bit, true);
 
             //It's either a .NET Core process, or a purely unmanaged process. Check if coreclr is loaded
             WithDbgShim(dbgShim =>
@@ -167,17 +167,40 @@ namespace ChaosDbg.Cordb
             initCallback(cb, ucb, corDebug, target);
         }
 
-        private static void ValidateTargetArchitecture(int pid, bool is32Bit)
+        private static void ValidateTargetArchitecture(int pid, bool is32Bit, bool attach)
         {
+            void KillProcess()
+            {
+                if (attach)
+                    return;
+
+                //If we can't attach to the process we created, terminate the process
+
+                try
+                {
+                    Process.GetProcessById(pid).Kill();
+                }
+                catch
+                {
+                    //The process is already terminated. Great!
+                }
+            }
+
             if (IntPtr.Size == 4)
             {
                 if (!is32Bit)
+                {
+                    KillProcess();
                     throw new DebuggerInitializationException($"Failed to attach to process {pid}: target process is 64-bit however debugger process is 32-bit.", HRESULT.E_FAIL);
+                }
             }
             else
             {
                 if (is32Bit)
+                {
+                    KillProcess();
                     throw new DebuggerInitializationException($"Failed to attach to process {pid}: target process is 32-bit however debugger process is 64-bit.", HRESULT.E_FAIL);
+                }
             }
         }
     }

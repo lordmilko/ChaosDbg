@@ -69,7 +69,7 @@ namespace ChaosDbg.DbgEng
             switch (hr)
             {
                 case HRESULT.ERROR_NOT_SUPPORTED:
-                case (HRESULT) 0xD00000BB: //DbgEng corrupts the NTSTATUS code STATUS_NOT_SUPPORTED by OR'ing it with the ImageBase for some reason, giving a C instead of a C
+                case HRESULT.STATUS_NOT_SUPPORTED:
                     throw new DebuggerInitializationException($"Failed to attach to process: process most likely does not match architecture of debugger ({(IntPtr.Size == 4 ? "x86" : "x64")}).", hr);
             }
 
@@ -82,24 +82,33 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private void EngineLoop()
         {
-            while (!IsEngineCancellationRequested)
+            try
             {
-                //Go to sleep and wait for an event to occur. We can force the debugger to wake up
-                //via our UiClient by calling DebugControl.SetInterrupt()
-                EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, Kernel32.INFINITE);
+                while (!IsEngineCancellationRequested)
+                {
+                    //Go to sleep and wait for an event to occur. We can force the debugger to wake up
+                    //via our UiClient by calling DebugControl.SetInterrupt()
+                    EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, Kernel32.INFINITE);
 
-                //When disposing our debug session on the UI thread, we will cancel our CTS and then attempt to call DebugControl.SetInterrupt().
-                //If we can see cancellation was requested, the engine is shutting down, and we should break out of the engine loop
-                if (IsEngineCancellationRequested)
-                    break;
+                    //When disposing our debug session on the UI thread, we will cancel our CTS and then attempt to call DebugControl.SetInterrupt().
+                    //If we can see cancellation was requested, the engine is shutting down, and we should break out of the engine loop
+                    if (IsEngineCancellationRequested)
+                        break;
 
-                //Notify all DebugClient instances about the current status of the debuggee (e.g. the current instruction we've stopped at)
-                EngineClient.Control.OutputCurrentState(DEBUG_OUTCTL.ALL_CLIENTS, DEBUG_CURRENT.DEFAULT);
+                    //Notify all DebugClient instances about the current status of the debuggee (e.g. the current instruction we've stopped at)
+                    EngineClient.Control.OutputCurrentState(DEBUG_OUTCTL.ALL_CLIENTS, DEBUG_CURRENT.DEFAULT);
 
-                //Repeatedly request input from the user until they resume the debuggee.
-                //If the engine was terminated while inside of the input loop, we'll see
-                //that cancellation was requested at the start of the next EngineLoop iteration
-                InputLoop();
+                    //Repeatedly request input from the user until they resume the debuggee.
+                    //If the engine was terminated while inside of the input loop, we'll see
+                    //that cancellation was requested at the start of the next EngineLoop iteration
+                    InputLoop();
+                }
+            }
+            finally
+            {
+                //Do our best to cleanup. Specifically, we want to call DiscardTarget() so that globals like g_EngStatus
+                //are guaranteed to get set back to 0
+                EngineClient.TryEndSession(DEBUG_END.ACTIVE_TERMINATE);
             }
         }
 

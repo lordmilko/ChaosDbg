@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -23,12 +24,28 @@ namespace ChaosDbg.Tests
             if (Thread.CurrentThread.GetApartmentState() == ApartmentState.MTA)
                 return Invoke(testMethod);
 
+            Exception exception = null;
+
             TestResult[] result = null;
-            var thread = new Thread(() => result = Invoke(testMethod));
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    result = Invoke(testMethod);
+                }
+                catch (Exception ex)
+                {
+                    exception = ex;
+                }
+            });
+            thread.Name = testMethod.TestMethodName;
             thread.SetApartmentState(ApartmentState.MTA);
             
             thread.Start();
             thread.Join();
+
+            if (exception != null)
+                throw exception;
 
             return result;
         }

@@ -119,10 +119,12 @@ namespace ChaosDbg.Tests
                     var thread = engine.ActiveProcess.Threads.Single();
 
                     thread.Verify().StackTrace(
+                        "Transition Frame",
                         "System.Threading.Thread.Sleep",
                         "TestApp.Program.SignalReady",
                         "TestApp.CordbEngine_Thread_StackTrace.Managed",
-                        "TestApp.Program.Main"
+                        "TestApp.Program.Main",
+                        "Transition Frame"
                     );
                 }
             );
@@ -138,13 +140,16 @@ namespace ChaosDbg.Tests
                     var thread = engine.ActiveProcess.Threads.Single();
 
                     thread.Verify().StackTrace(
+                        "Transition Frame",
                         "System.Threading.Thread.Sleep",
                         "TestApp.Program.SignalReady",
                         "<>c.<Internal>b__1_0",
-                        "",
-                        "",
-                        "TestApp.CordbEngine_Thread_StackTrace.Managed",
-                        "TestApp.Program.Main"
+                        "[Runtime]",
+                        "Transition Frame",
+                        "[Runtime]",
+                        "TestApp.CordbEngine_Thread_StackTrace.Internal",
+                        "TestApp.Program.Main",
+                        "Transition Frame"
                     );
                 }
             );
@@ -216,6 +221,9 @@ namespace ChaosDbg.Tests
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
             eventHandle.WaitOne();
+
+            //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
+            Thread.Sleep(100);
 
             engine.Break();
 

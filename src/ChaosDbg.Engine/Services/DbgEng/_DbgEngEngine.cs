@@ -87,6 +87,9 @@ namespace ChaosDbg.DbgEng
                 CreateDebugClient(),
                 cancellationToken
             );
+
+            //We must start the debugger thread AFTER the Session variable has been assigned to
+            Session.Start();
         }
 
         private DebugClient CreateDebugClient()
