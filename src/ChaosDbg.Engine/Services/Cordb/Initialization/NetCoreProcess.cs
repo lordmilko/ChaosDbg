@@ -162,9 +162,15 @@ namespace ChaosDbg.Cordb
 
             var process = corDebug.DebugActiveProcess(processId, useInterop);
 
-            var target = new CordbTargetInfo(commandLine, process, is32Bit, useInterop);
-
-            initCallback(cb, ucb, corDebug, target);
+            initCallback(
+                corDebug,
+                process,
+                cb,
+                ucb,
+                is32Bit,
+                commandLine,
+                useInterop
+            );
         }
 
         private static void ValidateTargetArchitecture(int pid, bool is32Bit, bool attach)

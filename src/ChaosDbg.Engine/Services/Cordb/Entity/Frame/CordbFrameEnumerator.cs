@@ -101,7 +101,7 @@ namespace ChaosDbg.Cordb
 
                 var process = thread.Process;
 
-                if (process.IsInterop)
+                if (process.Session.IsInterop)
                     return ResolveNativeFrames(process.Handle, thread.Handle, process.DAC.DataTarget, process.DbgHelp, results);
 
                 return results.ToArray();
@@ -125,7 +125,7 @@ namespace ChaosDbg.Cordb
                 if (frames.Count == 0)
                     return Array.Empty<CordbFrame>();
 
-                var walker = new NativeStackWalker(dataTarget, dbgHelpSession);
+                using var walker = new NativeStackWalker(dataTarget, dbgHelpSession);
 
                 //First, let's get all native frames starting from the top of the stack
                 var nativeFrames = walker.Walk(hProcess, hThread, frames[0].Context, null).ToArray();

@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
-using ChaosDbg.Metadata;
-using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -38,7 +35,7 @@ namespace ChaosDbg.Cordb
                 //Attach to an existing process
                 var a = (AttachProcessOptions) launchInfo;
 
-                var process = Process.GetProcessById(a.ProcessId);
+                var process = System.Diagnostics.Process.GetProcessById(a.ProcessId);
 
                 if (process.Modules.Cast<ProcessModule>()
                     .Any(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase)))
@@ -48,7 +45,14 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        private void InitCallback(CordbManagedCallback cb, CordbUnmanagedCallback ucb, CorDebug corDebug, CordbTargetInfo target)
+        private void InitCallback(
+            CorDebug corDebug,
+            CorDebugProcess process,
+            CordbManagedCallback cb,
+            CordbUnmanagedCallback ucb,
+            bool is32Bit,
+            string commandLine,
+            bool isInterop)
         {
             RegisterCallbacks(cb);
             RegisterUnmanagedCallbacks(ucb);
@@ -56,9 +60,8 @@ namespace ChaosDbg.Cordb
             Session.CorDebug = corDebug;
             Session.ManagedCallback = cb;
             Session.UnmanagedCallback = ucb;
-            Session.Process = target.Process;
-
-            Target = target;
+            Session.Process = new CordbProcess(process, Session, services, is32Bit, commandLine);
+            Session.IsInterop = isInterop;
         }
     }
 }

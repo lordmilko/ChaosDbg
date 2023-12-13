@@ -23,7 +23,7 @@ namespace ChaosDbg.DAC
             get
             {
                 if (sos == null)
-                    sos = GetSOSDacInterface();
+                    sos = GetSOSDacInterface(cdbProcess.Id, DataTarget);
 
                 return sos;
             }
@@ -40,7 +40,7 @@ namespace ChaosDbg.DAC
         {
             cdbProcess = process;
 
-            DataTarget = new CordbDataTarget(process);
+            DataTarget = new CordbDataTarget(process.Handle);
             DataTarget.SetFlushCallback(() => SOS.As<XCLRDataProcess>().Flush());
             Threads = new DacThreadStore(this);
         }
@@ -59,28 +59,28 @@ namespace ChaosDbg.DAC
 
         #region Init
 
-        private SOSDacInterface GetSOSDacInterface()
+        public static SOSDacInterface GetSOSDacInterface(int pid, ICLRDataTarget dataTarget)
         {
             //Get a new Process so we get the latest list of modules. Modules won't refresh on a Process object after they've been
             //retrieved the first time
-            var process = Process.GetProcessById(cdbProcess.Id);
+            var process = Process.GetProcessById(pid);
 
             var modules = process.Modules.Cast<ProcessModule>().ToArray();
 
             var clr = modules.FirstOrDefault(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase));
 
             if (clr != null)
-                return CLRDataCreateInstance(DataTarget).SOSDacInterface;
+                return CLRDataCreateInstance(dataTarget).SOSDacInterface;
 
             var coreclr = modules.FirstOrDefault(m => m.ModuleName.Equals("coreclr.dll", StringComparison.OrdinalIgnoreCase));
 
             if (coreclr == null)
-                throw new InvalidOperationException($"Could not find module clr.dll or coreclr.dll on process {cdbProcess.Id}.");
+                throw new InvalidOperationException($"Could not find module clr.dll or coreclr.dll on process {pid}.");
 
-            return CoreCLRDataCreateInstance(coreclr).SOSDacInterface;
+            return CoreCLRDataCreateInstance(coreclr, dataTarget).SOSDacInterface;
         }
 
-        private CLRDataCreateInstanceInterfaces CoreCLRDataCreateInstance(ProcessModule module)
+        private static CLRDataCreateInstanceInterfaces CoreCLRDataCreateInstance(ProcessModule module, ICLRDataTarget dataTarget)
         {
             var dacPath = Path.Combine(Path.GetDirectoryName(module.FileName), "mscordaccore.dll");
 
@@ -93,7 +93,7 @@ namespace ChaosDbg.DAC
 
             var clrDataCreateInstanceDelegate = Marshal.GetDelegateForFunctionPointer<CLRDataCreateInstanceDelegate>(clrDataCreateInstancePtr);
 
-            var clrDataCreateInstance = CLRDataCreateInstance(clrDataCreateInstanceDelegate, DataTarget);
+            var clrDataCreateInstance = CLRDataCreateInstance(clrDataCreateInstanceDelegate, dataTarget);
 
             return clrDataCreateInstance;
         }

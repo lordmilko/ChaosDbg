@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using ChaosLib;
 using ClrDebug;
@@ -14,8 +13,6 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbDataTarget : ICLRDataTarget, ICorDebugDataTarget
     {
-        private CordbProcess process;
-
         //IXCLRDataProcess::Flush does not use DAC_ENTER, which can lead to heap corruption if the process is flushed while it is running. To work around this,
         //ReadVirtual is tricked to call IXCLRDataProcess::Flush upon attempting to execute another method (which DOES call DAC_ENTER), thereby giving us a safe flush.
         //Taken from RuntimeBuilder.FlushDac() in ClrMD.
@@ -23,13 +20,13 @@ namespace ChaosDbg.Cordb
         private volatile int flushContext;
         private ulong MagicFlushAddress = 0x43; //A random (invalid) address constant to signal we're doing a flush, not reading an address
 
+        private int pid;
         private MemoryReader reader;
 
-        public CordbDataTarget(CordbProcess process)
+        public CordbDataTarget(IntPtr hProcess)
         {
-            this.process = process;
-
-            reader = new MemoryReader(process.Handle);
+            pid = Kernel32.GetProcessId(hProcess);
+            reader = new MemoryReader(hProcess);
         }
 
         public void SetFlushCallback(Action action)
@@ -58,17 +55,19 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        public static implicit operator MemoryReader(CordbDataTarget dataTarget) => dataTarget.reader;
+
         #region ICLRDataTarget
 
         HRESULT ICLRDataTarget.GetMachineType(out IMAGE_FILE_MACHINE machineType)
         {
-            machineType = process.MachineType;
+            machineType = reader.Is32Bit ? IMAGE_FILE_MACHINE.I386 : IMAGE_FILE_MACHINE.AMD64;
             return S_OK;
         }
 
         HRESULT ICLRDataTarget.GetPointerSize(out int pointerSize)
         {
-            pointerSize = process.Is32Bit ? 4 : 8;
+            pointerSize = reader.PointerSize;
             return S_OK;
         }
 
@@ -82,7 +81,7 @@ namespace ChaosDbg.Cordb
             for (var i = 0; i < 100; i++)
             {
                 //Once Process.Modules have been retrieved, they'll be cached. As such we re-retrieve the Process each time to get the latest available set of modules
-                module = Process.GetProcessById(process.Id).Modules.Cast<ProcessModule>().FirstOrDefault(m => StringComparer.OrdinalIgnoreCase.Equals(m.ModuleName, imagePath));
+                module = Process.GetProcessById(pid).Modules.Cast<ProcessModule>().FirstOrDefault(m => StringComparer.OrdinalIgnoreCase.Equals(m.ModuleName, imagePath));
 
                 if (module != null)
                     break;

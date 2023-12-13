@@ -59,9 +59,15 @@ namespace ChaosDbg.Cordb
             {
                 var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-                var target = new CordbTargetInfo(createProcessOptions.CommandLine, process, is32Bit, createProcessOptions.UseInterop);
-
-                initCallback(cb, ucb, corDebug, target);
+                initCallback(
+                    corDebug,
+                    process,
+                    cb,
+                    ucb,
+                    is32Bit,
+                    createProcessOptions.CommandLine,
+                    createProcessOptions.UseInterop
+                );
 
                 //We are now going to resume the process. Any required setup must now be complete or we will encounter a race
                 Kernel32.ResumeThread(pi.hThread);
@@ -104,9 +110,15 @@ namespace ChaosDbg.Cordb
 
             var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
 
-            var target = new CordbTargetInfo(null, process, is32Bit, attachProcessOptions.UseInterop);
-
-            initCallback(cb, ucb, corDebug, target);
+            initCallback(
+                corDebug,
+                process,
+                cb,
+                ucb,
+                is32Bit,
+                null,
+                attachProcessOptions.UseInterop
+            );
         }
 
         private static void ValidateCreateOrAttach(HRESULT hr, string action)

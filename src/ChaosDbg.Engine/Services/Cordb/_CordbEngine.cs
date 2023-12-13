@@ -11,32 +11,38 @@ namespace ChaosDbg.Cordb
     {
         #region State
 
-        public CordbProcess ActiveProcess => Session.Process;
+        public CordbProcess Process => Session.Process;
 
         /// <summary>
         /// Gets the container containing the entities used to manage the current <see cref="CordbEngine"/> session.
         /// </summary>
         public CordbSessionInfo Session { get; private set; }
 
-        /// <summary>
-        /// Gets the current debug target. This property is set by the engine thread.
-        /// </summary>
-        public CordbTargetInfo Target { get; private set; }
-
         #endregion
 
         private readonly IExeTypeDetector exeTypeDetector;
+        private readonly CordbEngineServices services;
         private bool disposed;
 
-        public CordbEngine(IExeTypeDetector exeTypeDetector, NativeLibraryProvider nativeLibraryProvider)
+        public CordbEngine(
+            IExeTypeDetector exeTypeDetector,
+            NativeLibraryProvider nativeLibraryProvider,
+            CordbEngineServices services)
         {
             //Ensure the right DbgHelp gets loaded before we need it
             nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
 
             this.exeTypeDetector = exeTypeDetector;
+            this.services = services;
         }
 
-        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default)
+        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default) =>
+            CreateSession(options, cancellationToken);
+
+        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default) =>
+            CreateSession(options, cancellationToken);
+
+        private void CreateSession(object options, CancellationToken cancellationToken)
         {
             if (Session != null)
                 throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
@@ -50,11 +56,6 @@ namespace ChaosDbg.Cordb
             Session.Start();
         }
 
-        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
         public void Dispose()
         {
             if (disposed)
@@ -66,8 +67,8 @@ namespace ChaosDbg.Cordb
 
             try
             {
-                if (Target != null)
-                    Process.GetProcessById(ActiveProcess.Id).Kill();
+                if (Process != null)
+                    System.Diagnostics.Process.GetProcessById(Process.Id).Kill();
             }
             catch
             {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using ChaosDbg.DAC;
 using ChaosLib;
 using ClrDebug;
@@ -11,10 +12,9 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbProcess : IDisposable
     {
-        /// <summary>
-        /// Gets the underlying <see cref="ClrDebug.CorDebugProcess"/> of this entity.
-        /// </summary>
-        public CorDebugProcess CorDebugProcess { get; }
+        #region Overview
+
+        //High level information about the target process
 
         /// <summary>
         /// Gets the ID of this process.<para/>
@@ -22,6 +22,9 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public int Id => CorDebugProcess.Id;
 
+        /// <summary>
+        /// Gets the handle of the process.
+        /// </summary>
         public IntPtr Handle => CorDebugProcess.Handle;
 
         /// <summary>
@@ -30,24 +33,24 @@ namespace ChaosDbg.Cordb
         public bool Is32Bit { get; }
 
         /// <summary>
-        /// Gets whether both managed and native code are being debugged in the process.
+        /// Gets the <see cref="IMAGE_FILE_MACHINE"/> type of this process.
         /// </summary>
-        public bool IsInterop { get; }
-
         public IMAGE_FILE_MACHINE MachineType => Is32Bit ? IMAGE_FILE_MACHINE.I386 : IMAGE_FILE_MACHINE.AMD64;
 
         /// <summary>
-        /// Provides access to information about the process that comes form the DAC.
+        /// Gets the command line that was used to launch the process.
         /// </summary>
-        public DacProvider DAC { get; }
+        public string CommandLine { get; }
+
+        #endregion
+        #region Related Entities
+
+        //Objects that store additionl information about the process
 
         /// <summary>
-        /// Gets whether any thread currently has queued callbacks in need of dispatching.<para/>
-        /// When attempting to stop the debugger, all queued callbacks must have been dispatched in order to ascertain
-        /// the true state of the debugger. Failure to do so will result in CORDBG_E_PROCESS_NOT_SYNCHRONIZED upon
-        /// trying to introspect the process. See also: https://learn.microsoft.com/en-us/archive/blogs/jmstall/using-icordebugprocesshasqueuedcallbacks
+        /// Gets the underlying <see cref="ClrDebug.CorDebugProcess"/> of this entity.
         /// </summary>
-        public bool HasQueuedCallbacks => CorDebugProcess.HasQueuedCallbacks(null);
+        public CorDebugProcess CorDebugProcess { get; }
 
         /// <summary>
         /// Gets the container containing the threads that have been loaded into the current process.
@@ -59,25 +62,64 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbModuleStore Modules { get; }
 
+        #endregion
+        #region Services
+
+        //Objects that provide access to additional services for interacting with the process
+
+        /// <summary>
+        /// Provides access to information about the process that comes form the DAC.
+        /// </summary>
+        public DacProvider DAC { get; }
+
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private Lazy<DbgHelpSession> dbgHelp;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public DbgHelpSession DbgHelp => dbgHelp.Value;
 
+        #endregion
+        #region Debugger State
+
+        //Values that provide information about the state and the way in which the process is being debugged
+
+        public CordbSessionInfo Session { get; }
+
+        /// <summary>
+        /// Gets whether any thread currently has queued callbacks in need of dispatching.<para/>
+        /// When attempting to stop the debugger, all queued callbacks must have been dispatched in order to ascertain
+        /// the true state of the debugger. Failure to do so will result in CORDBG_E_PROCESS_NOT_SYNCHRONIZED upon
+        /// trying to introspect the process. See also: https://learn.microsoft.com/en-us/archive/blogs/jmstall/using-icordebugprocesshasqueuedcallbacks
+        /// </summary>
+        public bool HasQueuedCallbacks => CorDebugProcess.HasQueuedCallbacks(null);
+
+        #endregion
+
         private bool disposed;
 
-        public CordbProcess(CorDebugProcess corDebugProcess, bool is32Bit, bool isInterop)
+        public CordbProcess(
+            CorDebugProcess corDebugProcess,
+            CordbSessionInfo session,
+            CordbEngineServices services,
+            bool is32Bit,
+            string commandLine)
         {
             if (corDebugProcess == null)
                 throw new ArgumentNullException(nameof(corDebugProcess));
 
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+
+            if (services == null)
+                throw new ArgumentNullException(nameof(services));
+
             CorDebugProcess = corDebugProcess;
+            Session = session;
             Is32Bit = is32Bit;
-            IsInterop = isInterop;
+            CommandLine = commandLine;
 
             Threads = new CordbThreadStore(this);
-            Modules = new CordbModuleStore(this);
+            Modules = new CordbModuleStore(this, services);
 
             DAC = new DacProvider(this);
 

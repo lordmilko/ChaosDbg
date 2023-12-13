@@ -28,6 +28,11 @@ namespace ChaosDbg.Cordb
         private Dictionary<int, CordbThread> threads = new Dictionary<int, CordbThread>();
         private CordbProcess process;
 
+        /// <summary>
+        /// Gets or sets thread that user interactions with the debugger should apply to.
+        /// </summary>
+        public CordbThread ActiveThread { get; set; }
+
         public CordbThreadStore(CordbProcess process)
         {
             this.process = process;
@@ -45,6 +50,23 @@ namespace ChaosDbg.Cordb
                 threads.Add(corDebugThread.Id, thread);
 
                 return thread;
+            }
+        }
+
+        internal void SetActiveThread(CorDebugThread corDebugThread)
+        {
+            if (corDebugThread == null)
+                return;
+
+            ActiveThread = this[corDebugThread.Id];
+        }
+
+        internal CordbThread this[int id]
+        {
+            get
+            {
+                lock (threadLock)
+                    return threads[id];
             }
         }
 

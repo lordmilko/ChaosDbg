@@ -25,6 +25,8 @@ namespace ChaosDbg.Cordb
                 return;
 
             ucb.OnAnyEvent += AnyUnmanagedEvent;
+            ucb.OnLoadDll += UnmanagedLoadModule;
+            ucb.OnUnloadDll += UnmanagedUnloadModule;
         }
 
         #region ChaosDbg Event Handlers
@@ -43,7 +45,7 @@ namespace ChaosDbg.Cordb
 
         private void PreEvent(object sender, CorDebugManagedCallbackEventArgs e)
         {
-            UpdateCurrentThread(e);
+            //UpdateCurrentThread(e);
         }
 
         private void UpdateCurrentThread(CorDebugManagedCallbackEventArgs e)
@@ -51,12 +53,14 @@ namespace ChaosDbg.Cordb
             //The following is a list of event types that contain a CorDebugThread member.
             //If we see one of these, update the last seen thread
 
+            var threads = Process.Threads;
+
             if (e is AppDomainThreadDebugCallbackEventArgs a)
-                Target.ActiveThread = a.Thread;
+                threads.SetActiveThread(a.Thread);
             else if (e is DataBreakpointCorDebugManagedCallbackEventArgs d)
-                Target.ActiveThread = d.Thread;
+                threads.SetActiveThread(d.Thread);
             if (e is MDANotificationCorDebugManagedCallbackEventArgs m)
-                Target.ActiveThread = m.Thread;
+                threads.SetActiveThread(m.Thread);
         }
 
         #endregion
@@ -76,14 +80,29 @@ namespace ChaosDbg.Cordb
             //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process
             e.Module.TrySetJITCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
 
-            var module = ActiveProcess.Modules.Add(e.Module);
+            var module = Process.Modules.Add(e.Module);
 
             HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
         }
 
         private void UnloadModule(object sender, UnloadModuleCorDebugManagedCallbackEventArgs e)
         {
-            var module = ActiveProcess.Modules.Remove(e.Module.BaseAddress);
+            var module = Process.Modules.Remove(e.Module.BaseAddress);
+
+            if (module != null)
+                HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+        }
+
+        private void UnmanagedLoadModule(object sender, LOAD_DLL_DEBUG_INFO e)
+        {
+            var module = Process.Modules.Add(e);
+
+            HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+        }
+
+        private void UnmanagedUnloadModule(object sender, UNLOAD_DLL_DEBUG_INFO e)
+        {
+            var module = Process.Modules.Remove(e);
 
             if (module != null)
                 HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
@@ -94,14 +113,14 @@ namespace ChaosDbg.Cordb
 
         private void CreateThread(object sender, CreateThreadCorDebugManagedCallbackEventArgs e)
         {
-            var thread = ActiveProcess.Threads.Add(e.Thread);
+            var thread = Process.Threads.Add(e.Thread);
 
             HandleUIEvent(ThreadCreate, new EngineThreadCreateEventArgs(thread));
         }
 
         private void ExitThread(object sender, ExitThreadCorDebugManagedCallbackEventArgs e)
         {
-            var thread = ActiveProcess.Threads.Remove(e.Thread.Id);
+            var thread = Process.Threads.Remove(e.Thread.Id);
 
             if (thread != null)
                 HandleUIEvent(ThreadExit, new EngineThreadExitEventArgs(thread));
@@ -118,7 +137,7 @@ namespace ChaosDbg.Cordb
 
             //Even when we call Stop() to break into the process, if we're in the middle of processing an event, we'll end up calling
             //Continue() again here.
-            if (Target.Process.HasQueuedCallbacks)
+            if (Process.HasQueuedCallbacks)
             {
                 DoContinue(e.Controller, false);
                 return;
@@ -138,22 +157,22 @@ namespace ChaosDbg.Cordb
 
         private void AnyUnmanagedEvent(object sender, bool fOutOfBand)
         {
-            DoContinue(ActiveProcess.CorDebugProcess, fOutOfBand, isUnmanaged: true);
+            DoContinue(Process.CorDebugProcess, fOutOfBand, isUnmanaged: true);
         }
 
         private void OnStopping()
         {
             //We're not continuing. Update debugger state
-            Target.Process.DAC.Threads.Refresh();
+            Process.DAC.Threads.Refresh();
         }
 
         private void SetEngineStatus(EngineStatus newStatus)
         {
-            var oldStatus = Target.Status;
+            var oldStatus = Session.Status;
 
             if (oldStatus != newStatus)
             {
-                Target.Status = newStatus;
+                Session.Status = newStatus;
 
                 HandleUIEvent(EngineStatusChanged, new EngineStatusChangedEventArgs(oldStatus, newStatus));
             }

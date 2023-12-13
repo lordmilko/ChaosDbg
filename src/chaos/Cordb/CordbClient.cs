@@ -19,13 +19,13 @@ namespace chaos
             commandDispatcher = commandBuilder.Build();
         }
 
-        public void Execute(string executable, bool minimized)
+        public void Execute(string executable, bool minimized, bool interop)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
 
             RegisterCallbacks();
 
-            engine.CreateProcess(executable, minimized);
+            engine.CreateProcess(executable, minimized, interop);
 
             EngineLoop();
         }
@@ -44,7 +44,7 @@ namespace chaos
 
         private void InputLoop()
         {
-            while (engine.Target.Status == EngineStatus.Break)
+            while (engine.Session.Status == EngineStatus.Break)
             {
                 PrintPrompt();
 
@@ -74,7 +74,7 @@ namespace chaos
 
         private void PrintModules()
         {
-            foreach (var module in engine.ActiveProcess.Modules)
+            foreach (var module in engine.Process.Modules)
             {
                 Console.WriteLine(module);
             }

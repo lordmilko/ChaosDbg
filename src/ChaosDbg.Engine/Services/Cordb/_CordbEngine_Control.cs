@@ -18,7 +18,7 @@ namespace ChaosDbg.Cordb
 
             //Keep calling CorDebugController.Continue() until we're freely running again
             while (Session.CurrentStopCount > 0)
-                DoContinue(Target.Process.CorDebugProcess, false);
+                DoContinue(Process.CorDebugProcess, false);
         }
 
         private void DoContinue(CorDebugController controller, bool outOfBand, bool isUnmanaged = false)
@@ -94,7 +94,7 @@ namespace ChaosDbg.Cordb
 
         public void Break()
         {
-            Target.Process.CorDebugProcess.Stop(0);
+            Process.CorDebugProcess.Stop(0);
             OnStopping();
             Session.CurrentStopCount++;
             SetEngineStatus(EngineStatus.Break);

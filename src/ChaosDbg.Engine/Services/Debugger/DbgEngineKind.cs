@@ -3,6 +3,7 @@
     public enum DbgEngineKind
     {
         DbgEng,
-        Cordb
+        Cordb,
+        Interop
     }
 }

@@ -31,7 +31,8 @@ namespace chaos
                             break;
 
                         case DbgEngineKind.Cordb:
-                            GlobalProvider.ServiceProvider.GetService<CordbClient>().Execute(executable, minimized);
+                        case DbgEngineKind.Interop:
+                            GlobalProvider.ServiceProvider.GetService<CordbClient>().Execute(executable, minimized, kind == DbgEngineKind.Interop);
                             break;
 
                         default:

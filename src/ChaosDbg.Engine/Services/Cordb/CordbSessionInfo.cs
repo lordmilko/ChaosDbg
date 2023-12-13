@@ -19,6 +19,16 @@ namespace ChaosDbg.Cordb
         public CordbProcess Process { get; set; }
 
         /// <summary>
+        /// Gets or sets the current status of the process.
+        /// </summary>
+        public EngineStatus Status { get; set; }
+
+        /// <summary>
+        /// Gets whether both managed and native code are being debugged in the process.
+        /// </summary>
+        public bool IsInterop { get; set; }
+
+        /// <summary>
         /// Gets the current number of times a managed callback has been entered or Stop() has been called
         /// without subsequently calling Continue(). Any time this value is not 0, the process is not freely running.
         /// </summary>
