@@ -8,9 +8,18 @@ namespace TestApp
     static class NativeMethods
     {
         private const string user32 = "user32.dll";
+        private const string kernel32 = "kernel32.dll";
 
         [DllImport(user32)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport(kernel32)]
+        public static extern int TlsAlloc();
+
+        [DllImport(kernel32)]
+        public static extern bool TlsSetValue(
+            [In] int dwTlsIndex,
+            [In] IntPtr lpTlsValue);
     }
 }

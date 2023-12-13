@@ -48,6 +48,43 @@ namespace TestApp
                     new CordbEngine_Thread_StackTrace().Internal();
                     break;
 
+                case TestType.CordbEngine_Thread_TLS:
+                {
+                    for (var i = 0; i < 20; i++)
+                    {
+                        var slot = NativeMethods.TlsAlloc();
+
+                        NativeMethods.TlsSetValue(slot, new IntPtr(i));
+                    }
+
+                    SignalReady();
+
+                    break;
+                }
+
+                case TestType.CordbEngine_Thread_TLS_Extended:
+                {
+                    for (var i = 0; i < 100; i++)
+                    {
+                        var slot = NativeMethods.TlsAlloc();
+
+                        NativeMethods.TlsSetValue(slot, new IntPtr(i));
+                    }
+
+                    SignalReady();
+
+                    break;
+                }
+
+                case TestType.CordbEngine_Thread_Type:
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        SignalReady();
+                    });
+
+                    while (true)
+                        Thread.Sleep(1);
+
                 default:
                     throw new NotImplementedException($"Don't know how to handle {nameof(TestType)} '{testType}'.");
             }

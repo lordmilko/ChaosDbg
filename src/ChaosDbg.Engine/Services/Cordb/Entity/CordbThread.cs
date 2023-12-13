@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
+using ChaosLib;
 using ClrDebug;
 using ThreadState = ClrDebug.ThreadState;
 
@@ -17,10 +19,12 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (Id == VolatileOSThreadID)
-                    return Id.ToString();
+                var type = Type == 0 ? "Normal" : Type.ToString();
 
-                return $"Id = {Id}, VolatileOSThreadID = {VolatileOSThreadID}";
+                if (Id == VolatileOSThreadID)
+                    return $"{type}: {Id}";
+
+                return $"{type}: Id = {Id}, VolatileOSThreadID = {VolatileOSThreadID}";
             }
         }
 
@@ -47,7 +51,15 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public int VolatileOSThreadID => CorDebugThread.VolatileOSThreadID;
 
+        /// <summary>
+        /// Gets the handle of this thread.
+        /// </summary>
         public IntPtr Handle => CorDebugThread.Handle;
+
+        /// <summary>
+        /// Gets the TEB that is associated with this thread.
+        /// </summary>
+        public RemoteTeb Teb { get; }
 
         /// <summary>
         /// Gets whether the thread is currently alive.<para/>
@@ -92,12 +104,40 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        /// <summary>
+        /// Gets the type of this thread.
+        /// </summary>
+        public TlsThreadTypeFlag Type
+        {
+            get
+            {
+                //We want to get size_t t_ThreadType
+
+                //This returns g_TlsIndex, which is set by SetIlsIndex. It seems this is a pointer to ThreadLocalInfo gCurrentThreadInfo
+                var index = Process.DAC.SOS.TLSIndex;
+
+                MemoryReader memoryReader = Process.DAC.DataTarget;
+
+                //I'm not 100% clear how this works exactly; SOS and ClrMD use a different strategy to get this value, but it seems to work regardless
+                
+                var slotValue = Teb.GetTlsValue(index);
+                var value = (TlsThreadTypeFlag) memoryReader.ReadPointer(slotValue + memoryReader.PointerSize * (int) PredefinedTlsSlots.TlsIdx_ThreadType);
+
+                return value;
+            }
+        }
+
         public CordbFrame[] StackTrace => CordbFrameEnumerator.V3.Enumerate(this).ToArray();
 
         public CordbThread(CorDebugThread corDebugThread, CordbProcess process)
         {
             CorDebugThread = corDebugThread;
             Process = process;
+
+            if (!Process.DAC.Threads.TryGetValue(VolatileOSThreadID, true, out var dacThread))
+                throw new InvalidOperationException("Failed to get DacThread");
+
+            Teb = new RemoteTeb(dacThread.teb, Process.DAC.DataTarget);
         }
 
         public override string ToString() => Id.ToString();
