@@ -1,9 +1,9 @@
 ﻿using System;
 
-namespace chaos
+namespace chaos.Cordb.Commands
 {
     class CommandAttribute : Attribute
-    {
+    { 
         public string Name { get; }
 
         public CommandAttribute(string name)

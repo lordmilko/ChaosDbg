@@ -1,6 +1,6 @@
 ﻿using System;
-using System.CommandLine.Parsing;
 using System.Threading;
+using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
 
@@ -11,7 +11,7 @@ namespace chaos
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
         private CordbEngine engine;
-        private Parser commandDispatcher;
+        private RelayParser commandDispatcher;
 
         public CordbClient(CordbEngine engine, CommandBuilder commandBuilder)
         {

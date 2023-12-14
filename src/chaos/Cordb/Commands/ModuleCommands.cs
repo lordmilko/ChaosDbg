@@ -4,7 +4,7 @@
     {
         [Command("lm")]
         public void ListModules(
-            [Parameter("m")] string pattern)
+            [Option("m")] string pattern)
         {
             throw new System.NotImplementedException();
         }

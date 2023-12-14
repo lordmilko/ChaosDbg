@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;

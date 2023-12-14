@@ -8,6 +8,7 @@ namespace ChaosDbg.DAC
         private DacProvider provider;
 
         private Dictionary<int, DacpThreadData> threads = new Dictionary<int, DacpThreadData>();
+        private object lockObj = new object();
 
         public DacThreadStore(DacProvider provider)
         {
@@ -22,29 +23,35 @@ namespace ChaosDbg.DAC
                 Refresh();
             }
 
-            if (threads.TryGetValue(threadId, out data))
-                return true;
+            lock (lockObj)
+            {
+                if (threads.TryGetValue(threadId, out data))
+                    return true;
+            }
 
             return false;
         }
 
         public void Refresh()
         {
-            threads.Clear();
-            provider.Flush();
-
-            var threadStore = provider.SOS.ThreadStoreData;
-
-            var currentThread = threadStore.firstThread;
-
-            while (currentThread != 0)
+            lock (lockObj)
             {
-                var threadData = provider.SOS.GetThreadData(currentThread);
+                threads.Clear();
+                provider.Flush();
 
-                if (threadData.osThreadId != 0)
-                    threads.Add(threadData.osThreadId, threadData);
+                var threadStore = provider.SOS.ThreadStoreData;
 
-                currentThread = threadData.nextThread;
+                var currentThread = threadStore.firstThread;
+
+                while (currentThread != 0)
+                {
+                    var threadData = provider.SOS.GetThreadData(currentThread);
+
+                    if (threadData.osThreadId != 0)
+                        threads.Add(threadData.osThreadId, threadData); //todo: this crashes when i ctrl+c the process and its in the middle of creating a thread?
+
+                    currentThread = threadData.nextThread;
+                }
             }
         }
     }
