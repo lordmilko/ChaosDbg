@@ -19,6 +19,9 @@ namespace ChaosDbg
         //PVOID TlsExpansionSlots
         private int TlsExpansionSlotsFieldOffset => memoryReader.Is32Bit ? 0x0F94 : 0x1780;
 
+        //PEB *ProcessEnvironmentBlock
+        private int ProcessEnvironmentBlockFieldOffset => memoryReader.Is32Bit ? 0x30 : 0x60;
+
         private const int TLS_EXPANSION_SLOTS = 1024;
         private const uint TLS_OUT_OF_INDEXES = 0xFFFFFFFF;
 
@@ -77,6 +80,12 @@ namespace ChaosDbg
         }
 
         /// <summary>
+        /// Gets the address of the PEB.<para/>
+        /// If we are a 64-bit process attempting to read the TEB of a 32-bit process, this will be the address of the Peb32, rather than the Wow64 PEB.
+        /// </summary>
+        public CLRDATA_ADDRESS ProcessEnvironmentBlock => memoryReader.ReadPointer(Address + ProcessEnvironmentBlockFieldOffset);
+
+        /// <summary>
         /// Gets the address of the TEB.<para/>
         /// If we are a 64-bit process attempting to read the TEB of a 32-bit process, this will be the address of the Teb32, rather than the Wow64 TEB.
         /// </summary>
@@ -84,7 +93,7 @@ namespace ChaosDbg
 
         private MemoryReader memoryReader;
 
-        public RemoteTeb(long tebAddress, MemoryReader memoryReader)
+        public RemoteTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader)
         {
             if (memoryReader.Is32Bit && IntPtr.Size == 8)
             {
