@@ -7,7 +7,7 @@ namespace TestApp
 {
     class Program
     {
-        private static string eventName;
+        internal static string eventName;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void SignalReady()

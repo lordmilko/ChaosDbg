@@ -3,10 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net472;net5.0</TargetFrameworks>
-    <LangVersion>8.0</LangVersion>
+    <LangVersion>9.0</LangVersion>
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
     <NoWarn>$(NoWarn);NETSDK1138</NoWarn>
     <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>$(SolutionDir)artifacts\bin\$(Configuration)\x64</OutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>TestApp</RootNamespace>
   </PropertyGroup>
 
 </Project>

@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+
+<assemblyIdentity type="win32" name="Managed.x86" version="1.0.0.0" />
+
+<clrClass clsid="{23FC427E-088C-472A-BD08-F8185AFDF3BD}" name="TestApp.Example" threadingModel="Both" runtimeVersion="v4.0.30319" />
+
+</assembly>

@@ -8,4 +8,9 @@
         CordbEngine_Thread_TLS_Extended,
         CordbEngine_Thread_Type
     }
+
+    public enum NativeTestType
+    {
+        Com = 1
+    }
 }
