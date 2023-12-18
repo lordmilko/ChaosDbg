@@ -71,7 +71,7 @@ namespace ChaosDbg
             IntPtr hProcess,
             IntPtr hThread,
             CrossPlatformContext context,
-            Func<NativeFrame, bool> predicate)
+            Func<NativeFrame, bool> predicate = null)
         {
             var stackFrame = new STACKFRAME_EX
             {

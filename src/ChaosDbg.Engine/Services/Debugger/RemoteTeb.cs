@@ -93,7 +93,15 @@ namespace ChaosDbg
 
         private MemoryReader memoryReader;
 
-        public RemoteTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader)
+        public static RemoteTeb FromThread(IntPtr hThread, MemoryReader memoryReader) => new RemoteTeb(hThread, memoryReader);
+
+        public static RemoteTeb FromTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader) => new RemoteTeb(tebAddress, memoryReader);
+
+        private RemoteTeb(IntPtr hThread, MemoryReader memoryReader) : this(GetTebAddress(hThread), memoryReader)
+        {
+        }
+
+        private RemoteTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader)
         {
             if (memoryReader.Is32Bit && IntPtr.Size == 8)
             {
@@ -109,6 +117,12 @@ namespace ChaosDbg
 
             Address = tebAddress;
             this.memoryReader = memoryReader;
+        }
+
+        private static CLRDATA_ADDRESS GetTebAddress(IntPtr hThread)
+        {
+            var info = Ntdll.NtQueryInformationThread<THREAD_BASIC_INFORMATION>(hThread, THREADINFOCLASS.ThreadBasicInformation);
+            return info.TebBaseAddress;
         }
 
         public long GetTlsValue(int index)

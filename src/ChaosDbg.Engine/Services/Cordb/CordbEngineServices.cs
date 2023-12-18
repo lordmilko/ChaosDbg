@@ -1,7 +1,6 @@
-﻿using ChaosDbg.Cordb;
-using ChaosLib.Metadata;
+﻿using ChaosLib.Metadata;
 
-namespace ChaosDbg
+namespace ChaosDbg.Cordb
 {
     /// <summary>
     /// Encapsulates critical services required by a <see cref="CordbEngine"/> and its related entities.

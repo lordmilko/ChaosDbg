@@ -74,6 +74,8 @@ namespace ChaosDbg.DAC
 
             var coreclr = modules.FirstOrDefault(m => m.ModuleName.Equals("coreclr.dll", StringComparison.OrdinalIgnoreCase));
 
+            //You cannot access SOS before the clr is loaded. We protect against this in our managed callback by checking whether
+            //we've ever received any managed events prior to attempting to call Refresh upon stopping
             if (coreclr == null)
                 throw new InvalidOperationException($"Could not find module clr.dll or coreclr.dll on process {pid}.");
 

@@ -12,8 +12,17 @@ namespace ChaosDbg.Cordb
     {
         public override string Name { get; }
 
-        public CordbNativeFrame(string name, CrossPlatformContext context) : base(null, context)
+        public CordbNativeFrame(NativeFrame nativeFrame) : base(null, nativeFrame.Context)
         {
+            string name;
+
+            if (nativeFrame.FunctionName != null)
+                name = $"{nativeFrame.ModuleName}!{nativeFrame.FunctionName}";
+            else if (nativeFrame.ModuleName != null)
+                name = $"{nativeFrame.ModuleName}!{nativeFrame.IP:X}";
+            else
+                name = null;
+
             Name = name;
         }
     }

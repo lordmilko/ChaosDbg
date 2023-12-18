@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using ChaosLib;
 using ClrDebug;
 
@@ -154,9 +155,15 @@ namespace ChaosDbg.Cordb
 
             CordbUnmanagedCallback ucb = null;
 
+            ManualResetEventSlim wait = null;
+
             if (useInterop)
             {
                 ucb = new CordbUnmanagedCallback();
+
+                //Don't let unmanaged callbacks run free until we've signalled we're ready!
+                InstallInteropStartupHook(ref wait, ucb);
+
                 corDebug.SetUnmanagedHandler(ucb);
             }
 
@@ -171,6 +178,8 @@ namespace ChaosDbg.Cordb
                 commandLine,
                 useInterop
             );
+
+            wait?.Set();
         }
 
         private static void ValidateTargetArchitecture(int pid, bool is32Bit, bool attach)

@@ -13,6 +13,27 @@ using TestApp;
 
 namespace ChaosDbg.Tests
 {
+    public class CallbackContext : IDisposable
+    {
+        public CordbEngine CordbEngine { get; }
+
+        public Lazy<DbgEngEngine> DbgEngEngine { get; }
+
+        public CallbackContext(CordbEngine cordbEngine, Lazy<DbgEngEngine> dbgEngEngine)
+        {
+            CordbEngine = cordbEngine;
+            DbgEngEngine = dbgEngEngine;
+        }
+
+        public void Dispose()
+        {
+            CordbEngine?.Dispose();
+
+            if (DbgEngEngine.IsValueCreated)
+                DbgEngEngine.Value.Dispose();
+        }
+    }
+
     public abstract class BaseTest
     {
         public TestContext TestContext { get; set; }
@@ -51,12 +72,13 @@ namespace ChaosDbg.Tests
         protected string EventName => $"ChaosDbg_Test_{Process.GetCurrentProcess().Id}_{TestContext.TestName}";
 
         protected void TestCreate(
-            TestType testType,
+            Either<TestType, NativeTestType> testType,
             bool is32Bit,
             Action<Process> validate,
-            bool netCore = false)
+            bool netCore = false,
+            bool native = false)
         {
-            var path = GetTestAppPath(is32Bit ? IntPtr.Size == 4 : IntPtr.Size == 8, netCore);
+            var path = GetTestAppPath(is32Bit ? IntPtr.Size == 4 : IntPtr.Size == 8, netCore, native);
 
             Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
@@ -64,7 +86,7 @@ namespace ChaosDbg.Tests
 
             try
             {
-                process = Process.Start(path, $"{testType} {EventName}");
+                process = Process.Start(path, $"{(testType.IsLeft ? testType.Left.ToString() : ((int) testType.Right).ToString())} {EventName}");
 
                 using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
@@ -79,7 +101,11 @@ namespace ChaosDbg.Tests
             {
                 try
                 {
-                    process?.Kill();
+                    if (process != null)
+                    {
+                        if (!process.HasExited)
+                            process.Kill();
+                    }
                 }
                 catch
                 {
@@ -89,22 +115,27 @@ namespace ChaosDbg.Tests
         }
 
         protected void TestDebugCreate(
-            TestType testType,
-            Action<CordbEngine> action,
+            Either<TestType, NativeTestType> testType,
+            Action<CallbackContext> action,
             bool matchCurrentProcess = true,
             bool netCore = false,
-            bool useInterop = false)
+            bool useInterop = false,
+            bool native = false,
+            ExeKind? exeKind = null)
         {
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
                 throw new InvalidOperationException("ICorDebug can only be interacted with from an MTA thread. Attempting to interact with ICorDebug (such as calling Stop()) will cause E_NOINTERFACE errors.");
 
-            using var engine = (CordbEngine) GetService<ICordbEngine>();
+            using var cordbEngine = (CordbEngine) GetService<ICordbEngine>();
 
-            var path = GetTestAppPath(matchCurrentProcess, netCore);
+            var path = GetTestAppPath(matchCurrentProcess, netCore, native);
 
             Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
-            engine.CreateProcess($"\"{path}\" {testType} {EventName}", useInterop: useInterop);
+            cordbEngine.CreateProcess(
+                $"\"{path}\" {(testType.IsLeft ? testType.Left.ToString() : ((int) testType.Right).ToString())} {EventName}",
+                useInterop: useInterop,
+                exeKind: exeKind);
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
@@ -113,12 +144,67 @@ namespace ChaosDbg.Tests
             //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
             Thread.Sleep(100);
 
-            engine.Break();
+            cordbEngine.Break();
 
-            action(engine);
+            using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+            {
+                //Note: creating a DebugClient will cause DbgHelp's global options to be modified
+
+                var dbgEngEngine = GetService<DbgEngEngine>();
+                dbgEngEngine.Attach(cordbEngine.Process.Id, true);
+                dbgEngEngine.WaitForBreak();
+
+                return dbgEngEngine;
+            }));
+
+            action(ctx);
         }
 
-        protected string GetTestAppPath(bool matchCurrentProcess, bool netCore)
+        protected void TestDebugAttach(
+            Either<TestType, NativeTestType> testType,
+            Action<CallbackContext> action,
+            bool netCore = false,
+            bool useInterop = false,
+            bool native = false)
+        {
+            TestCreate(
+                testType,
+                IntPtr.Size == 4,
+                process =>
+                {
+                    //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
+                    Thread.Sleep(100);
+
+                    using var cordbEngine = (CordbEngine) GetService<ICordbEngine>();
+
+                    cordbEngine.Attach(process.Id, useInterop);
+
+                    //I don't really know the best way to wait for the initial attach events to complete yet, so for now we'll do this
+
+                    while (cordbEngine.Session.IsAttaching)
+                        Thread.Sleep(100);
+
+                    cordbEngine.Break();
+
+                    using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+                    {
+                        //Note: creating a DebugClient will cause DbgHelp's global options to be modified
+
+                        var dbgEngEngine = GetService<DbgEngEngine>();
+                        dbgEngEngine.Attach(cordbEngine.Process.Id, true);
+                        dbgEngEngine.WaitForBreak();
+
+                        return dbgEngEngine;
+                    }));
+
+                    action(ctx);
+                },
+                netCore: netCore,
+                native: native
+            );
+        }
+
+        protected string GetTestAppPath(bool matchCurrentProcess, bool netCore, bool native = false)
         {
             var dllPath = GetType().Assembly.Location;
 
@@ -132,9 +218,16 @@ namespace ChaosDbg.Tests
             var configuration = "Release";
 #endif
 
-            var dir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dllPath), "..", "..", "..", $"TestApp.{suffix}", "bin", configuration, netCore ? "net5.0" : "net472", $"TestApp.{suffix}.exe"));
+            var baseDir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dllPath), "..", "..", "..", "..", "artifacts", "bin", configuration, suffix));
 
-            return dir;
+            string filePath;
+
+            if (native)
+                filePath = Path.Combine(baseDir, $"Native.{suffix}.exe");
+            else
+                filePath = Path.Combine(baseDir, netCore ? "net5.0" : "net472", $"Managed.{suffix}.exe");
+
+            return filePath;
         }
     }
 }

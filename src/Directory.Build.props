@@ -5,6 +5,15 @@
     <Build>$(MSBuildThisFileDirectory)..\build\</Build>
 	
     <Copyright>(c) 2023 lordmilko. All rights reserved.</Copyright>
+
+    <!-- Prior to Visual Studio 2022 17.1, there is an issue when building SDK style .NET Framework projects, wherein the app.exe.config file's timestamp does not get updated,
+         breaking incremental builds. By enabling View -> Tools -> SDL-Style Projects -> Logging Level: Verbose you can see the details of the FastUpToDate checks.
+         Since it doesn't seem we can hack into the target they applied the fix in to make this with in VS2019, our options for resolving this are
+         either to create a target that applies a Touch task to force update the config file, or alternatively just disable generating the config file
+         all together. We currently employ the latter option. Note that unlike what https://github.com/dotnet/project-system/issues/6758 says,
+         the correct way to disable the app.config file in SDK style projects is to use the GenerateSupportedRuntime attribute -->
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+
   </PropertyGroup>
 
   <!-- Package Versions -->

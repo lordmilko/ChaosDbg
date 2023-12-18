@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using ChaosLib;
 using ClrDebug;
@@ -125,8 +126,40 @@ namespace ChaosDbg.Cordb
         HRESULT ICLRDataTarget.GetCurrentThreadID(out int threadID) =>
             throw new NotImplementedException();
 
-        HRESULT ICLRDataTarget.GetThreadContext(int threadID, ContextFlags contextFlags, int contextSize, IntPtr context) =>
-            throw new NotImplementedException();
+        unsafe HRESULT ICLRDataTarget.GetThreadContext(int threadID, ContextFlags contextFlags, int contextSize, IntPtr context)
+        {
+            HRESULT hr;
+
+            if (context == IntPtr.Zero)
+                return E_INVALIDARG;
+
+            if ((hr = Kernel32.TryOpenThread(ThreadAccess.GET_CONTEXT, false, threadID, out var hThread)) != S_OK)
+                return hr;
+
+            if (contextFlags >= ContextFlags.AMD64Context && contextFlags <= ContextFlags.AMD64ContextAll)
+            {
+                if (contextSize < Marshal.SizeOf<AMD64_CONTEXT>())
+                    return E_INVALIDARG;
+
+                ((AMD64_CONTEXT*) context)->ContextFlags = contextFlags;
+            }
+            else
+            {
+                //Some type of x86 context
+                Marshal.WriteInt32(context, (int) contextFlags);
+            }
+
+            try
+            {
+                hr = Kernel32.TryGetThreadContext(hThread, context);
+
+                return hr;
+            }
+            finally
+            {
+                hThread.Dispose();
+            }
+        }
 
         HRESULT ICLRDataTarget.SetThreadContext(int threadID, int contextSize, IntPtr context) =>
             throw new NotImplementedException();
@@ -181,10 +214,8 @@ namespace ChaosDbg.Cordb
         HRESULT ICorDebugDataTarget.ReadVirtual(CORDB_ADDRESS address, IntPtr pBuffer, int bytesRequested, out int pBytesRead) =>
             LegacyTarget.ReadVirtual(address, pBuffer, bytesRequested, out pBytesRead);
 
-        HRESULT ICorDebugDataTarget.GetThreadContext(int dwThreadId, ContextFlags contextFlags, int contextSize, IntPtr pContext)
-        {
-            throw new NotImplementedException();
-        }
+        HRESULT ICorDebugDataTarget.GetThreadContext(int dwThreadId, ContextFlags contextFlags, int contextSize, IntPtr pContext) =>
+            LegacyTarget.GetThreadContext(dwThreadId, contextFlags, contextSize, pContext);
 
         #endregion
     }

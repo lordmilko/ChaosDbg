@@ -9,29 +9,39 @@ using ThreadState = ClrDebug.ThreadState;
 namespace ChaosDbg.Cordb
 {
     /// <summary>
-    /// Encapsulates a <see cref="ClrDebug.CorDebugThread"/> that exists within a <see cref="CordbProcess"/>.
+    /// Represents a thread that may or may not have ever executed managed code within a <see cref="CordbProcess"/>.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
-    public class CordbThread : IDbgThread
+    public partial class CordbThread : IDbgThread
     {
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay
         {
             get
             {
-                var type = Type == 0 ? "Normal" : Type.ToString();
+                var builder = new StringBuilder();
 
-                if (Id == VolatileOSThreadID)
-                    return $"{type}: {Id}";
+                var type = Type;
 
-                return $"{type}: Id = {Id}, VolatileOSThreadID = {VolatileOSThreadID}";
+                if (type == null)
+                    builder.Append($"[Native] {Id}");
+                else
+                {
+                    builder.Append("[Managed] ");
+                    builder.Append(type == 0 ? "Normal" : Type.ToString());
+                    builder.Append(": ");
+
+                    var accessor = (ManagedAccessor) Accessor;
+
+                    if (accessor.Id == accessor.VolatileOSThreadID)
+                        builder.Append(accessor.Id);
+                    else
+                        builder.Append($"Runtime Id = {accessor.Id}, VolatileOSThreadID = {accessor.VolatileOSThreadID}");
+                }
+
+                return builder.ToString();
             }
         }
-
-        /// <summary>
-        /// Gets the underlying <see cref="ClrDebug.CorDebugThread"/> of this entity.
-        /// </summary>
-        public CorDebugThread CorDebugThread { get; }
 
         /// <summary>
         /// Gets the <see cref="CordbProcess"/> to which this thread belongs.
@@ -39,22 +49,14 @@ namespace ChaosDbg.Cordb
         public CordbProcess Process { get; }
 
         /// <summary>
-        /// Gets the ID of this thread in the runtime. This is usually the same as <see cref="VolatileOSThreadID"/>,
-        /// however does not change when the managed thread moves to a different OS thread. This is not the same as
-        /// the managed thread ID.
+        /// Gets the operating system ID of this thread.
         /// </summary>
-        public int Id => CorDebugThread.Id;
-
-        /// <summary>
-        /// Gets the true OS thread that this managed thread is bound to. If the managed thread moves to a different
-        /// OS thread, this value will update accordingly.
-        /// </summary>
-        public int VolatileOSThreadID => CorDebugThread.VolatileOSThreadID;
+        public int Id => Accessor.Id;
 
         /// <summary>
         /// Gets the handle of this thread.
         /// </summary>
-        public IntPtr Handle => CorDebugThread.Handle;
+        public IntPtr Handle => Accessor.Handle;
 
         /// <summary>
         /// Gets the TEB that is associated with this thread.
@@ -69,7 +71,7 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (!Process.DAC.Threads.TryGetValue(VolatileOSThreadID, true, out var dacThread))
+                if (!Process.DAC.Threads.TryGetValue(Id, true, out var dacThread))
                     return false;
 
                 var state = dacThread.state;
@@ -105,41 +107,65 @@ namespace ChaosDbg.Cordb
         }
 
         /// <summary>
-        /// Gets the type of this thread.
+        /// Gets the type of this thread within the CLR.<para/>
+        /// If this is a native thread, this property returns null.
         /// </summary>
-        public TlsThreadTypeFlag Type
+        public TlsThreadTypeFlag? Type => Accessor.Type;
+
+        /// <summary>
+        /// Gets whether this thread has ever executed managed code.
+        /// </summary>
+        public bool IsManaged => Accessor is ManagedAccessor;
+
+        public CordbFrame[] StackTrace => Accessor.StackTrace;
+
+        public CordbThread(ICordbThreadAccessor threadAccessor, CordbProcess process)
         {
-            get
-            {
-                //We want to get size_t t_ThreadType
-
-                //This returns g_TlsIndex, which is set by SetIlsIndex. It seems this is a pointer to ThreadLocalInfo gCurrentThreadInfo
-                var index = Process.DAC.SOS.TLSIndex;
-
-                MemoryReader memoryReader = Process.DAC.DataTarget;
-
-                //I'm not 100% clear how this works exactly; SOS and ClrMD use a different strategy to get this value, but it seems to work regardless
-                
-                var slotValue = Teb.GetTlsValue(index);
-                var value = (TlsThreadTypeFlag) memoryReader.ReadPointer(slotValue + memoryReader.PointerSize * (int) PredefinedTlsSlots.TlsIdx_ThreadType);
-
-                return value;
-            }
-        }
-
-        public CordbFrame[] StackTrace => CordbFrameEnumerator.V3.Enumerate(this).ToArray();
-
-        public CordbThread(CorDebugThread corDebugThread, CordbProcess process)
-        {
-            CorDebugThread = corDebugThread;
+            Accessor = threadAccessor;
             Process = process;
-
-            if (!Process.DAC.Threads.TryGetValue(VolatileOSThreadID, true, out var dacThread))
-                throw new InvalidOperationException("Failed to get DacThread");
-
-            Teb = new RemoteTeb(dacThread.teb, Process.DAC.DataTarget);
+            Teb = RemoteTeb.FromThread(Handle, Process.DAC.DataTarget);
         }
 
         public override string ToString() => Id.ToString();
+
+        #region ICordbThreadAccessor
+
+        private ICordbThreadAccessor accessor;
+
+        /// <summary>
+        /// Gets or sets the accessor that is used to interact with the underlying thread.
+        /// </summary>
+        public ICordbThreadAccessor Accessor
+        {
+            get => accessor;
+            set
+            {
+                if (value != null)
+                    value.Thread = this;
+
+                accessor = value;
+            }
+        }
+
+        /// <summary>
+        /// Provides facilities for interacting with either a native or managed thread.
+        /// </summary>
+        public interface ICordbThreadAccessor
+        {
+            CordbThread Thread { get; set; }
+
+            /// <inheritdoc cref="CordbThread.Id" />
+            int Id { get; }
+
+            /// <inheritdoc cref="CordbThread.Handle" />
+            IntPtr Handle { get; }
+
+            /// <inheritdoc cref="CordbThread.Type" />
+            TlsThreadTypeFlag? Type { get; }
+
+            CordbFrame[] StackTrace { get; }
+        }
+
+        #endregion
     }
 }

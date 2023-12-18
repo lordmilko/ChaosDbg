@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using ClrDebug;
+using Win32Process = System.Diagnostics.Process;
 
 namespace ChaosDbg.Cordb
 {
@@ -11,6 +12,8 @@ namespace ChaosDbg.Cordb
         private void ThreadProc(object launchInfo)
         {
             CreateDebugTarget(launchInfo);
+
+            Session.TargetCreated.Set();
 
             while (!Session.IsEngineCancellationRequested) //temp
             {
@@ -26,7 +29,7 @@ namespace ChaosDbg.Cordb
             {
                 //Is the target executable a .NET Framework or .NET Core process?
 
-                var kind = exeTypeDetector.Detect(c.CommandLine);
+                var kind = c.ExeKind ?? exeTypeDetector.Detect(c.CommandLine);
 
                 NetInitCommon.Create(c, kind, InitCallback);
             }
@@ -35,10 +38,11 @@ namespace ChaosDbg.Cordb
                 //Attach to an existing process
                 var a = (AttachProcessOptions) launchInfo;
 
-                var process = System.Diagnostics.Process.GetProcessById(a.ProcessId);
+                var process = Win32Process.GetProcessById(a.ProcessId);
 
-                if (process.Modules.Cast<ProcessModule>()
-                    .Any(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase)))
+                Session.IsAttaching = true;
+
+                if (process.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase)))
                     NetFrameworkProcess.Attach(a, InitCallback);
                 else
                     NetCoreProcess.Attach(a, InitCallback);

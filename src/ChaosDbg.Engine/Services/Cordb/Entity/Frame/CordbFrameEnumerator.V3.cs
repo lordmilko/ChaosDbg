@@ -10,14 +10,23 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Provides facilities for enumerating the stack frames of a <see cref="CordbThread"/>.
     /// </summary>
-    class CordbFrameEnumerator
+    internal partial class CordbFrameEnumerator
     {
+        //The mimimum we need for stack walking is IP, SP and BP. There is a big gotcha in AMD64: you also need to include CONTEXT_INTEGER if you want to get Rbp!
+        private static ContextFlags GetContextFlags(IMAGE_FILE_MACHINE machineType) => machineType == IMAGE_FILE_MACHINE.I386 ? ContextFlags.X86ContextControl : ContextFlags.AMD64ContextControl | ContextFlags.AMD64ContextInteger;
+
         /// <summary>
         /// Implements a stack frame enumerator compatible with .NET Framework 4+
         /// </summary>
         public static class V3
         {
-            public static CordbFrame[] Enumerate(CordbThread thread)
+            /// <summary>
+            /// Enumerates all frames in a thread that at some point was executing managed code.<para/>
+            /// If interop debugging, includes any native frames in the call stack.
+            /// </summary>
+            /// <param name="accessor">The accessor that is used to interact with the managed thread.</param>
+            /// <returns>A list of all frames in the stack trace.</returns>
+            public static CordbFrame[] Enumerate(CordbThread.ManagedAccessor accessor)
             {
                 /* Interacting with threads is an inherently dangerous affair. Threads can decide to end at any time,
                  * even when the managed process is broken into. We can try and query whether or not the thread is currently alive,
@@ -45,10 +54,10 @@ namespace ChaosDbg.Cordb
                  */
 
                 //If we can't query for frames because the thread has died, not much we can really do!
-                if (thread.CorDebugThread.TryCreateStackWalk(out var stackWalk) != S_OK)
+                if (accessor.CorDebugThread.TryCreateStackWalk(out var stackWalk) != S_OK)
                     return Array.Empty<CordbFrame>();
 
-                var contextFlags = thread.Process.MachineType == IMAGE_FILE_MACHINE.I386 ? ContextFlags.X86ContextControl : ContextFlags.AMD64ContextControl;
+                var contextFlags = GetContextFlags(accessor.Thread.Process.MachineType);
 
                 var results = new List<CordbFrame>();
 
@@ -99,10 +108,10 @@ namespace ChaosDbg.Cordb
                     }
                 }
 
-                var process = thread.Process;
+                var process = accessor.Thread.Process;
 
                 if (process.Session.IsInterop)
-                    return ResolveNativeFrames(process.Handle, thread.Handle, process.DAC.DataTarget, process.DbgHelp, results);
+                    return ResolveNativeFrames(process.Handle, accessor.Handle, process.DAC.DataTarget, process.DbgHelp, results);
 
                 return results.ToArray();
             }
@@ -128,7 +137,7 @@ namespace ChaosDbg.Cordb
                 using var walker = new NativeStackWalker(dataTarget, dbgHelpSession);
 
                 //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(hProcess, hThread, frames[0].Context, null).ToArray();
+                var nativeFrames = walker.Walk(hProcess, hThread, frames[0].Context).ToArray();
 
                 //Concat our native and ICorDebug derived frames together. The stack pointer of each frame should increase
                 //as you go from more recent function calls to older function calls. I'm not sure if this solution of merging
@@ -156,17 +165,7 @@ namespace ChaosDbg.Cordb
                             continue;
 
                         //It's a normal NativeFrame then
-
-                        string name;
-
-                        if (native.FunctionName != null)
-                            name = $"{native.ModuleName}!{native.FunctionName}";
-                        else if (native.ModuleName != null)
-                            name = $"{native.ModuleName}!{native.IP:X}";
-                        else
-                            name = null;
-
-                        newFrames.Add(new CordbNativeFrame(name, native.Context));
+                        newFrames.Add(new CordbNativeFrame(native));
                     }
                     else
                     {

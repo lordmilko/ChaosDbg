@@ -37,7 +37,7 @@ namespace ChaosDbg
 
                 var info = Ntdll.NtQueryInformationThread<THREAD_BASIC_INFORMATION>(handle, THREADINFOCLASS.ThreadBasicInformation);
 
-                var remoteTeb = new RemoteTeb(info.TebBaseAddress, memoryReader);
+                var remoteTeb = RemoteTeb.FromTeb(info.TebBaseAddress, memoryReader);
 
                 pebAddress = remoteTeb.ProcessEnvironmentBlock;
             }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using ChaosLib;
 using ClrDebug;
 
@@ -97,9 +98,15 @@ namespace ChaosDbg.Cordb
 
             CordbUnmanagedCallback ucb = null;
 
+            ManualResetEventSlim wait = null;
+
             if (attachProcessOptions.UseInterop)
             {
                 ucb = new CordbUnmanagedCallback();
+
+                //Don't let unmanaged callbacks run free until we've signalled we're ready!
+                InstallInteropStartupHook(ref wait, ucb);
+
                 corDebug.SetUnmanagedHandler(ucb);
             }
 
@@ -119,6 +126,8 @@ namespace ChaosDbg.Cordb
                 null,
                 attachProcessOptions.UseInterop
             );
+
+            wait?.Set();
         }
 
         private static void ValidateCreateOrAttach(HRESULT hr, string action)

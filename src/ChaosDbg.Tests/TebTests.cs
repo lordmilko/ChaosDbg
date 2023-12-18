@@ -47,7 +47,7 @@ namespace ChaosDbg.Tests
 
                     var info = Ntdll.NtQueryInformationThread<THREAD_BASIC_INFORMATION>(handle, THREADINFOCLASS.ThreadBasicInformation);
 
-                    var teb = new RemoteTeb(info.TebBaseAddress, reader);
+                    var teb = RemoteTeb.FromTeb(info.TebBaseAddress, reader);
 
                     var slots = teb.TlsSlots.Concat(teb.TlsExpansionSlots).ToArray();
 

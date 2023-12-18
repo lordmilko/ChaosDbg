@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using ChaosDbg.Metadata;
 using ChaosLib;
 using ClrDebug;
@@ -69,6 +71,36 @@ namespace ChaosDbg.Cordb
             creationFlags =
                 CreateProcessFlags.CREATE_NEW_CONSOLE | //In the event ChaosDbg is invoked via some sort of command line tool, we want our debuggee to be created in a new window
                 CreateProcessFlags.CREATE_SUSPENDED;    //Don't let the process start running; after we create it we want our debugger to attach to it
+        }
+
+        protected static void InstallInteropStartupHook(ref ManualResetEventSlim wait, CordbUnmanagedCallback ucb)
+        {
+            //The process is already running. We now have the potential of a huge race: immediately
+            //after calling DebugActiveProcess, we may get a CREATE_PROCESS_DEBUG_EVENT. But if our
+            //initCallback hasn't finished storing all our state, we won't be in a position to handle the event yet.
+
+            EventHandler<DebugEventCorDebugUnmanagedCallbackEventArgs> onPreEvent = null;
+
+            wait = new ManualResetEventSlim(false);
+
+            //We can't use a ref variable in a lambda expression
+            var localWait = wait;
+
+            onPreEvent = (s, e) =>
+            {
+                localWait.Wait();
+
+                ucb.OnPreEvent -= onPreEvent;
+
+                //Now dispatch to the real OnPreEvent handler that was hooked up in the initCallback
+
+                var preEventDelegate = (MulticastDelegate) ucb.GetType().GetField(nameof(CordbUnmanagedCallback.OnPreEvent), BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ucb);
+
+                foreach (var handler in preEventDelegate.GetInvocationList())
+                    handler.Method.Invoke(handler.Target, new[] { s, e });
+            };
+
+            ucb.OnPreEvent += onPreEvent;
         }
 
         protected static void WithDbgShim(Action<DbgShim> action)

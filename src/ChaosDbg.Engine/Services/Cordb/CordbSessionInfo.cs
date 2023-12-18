@@ -28,11 +28,17 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool IsInterop { get; set; }
 
+        private int currentStopCount;
+
         /// <summary>
         /// Gets the current number of times a managed callback has been entered or Stop() has been called
         /// without subsequently calling Continue(). Any time this value is not 0, the process is not freely running.
         /// </summary>
-        public int CurrentStopCount { get; set; }
+        public int CurrentStopCount
+        {
+            get => currentStopCount;
+            set => Interlocked.Exchange(ref currentStopCount, value);
+        }
 
         /// <summary>
         /// Gets the total number of times that Continue() has been called in the current debug session, ever,
@@ -70,6 +76,17 @@ namespace ChaosDbg.Cordb
         /// </summary>
         internal DispatcherThread EngineThread { get; }
 
+        /// <summary>
+        /// Stores temporary values during the lifetime of a managed or unmanaged callback.
+        /// </summary>
+        internal CordbCallbackContext CallbackContext { get; }
+
+        internal CordbEventHistoryStore EventHistory { get; } = new CordbEventHistoryStore();
+
+        public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
+
+        internal bool IsAttaching { get; set; }
+
         private bool disposed;
 
         public CordbSessionInfo(ThreadStart threadProc, CancellationToken cancellationToken)
@@ -81,6 +98,8 @@ namespace ChaosDbg.Cordb
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            CallbackContext = new CordbCallbackContext(this);
         }
 
         /// <summary>
@@ -93,15 +112,20 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
+            TargetCreated.Dispose();
+
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();
 
             //The unmanaged callback has thread responsible for dispatching
             //in band callbacks that needs to be disposed
             UnmanagedCallback?.Dispose();
+            ManagedCallback?.Dispose();
 
             //Wait for the engine thread to end
             EngineThread.Dispose();
+
+            Process?.Dispose();
 
             //Clear out essential debugger objects
             CorDebug = null;

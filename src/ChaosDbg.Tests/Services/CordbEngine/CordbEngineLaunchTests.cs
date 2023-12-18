@@ -1,17 +1,14 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using ChaosDbg.Cordb;
-using ChaosDbg.DbgEng;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using TestApp;
 
 namespace ChaosDbg.Tests
 {
     [MTATestClass]
+    [DoNotParallelize]
     public class CordbEngineLaunchTests : BaseTest
     {
         [TestMethod]
@@ -76,7 +73,8 @@ namespace ChaosDbg.Tests
             }
             finally
             {
-                process.Kill();
+                if (!process.HasExited)
+                    process.Kill();
             }
         }
 

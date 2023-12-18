@@ -1,4 +1,6 @@
-﻿namespace ChaosDbg
+﻿using ChaosDbg.Metadata;
+
+namespace ChaosDbg
 {
     public class CreateProcessOptions
     {
@@ -7,6 +9,8 @@
         public bool StartMinimized { get; set; }
 
         public bool UseInterop { get; set; }
+
+        public ExeKind? ExeKind { get; set; }
 
         public CreateProcessOptions(string commandLine)
         {

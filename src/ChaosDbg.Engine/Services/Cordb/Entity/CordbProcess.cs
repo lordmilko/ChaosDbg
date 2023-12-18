@@ -1,12 +1,60 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Linq;
 using ChaosDbg.DAC;
 using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /* There are several entry points into the ICorDebug API. Depending on the method that is used, this can affect
+     * the capabilities the ICorDebug API provides to you.
+     *
+     * ICorDebug's source code makes several references to product codenames and engine versions. These references
+     * are as follows:
+     *
+     * Everett (V1.1): Visual Studio .NET 2003 (.NET Framework 1.1)
+     * Whidbey (V2): Visual Studio 2005 (.NET Framework 2.0)
+     * Orcas (V3): Visual Studio 2008 (.NET Framework 3.5)
+     * Arrowhead: .NET Framework 3.5 SP1
+     *
+     * In the original implementation of mscordbi (V1.0/V1.1), CorDebug was a CoClass. In V2+ you must use one of the methods
+     * exported from mscordbi to create an ICorDebug instance of a specific version. Nowadays there are really only two APIs
+     * you can use in mscordbi: V2 and V3. The V2 API is also known as the "in-process" API. In the V2 API, there are two "sides"
+     * to the debugger: the "left side" (the Debugger class, whose global instance lives in (debugger.cpp!g_pDebugger)) and the
+     * "right side" (mscordbi). When a process is created or attached using the V2 API, two things happen: first, a ShimProcess is
+     * created inside the CordbProcess that creates a CordbWin32EventThread used for pumping debugger events. Then, the in-process
+     * Debugger class is notified that we're debugging it via the CordbProcess::QueueManagedAttachIfNeededWorker method.
+     * This method is called in one of two places. Upon processing a native debug event, ShimProcess::HandleWin32DebugEvent will either:
+     *
+     * - call CordbProcess::HandleDebugEventForInteropDebugging which, after dispatching our DebugEvent callback, will call
+     *   CordbWin32EventThread::UnmanagedContinue -> CordbWin32EventThread::DoDbgContinue -> queue the pending attach
+     *
+     * - call ShimProcess::DefaultEventHandler -> queue the pending attach
+     *
+     * The V3 API by contrast is considered an "out-of-process" architecture. It enables debugging targets that aren't necessarily
+     * running, such as memory dumps. As a result, in V3 the in-process Debugger has no clue that you're debugging it, which means
+     * you won't receive managed callbacks from the "right side", and and there also won't be an event thread running inside ICorDebug
+     * pumping debug events. The V3 API is useful therefore when you've got your own debug engine and simply want to perform introspection
+     * against managed entities. This is what SOS does to do certain things that you can't do with SOSDacInterface. Certain methods
+     * such as ICorDebugProcess::GetID() and ICorDebugThread::GetHandle() are also unsupported in V3, due to the fact there might not
+     * be a live process to grab this information for.
+     *
+     * The following shows how ICorDebug is created in .NET Framework vs .NET Core
+     *   mscoreei!CLRRuntimeInfoImpl::GetInterface    -> mscoreei!GetLegacyDebuggingInterfaceInternal -> mscordbi!CreateCordbObject
+     *   dbgshim!CreateDebuggingInterfaceFromVersion* -> dbgshim!CreateCoreDbg                        -> mscordbi!CoreCLRCreateCordbObject
+     *
+     * The following function shows the ways in which a mscordbi!CordbProcess gets created using the V2
+     * pipeline containing a ShimProcess
+     *
+     *   Cordb::DebugActiveProcess -> Cordb::DebugActiveProcessCommon -> ShimProcess::DebugActiveProcess
+     *   Cordb::CreateProcess      -> Cordb::CreateProcessCommon      -> ShimProcess::CreateProcess
+     *
+     * The following shows the ways in which a mscordbi!CordbProcess gets created using the V2 pipeline
+     * without a ShimProcess. SOS uses this code path to get an ICorDebugProcess
+     *   OpenVirtualProcessImpl2   -> OpenVirtualProcessImpl (as below)
+     *   OpenVirtualProcessImpl    -> CordbProcess::OpenVirtualProcess
+     * */
+
     /// <summary>
     /// Encapsulates a <see cref="ClrDebug.CorDebugProcess"/> being debugged by a <see cref="CordbEngine"/>.
     /// </summary>
@@ -72,11 +120,7 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public DacProvider DAC { get; }
 
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private Lazy<DbgHelpSession> dbgHelp;
-
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public DbgHelpSession DbgHelp => dbgHelp.Value;
+        public DbgHelpSession DbgHelp { get; }
 
         #endregion
         #region Debugger State
@@ -124,7 +168,7 @@ namespace ChaosDbg.Cordb
             DAC = new DacProvider(this);
 
             //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
-            dbgHelp = new Lazy<DbgHelpSession>(() => new DbgHelpSession(corDebugProcess.Handle));
+            DbgHelp = new DbgHelpSession(corDebugProcess.Handle, invadeProcess: false);
         }
 
         public void Dispose()
@@ -132,8 +176,7 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
-            if (dbgHelp.IsValueCreated)
-                dbgHelp.Value.Dispose();
+            DbgHelp.Dispose();
 
             disposed = true;
         }

@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading;
 using ChaosDbg.Metadata;
+using Win32Process = System.Diagnostics.Process;
 
 namespace ChaosDbg.Cordb
 {
@@ -54,6 +54,10 @@ namespace ChaosDbg.Cordb
 
             //We must start the debugger thread AFTER the Session variable has been assigned to
             Session.Start();
+
+            //Once the target has been created, all the core values will exist
+            //in our Session that are required to interact with the target
+            Session.TargetCreated.Wait(cancellationToken);
         }
 
         public void Dispose()
@@ -68,7 +72,7 @@ namespace ChaosDbg.Cordb
             try
             {
                 if (Process != null)
-                    System.Diagnostics.Process.GetProcessById(Process.Id).Kill();
+                    Win32Process.GetProcessById(Process.Id).Kill();
             }
             catch
             {
