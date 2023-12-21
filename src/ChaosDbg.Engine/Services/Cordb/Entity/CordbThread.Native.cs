@@ -18,8 +18,6 @@ namespace ChaosDbg.Cordb
 
             public IntPtr Handle { get; }
 
-            public TlsThreadTypeFlag? Type => null;
-
             public CordbFrame[] StackTrace => CordbFrameEnumerator.Native.Enumerate(this);
 
             public NativeAccessor(int id, IntPtr handle)

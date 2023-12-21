@@ -33,6 +33,15 @@ namespace ChaosDbg.Cordb
 
         HRESULT ICorDebugUnmanagedCallback.DebugEvent(ref DEBUG_EVENT pDebugEvent, bool fOutOfBand)
         {
+            /* Sometimes the debugger might be stopped and we might be trying to interact with a native thread,
+             * when suddenly we might receive an out of band event informing us that the thread has now terminated!
+             * This can be very annoying when trying to do things such as interact with the TEB. So should we just
+             * block the unmanaged callback thread when the debugger is supposed to be paused and dispatch any out
+             * of band events when we're ready to continue? NO. ICorDebug APIs apparently become blocked while waiting
+             * for out of band events to occur. Thus, if we were to try and stop the debuggee like we would when
+             * debugging a native application, the debugger will deadlock
+             * https://web.archive.org/web/20140505033705/http://blogs.msdn.com/b/jmstall/archive/2005/09/13/out-of-band-events.aspx */
+
             if (disposed)
                 return HRESULT.E_FAIL;
 

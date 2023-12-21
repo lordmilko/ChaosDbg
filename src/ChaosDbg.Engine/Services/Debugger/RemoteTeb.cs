@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using ChaosLib;
 using ClrDebug;
 
@@ -13,17 +14,24 @@ namespace ChaosDbg
     public class RemoteTeb
     {
         //PVOID TlsSlots[64]
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private int TlsSlotsFieldOffset => memoryReader.Is32Bit ? 0x0E10 : 0x1480;
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private const int TlsSlotsArrayLength = 64;
 
         //PVOID TlsExpansionSlots
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private int TlsExpansionSlotsFieldOffset => memoryReader.Is32Bit ? 0x0F94 : 0x1780;
 
         //PEB *ProcessEnvironmentBlock
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private int ProcessEnvironmentBlockFieldOffset => memoryReader.Is32Bit ? 0x30 : 0x60;
 
         private const int TLS_EXPANSION_SLOTS = 1024;
         private const uint TLS_OUT_OF_INDEXES = 0xFFFFFFFF;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        private int ThreadLocalStoragePointerFieldOffset => memoryReader.Is32Bit ? 0x2C : 0x58;
 
         /// <summary>
         /// Gets the values contained in the initial 64 TlsSlots.
@@ -125,15 +133,44 @@ namespace ChaosDbg
             return info.TebBaseAddress;
         }
 
-        public long GetTlsValue(int index)
+        /// <summary>
+        /// Gets the value contained in the specified TLS slot that was previously written to via TlsSetValue().<para/>
+        /// For thread local storage that was previously embedded in the PE file, see <see cref="GetTlsPointerValue"/>
+        /// </summary>
+        /// <param name="index">The index of the slot to retrieve the value of.</param>
+        /// <returns>The value of the specified slot.</returns>
+        public long GetTlsSlotValue(int index)
         {
             if ((uint) index == TLS_OUT_OF_INDEXES)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            if (index > TlsSlotsArrayLength)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
             if (index < TlsSlotsArrayLength)
                 return TlsSlots[index];
 
             return TlsExpansionSlots[index - TlsSlotsArrayLength];
+        }
+
+        /// <summary>
+        /// Gets a value from the thread local storage that was defined in the PE file and is pointed to by the
+        /// ThreadLocalStoragePointer member of the TEB.<para/>
+        /// For thread local storage that was manually allocated via TlsSetValue(), see <see cref="GetTlsSlotValue"/>.
+        /// </summary>
+        /// <returns>If a value exists at the specified index, the value at that index. Otherwise, 0.</returns>
+        public long GetTlsPointerValue(int index)
+        {
+            var threadLocalStoragePointer = memoryReader.ReadPointer(Address + ThreadLocalStoragePointerFieldOffset);
+
+            if (threadLocalStoragePointer == 0)
+                return 0;
+
+            var addr = threadLocalStoragePointer + (IntPtr.Size * index);
+
+            var value = memoryReader.ReadPointer(addr);
+
+            return value;
         }
     }
 }

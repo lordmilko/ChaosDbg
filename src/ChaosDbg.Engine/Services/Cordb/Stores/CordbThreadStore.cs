@@ -125,6 +125,8 @@ namespace ChaosDbg.Cordb
                      * ManagedAccessor.VolatileOSThreadID for more information */
 
                     threads.Remove(thread.Id);
+
+                    thread.Exited = true;
                 }
 
                 return thread;

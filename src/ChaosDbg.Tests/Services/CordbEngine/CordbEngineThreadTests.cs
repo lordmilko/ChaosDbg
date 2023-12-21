@@ -140,8 +140,8 @@ namespace ChaosDbg.Tests
             );
         }
 
-        [TestMethod]
-        public void CordbEngine_Thread_Managed_Type()
+        [TestRuntimeMethod]
+        public void CordbEngine_Thread_Managed_Type(bool netCore)
         {
             TestDebugCreate(
                 TestType.CordbEngine_Thread_Type,
@@ -151,10 +151,35 @@ namespace ChaosDbg.Tests
 
                     Assert.AreEqual(3, threads.Length);
 
-                    Assert.AreEqual((TlsThreadTypeFlag) 0, threads[0].Type);
+                    Assert.IsNull(threads[0].Type);
                     Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[1].Type);
                     Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[2].Type);
-                }
+                },
+                netCore: netCore
+            );
+        }
+
+        [TestRuntimeMethod]
+        public void CordbEngine_Thread_Native_Type(bool netCore)
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_Type,
+                ctx =>
+                {
+                    var threads = ctx.CordbEngine.Process.Threads.ToArray();
+
+                    var managedThreads = threads.Where(t => t.IsManaged).ToArray();
+                    var nativeThreads = threads.Where(t => !t.IsManaged).ToArray();
+
+                    bool HasThreads(CordbThread[] candidates, TlsThreadTypeFlag type, int count) =>
+                        candidates.Count(c => c.Type == type) >= count;
+
+                    Assert.IsTrue(HasThreads(managedThreads, TlsThreadTypeFlag.ThreadType_Threadpool_Worker, 2), "Didn't have threadpool workers");
+                    Assert.IsTrue(HasThreads(nativeThreads, TlsThreadTypeFlag.ThreadType_Finalizer, 1), "Didn't have a Finalizer");
+                    Assert.IsTrue(HasThreads(nativeThreads, TlsThreadTypeFlag.ThreadType_DbgHelper, 1), "Didn't have DbgHelper");
+                },
+                netCore: netCore,
+                useInterop: true
             );
         }
 

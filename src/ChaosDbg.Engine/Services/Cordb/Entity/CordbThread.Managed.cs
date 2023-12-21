@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -39,28 +38,6 @@ namespace ChaosDbg.Cordb
 
             /// <inheritdoc cref="CordbThread.Handle" />
             public IntPtr Handle => CorDebugThread.Handle;
-
-            public TlsThreadTypeFlag? Type
-            {
-                get
-                {
-                    //We want to get size_t t_ThreadType
-
-                    var dac = Thread.Process.DAC;
-
-                    //This returns g_TlsIndex, which is set by SetIlsIndex. It seems this is a pointer to ThreadLocalInfo gCurrentThreadInfo
-                    var index = dac.SOS.TLSIndex;
-
-                    MemoryReader memoryReader = dac.DataTarget;
-
-                    //I'm not 100% clear how this works exactly; SOS and ClrMD use a different strategy to get this value, but it seems to work regardless
-
-                    var slotValue = Thread.Teb.GetTlsValue(index);
-                    var value = (TlsThreadTypeFlag) memoryReader.ReadPointer(slotValue + memoryReader.PointerSize * (int) PredefinedTlsSlots.TlsIdx_ThreadType);
-
-                    return value;
-                }
-            }
 
             public CordbFrame[] StackTrace => CordbFrameEnumerator.V3.Enumerate(this).ToArray();
 

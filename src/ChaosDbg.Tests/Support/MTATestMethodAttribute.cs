@@ -56,7 +56,7 @@ namespace ChaosDbg.Tests
                 return attrib.Execute(testMethod);
 
             //Invoke the test method. We will be invoked on an MTA thread if the current thread was STA
-            return new[] { testMethod.Invoke(null) };
+            return new[] { testMethod.Invoke(testMethod.Arguments) };
         }
     }
 }
