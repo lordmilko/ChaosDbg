@@ -1,4 +1,5 @@
-﻿using ClrDebug;
+﻿using ChaosLib;
+using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
@@ -12,7 +13,9 @@ namespace ChaosDbg.Cordb
     {
         public override string Name { get; }
 
-        public CordbNativeFrame(NativeFrame nativeFrame) : base(null, nativeFrame.Context)
+        public SymFromAddrResult Symbol { get; }
+
+        public CordbNativeFrame(NativeFrame nativeFrame, CordbModule module) : base(null, module, nativeFrame.Context)
         {
             string name;
 
@@ -24,6 +27,7 @@ namespace ChaosDbg.Cordb
                 name = null;
 
             Name = name;
+            Symbol = nativeFrame.Symbol;
         }
     }
 }

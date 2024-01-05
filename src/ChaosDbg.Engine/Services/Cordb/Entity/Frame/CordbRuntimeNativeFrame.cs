@@ -12,7 +12,7 @@ namespace ChaosDbg.Cordb
     {
         protected override string DebuggerDisplay => "[Runtime] " + base.DebuggerDisplay;
 
-        public CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CrossPlatformContext context) : base(corDebugFrame, context)
+        public CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
         }
     }

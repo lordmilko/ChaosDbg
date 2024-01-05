@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -28,11 +29,51 @@ namespace ChaosDbg.Cordb
 
         private Dictionary<int, CordbThread> threads = new Dictionary<int, CordbThread>();
         private CordbProcess process;
+        private int nextUserId;
+
+        //Stores the active thread the user has explicitly specified, if applicable.
+        private CordbThread explicitActiveThread;
 
         /// <summary>
         /// Gets or sets thread that user interactions with the debugger should apply to.
         /// </summary>
-        public CordbThread ActiveThread { get; set; }
+        public CordbThread ActiveThread
+        {
+            get
+            {
+                //If the user has set their active thread, prefer that
+                if (explicitActiveThread != null)
+                    return explicitActiveThread;
+
+                //If we know the main thread, use that
+                if (MainThread != null)
+                    return MainThread;
+
+                lock (threadLock)
+                {
+                    var managed = threads.Values.FirstOrDefault(t => t.IsManaged && t.SpecialType == null);
+
+                    //Prefer any managed threads we have?
+                    if (managed != null)
+                        return managed;
+
+                    var native = threads.Values.FirstOrDefault(t => !t.IsManaged && t.SpecialType == null);
+
+                    //Prefer any normal native threads?
+                    if (native != null)
+                        return native;
+
+                    //Return any thread we have then, special or not
+                    return threads.Values.FirstOrDefault();
+                }
+            }
+        }
+
+        public CordbThread MainThread { get; private set; }
+
+        public CordbThread FinalizerThread { get; private set; }
+
+        public CordbThread GCThread { get; private set; }
 
         public CordbThreadStore(CordbProcess process)
         {
@@ -50,6 +91,8 @@ namespace ChaosDbg.Cordb
         /// <returns>A <see cref="CordbThread"/> that encapsulates the specified <see cref="CorDebugThread"/>.</returns>
         internal CordbThread Add(CorDebugThread corDebugThread)
         {
+            CordbThread thread;
+
             lock (threadLock)
             {
                 /* In "hosted" scenarios (I suppose such as SQL Server) a managed thread may run on multiple
@@ -59,7 +102,10 @@ namespace ChaosDbg.Cordb
                  * look like when a managed thread actually gets moved to a different native thread, so
                  * we'll just try and catch that that might be happening in Remove(). */
 
-                var thread = new CordbThread(new CordbThread.ManagedAccessor(corDebugThread), process);
+                var userId = nextUserId;
+                nextUserId++;
+
+                thread = new CordbThread(userId, new CordbThread.ManagedAccessor(corDebugThread), process);
 
                 /* When we remove the thread, we're going to assert that the VolatileOSThreadID matches the "unique ID".
                 /* That way, if we ever see a scenario where a managed thread got moved to a different physical thread,
@@ -69,9 +115,12 @@ namespace ChaosDbg.Cordb
                  * which we'll probably only see in attach scenarios (.NET Core CreateProcess scenarios don't seen to apply,
                  * as we do get a bunch of native/managed CreateThread events shortly after attaching to the newly created process). */
                 threads.Add(corDebugThread.Id, thread);
-
-                return thread;
             }
+
+            //Must be outside of the lock
+            IdentifySpecialThreads(thread);
+
+            return thread;
         }
 
         /// <summary>
@@ -88,7 +137,10 @@ namespace ChaosDbg.Cordb
 
             lock (threadLock)
             {
-                var thread = new CordbThread(new CordbThread.NativeAccessor(id, hThread), process);
+                var userId = nextUserId;
+                nextUserId++;
+
+                var thread = new CordbThread(userId, new CordbThread.NativeAccessor(id, hThread), process);
 
                 threads.Add(id, thread);
 
@@ -101,7 +153,7 @@ namespace ChaosDbg.Cordb
             if (corDebugThread == null)
                 return;
 
-            ActiveThread = this[corDebugThread.Id];
+            explicitActiveThread = this[corDebugThread.Id];
         }
 
         internal CordbThread this[int id]
@@ -131,6 +183,151 @@ namespace ChaosDbg.Cordb
 
                 return thread;
             }
+        }
+
+        public void IdentifySpecialThreads(CordbThread thread)
+        {
+            //This method inherently should only ever be called with managed threads, or null
+            Debug.Assert(thread == null || thread.IsManaged);
+
+            CordbThread[] localThreads = null;
+
+            void EnsureThreads()
+            {
+                if (localThreads == null)
+                {
+                    lock (threadLock)
+                        localThreads = threads.Values.ToArray();
+                }
+            }
+
+            if (FinalizerThread == null)
+            {
+                EnsureThreads();
+
+                FinalizerThread = localThreads.SingleOrDefault(t => t.IsFinalizer);
+            }
+
+            if (GCThread == null)
+            {
+                EnsureThreads();
+
+                GCThread = localThreads.SingleOrDefault(t => t.IsGC);
+            }
+
+            if (MainThread == null)
+            {
+                if (process.Session.IsAttaching)
+                {
+                    if (thread != null)
+                        return;
+
+                    //We're receiving the attach complete message
+
+                    EnsureThreads();
+
+                    MainThread = CalculateMainThread(localThreads);
+                }
+                else
+                {
+                    EnsureThreads();
+
+                    if (thread.IsManaged && thread.SpecialType == null)
+                    {
+                        thread.IsMain = true;
+                        MainThread = thread;
+                    }
+                }
+            }
+        }
+
+        private CordbThread CalculateMainThread(CordbThread[] localThreads)
+        {
+            if (process.Session.IsInterop)
+            {
+                /* When interop debugging, DbgkpPostFakeThreadMessages does seem to notify us of thread creation
+                 * events in the same order they were created. This contrasts with ICorDebug, which notifies us
+                 * of our threads on attach in an arbitrary order. We can't just go for the thread with UserId 0,
+                 * because if this is a purely managed process, I imagine a special CLR thread could potentially
+                 * start before our normal main thread does */
+                return localThreads.OrderBy(t => t.UserId).First(t => t.SpecialType == null);
+            }
+
+            //Managed
+
+            //This may be a managed process, or a native process that spun up the CLR. And the CLR may have been spun up on the actual main thread,
+            //or a background thread created by the native process. Either way, because we're 
+
+            var managedCandidates = localThreads.Where(v => v.IsManaged && v.SpecialType == null).ToArray();
+
+            if (managedCandidates.Length == 1)
+                return managedCandidates[0];
+
+            var managedExeCandidates = new List<Tuple<CordbThread, CordbILFrame, int>>();
+            var nativeExeCandidates = new List<CordbThread>();
+
+            foreach (var managedCandidate in managedCandidates)
+            {
+                var stackTrace = managedCandidate.StackTrace.Reverse().ToArray();
+
+                for (var i = 0; i < stackTrace.Length; i++)
+                {
+                    var frame = stackTrace[i];
+
+                    //Because we're not interop, we won't be able to see any native frames
+
+                    if (frame is CordbILFrame f && f.Module != null && f.Module.IsExe)
+                    {
+                        var imageCor20Header = frame.Module.PEFile.Cor20Header;
+
+                        if (imageCor20Header != null && imageCor20Header.Flags.HasFlag(COMIMAGE_FLAGS.ILONLY))
+                            managedExeCandidates.Add(Tuple.Create(managedCandidate, f, i));
+                        else
+                            nativeExeCandidates.Add(managedCandidate);
+
+                        break;
+                    }
+                }
+            }
+
+            if (managedExeCandidates.Count > 0)
+            {
+                if (managedExeCandidates.Count == 1)
+                    return managedExeCandidates[0].Item1;
+
+                var entryPointMatches = new List<CordbThread>();
+
+                foreach (var item in managedExeCandidates)
+                {
+                    var token = (mdToken) item.Item2.Module.PEFile.Cor20Header.EntryPointTokenOrRelativeVirtualAddress;
+
+                    switch (token.Type)
+                    {
+                        case CorTokenType.mdtMethodDef:
+                            if (item.Item2.CorDebugFrame.FunctionToken == (mdMethodDef) token)
+                                entryPointMatches.Add(item.Item1);
+
+                            break;
+
+                        default:
+                            throw new NotImplementedException($"Don't know how to handle entry point token of type {token.Type}.");
+                    }
+                }
+
+                if (entryPointMatches.Count == 1)
+                    return entryPointMatches[0];
+
+                return (entryPointMatches.Count > 1 ? entryPointMatches : managedExeCandidates.Select(v => v.Item1))
+                    .Select(v => new {Id = v.DacThreadData?.corThreadId, Thread = v})
+                    .Where(v => v.Id != null)
+                    .OrderBy(v => v.Id)
+                    .First().Thread;
+            }
+
+            if (nativeExeCandidates.Count > 0)
+                throw new NotImplementedException($"Don't know how to choose the best native entry point from {nativeExeCandidates.Count} potential candidates");
+
+            throw new NotImplementedException("Couldn't figure out how to identify the main thread");
         }
 
         public IEnumerator<CordbThread> GetEnumerator()

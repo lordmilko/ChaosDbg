@@ -11,20 +11,20 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Represents a native module in an interop debugging session.
     /// </summary>
-    public class CordbNativeModule : ICordbModule
+    public class CordbNativeModule : CordbModule
     {
-        public string Name { get; }
-        public long BaseAddress { get; }
-        public int Size { get; }
-        public long EndAddress => BaseAddress + Size;
+        /// <summary>
+        /// Gets whether this is the module representing the CLR.
+        /// </summary>
+        public bool IsCLR { get; }
 
         public CordbManagedModule ManagedModule { get; set; }
 
-        public CordbNativeModule(long baseAddress, string name, int size)
+        public CordbNativeModule(string name, long baseAddress, IPEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, peFile)
         {
-            BaseAddress = baseAddress;
-            Name = name;
-            Size = size;
+            var fileName = Path.GetFileName(name);
+
+            IsCLR = StringComparer.OrdinalIgnoreCase.Equals(fileName, "coreclr.dll") || StringComparer.OrdinalIgnoreCase.Equals(fileName, "clr.dll");
         }
 
         #region GetNativeModuleName

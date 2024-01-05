@@ -6,7 +6,7 @@ using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
-    public class CordbModuleStore : IEnumerable<ICordbModule>
+    public class CordbModuleStore : IEnumerable<CordbModule>
     {
         private object moduleLock = new object();
 
@@ -25,11 +25,14 @@ namespace ChaosDbg.Cordb
             this.services = services;
         }
 
-        internal ICordbModule Add(CorDebugModule corDebugModule)
+        internal CordbModule Add(CorDebugModule corDebugModule)
         {
+            var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, corDebugModule.BaseAddress);
+            var peFile = services.PEFileProvider.ReadStream(stream, true);
+
             lock (moduleLock)
             {
-                var module = new CordbManagedModule(corDebugModule);
+                var module = new CordbManagedModule(corDebugModule, peFile);
 
                 managedModules.Add(corDebugModule.BaseAddress, module);
 
@@ -65,7 +68,7 @@ namespace ChaosDbg.Cordb
                 //The only way to get the image size is to read the PE header;
                 //DbgEng does that too
 
-                var native = new CordbNativeModule(baseAddress, name, peFile.OptionalHeader.SizeOfImage);
+                var native = new CordbNativeModule(name, baseAddress, peFile);
 
                 nativeModules.Add(baseAddress, native);
 
@@ -124,13 +127,40 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        public IEnumerator<ICordbModule> GetEnumerator()
+        internal CordbManagedModule GetModule(CorDebugModule corDebugModule)
+        {
+            lock (moduleLock)
+            {
+                var match = managedModules[corDebugModule.BaseAddress];
+
+                return match;
+            }
+        }
+
+        internal CordbModule GetModule(long ip)
+        {
+            lock (moduleLock)
+            {
+                foreach (var item in nativeModules.Values)
+                {
+                    if (ip >= item.BaseAddress && ip <= item.EndAddress)
+                        return item;
+                }
+            }
+
+            //Note: this method is used in contexts here it's assumed we MUST have a return type. If we modify this method to return null,
+            //we should update the description in CordbFrame.Module which says you only have a null module when it's a dynamically generated module
+
+            throw new InvalidOperationException($"Could not find which module address 0x{ip:X} belongs to");
+        }
+
+        public IEnumerator<CordbModule> GetEnumerator()
         {
             lock (moduleLock)
             {
                 return managedModules.Values
-                    .Cast<ICordbModule>()
-                    .Concat(nativeModules.Values.Cast<ICordbModule>())
+                    .Cast<CordbModule>()
+                    .Concat(nativeModules.Values.Cast<CordbModule>())
                     .ToList()
                     .GetEnumerator();
             }

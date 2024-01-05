@@ -52,6 +52,7 @@ namespace ChaosDbg.Tests
                         typeof(NativeLibraryProvider),
 
                         typeof(CordbEngineServices),
+                        typeof(DbgEngEngineServices),
 
                         { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
                         { typeof(ICordbEngine), typeof(CordbEngine) },
@@ -139,25 +140,40 @@ namespace ChaosDbg.Tests
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
-            eventHandle.WaitOne();
+            var pid = cordbEngine.Process.Id;
 
-            //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
-            Thread.Sleep(100);
-
-            cordbEngine.Break();
-
-            using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+            try
             {
-                //Note: creating a DebugClient will cause DbgHelp's global options to be modified
+                eventHandle.WaitOne();
 
-                var dbgEngEngine = GetService<DbgEngEngine>();
-                dbgEngEngine.Attach(cordbEngine.Process.Id, true);
-                dbgEngEngine.WaitForBreak();
+                //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
+                Thread.Sleep(100);
 
-                return dbgEngEngine;
-            }));
+                cordbEngine.Break();
 
-            action(ctx);
+                using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+                {
+                    //Note: creating a DebugClient will cause DbgHelp's global options to be modified
+
+                    var dbgEngEngine = GetService<DbgEngEngine>();
+                    dbgEngEngine.Attach(cordbEngine.Process.Id, true);
+                    dbgEngEngine.WaitForBreak();
+
+                    return dbgEngEngine;
+                }));
+
+                action(ctx);
+            }
+            finally
+            {
+                try
+                {
+                    Process.GetProcessById(pid).Kill();
+                }
+                catch
+                {
+                }
+            }
         }
 
         protected void TestDebugAttach(

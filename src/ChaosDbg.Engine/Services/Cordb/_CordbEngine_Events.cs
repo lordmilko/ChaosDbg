@@ -13,6 +13,7 @@ namespace ChaosDbg.Cordb
             cb.OnPreEvent += PreManagedEvent;
 
             cb.OnCreateProcess += CreateProcess;
+            cb.OnExitProcess += ExitProcess;
             cb.OnLoadModule += LoadModule;
             cb.OnUnloadModule += UnloadModule;
             cb.OnCreateThread += CreateThread;
@@ -97,6 +98,16 @@ namespace ChaosDbg.Cordb
             //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process.
             //This will fail when attempting to attach
             e.Process.TrySetDesiredNGENCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
+        }
+
+        private void ExitProcess(object sender, ExitProcessCorDebugManagedCallbackEventArgs e)
+        {
+            //On Windows, a process has not truly exited until we receive the EXIT_PROCESS_DEBUG_EVENT. My observation has been that, when interop debugging,
+            //we always receive EXIT_PROCESS_DEBUG_EVENT prior to receiving the managed ExitProcess event. While I don't know whether a process handle being signalled
+            //because it exited necessarily proves that EXIT_PROCESS_DEBUG_EVENT has also been fired. at this stage I don't see any reason why this would even matter
+
+            //Signal the wait as completed
+            Session.WaitExitProcess.SetResult(null);
         }
 
         private void UnmanagedCreateProcess(object sender, CREATE_PROCESS_DEBUG_INFO e)
@@ -210,6 +221,7 @@ namespace ChaosDbg.Cordb
 
                 //Upgrade the thread to be managed!
                 thread.Accessor = new CordbThread.ManagedAccessor(e.Thread);
+                Process.Threads.IdentifySpecialThreads(thread);
             }
             else
             {
@@ -322,6 +334,7 @@ namespace ChaosDbg.Cordb
             {
                 if (Session.IsAttaching)
                 {
+                    Process.Threads.IdentifySpecialThreads(null);
                     Session.IsAttaching = false;
                 }
             }

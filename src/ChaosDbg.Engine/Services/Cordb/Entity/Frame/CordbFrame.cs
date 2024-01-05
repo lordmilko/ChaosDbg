@@ -7,7 +7,7 @@ namespace ChaosDbg.Cordb
     {
         public new T CorDebugFrame => (T) base.CorDebugFrame;
 
-        protected CordbFrame(CorDebugFrame corDebugFrame, CrossPlatformContext context) : base(corDebugFrame, context)
+        protected CordbFrame(CorDebugFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
         }
     }
@@ -50,9 +50,15 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        protected CordbFrame(CorDebugFrame corDebugFrame, CrossPlatformContext context)
+        /// <summary>
+        /// Gets the module associated with this frame, or null if the module is in dynamically generated code.
+        /// </summary>
+        public CordbModule Module { get; }
+
+        protected CordbFrame(CorDebugFrame corDebugFrame, CordbModule module, CrossPlatformContext context)
         {
             CorDebugFrame = corDebugFrame;
+            Module = module;
             Context = context;
         }
 

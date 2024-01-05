@@ -8,7 +8,7 @@
     {
         public override string Name => "Transition Frame";
 
-        public CordbNativeTransitionFrame(CrossPlatformContext context) : base(null, context)
+        public CordbNativeTransitionFrame(CrossPlatformContext context) : base(null, null, context)
         {
         }
     }

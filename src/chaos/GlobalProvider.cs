@@ -57,6 +57,7 @@ namespace chaos
                 typeof(NativeLibraryProvider),
 
                 typeof(CordbEngineServices),
+                typeof(DbgEngEngineServices),
 
                 { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },

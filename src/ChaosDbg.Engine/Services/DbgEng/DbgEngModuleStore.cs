@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg.DbgEng
 {
@@ -14,11 +15,23 @@ namespace ChaosDbg.DbgEng
 
         private Dictionary<long, DbgEngModule> modules = new Dictionary<long, DbgEngModule>();
 
+        private DbgEngSessionInfo session;
+        private DbgEngEngineServices services;
+
+        public DbgEngModuleStore(DbgEngSessionInfo session, DbgEngEngineServices services)
+        {
+            this.session = session;
+            this.services = services;
+        }
+
         internal DbgEngModule Add(long baseAddress, string imageName, string moduleName, int moduleSize)
         {
+            var stream = DbgEngMemoryStream.CreateRelative(session.EngineClient, baseAddress);
+            IPEFile peFile = services.PEFileProvider.ReadStream(stream, true);
+
             lock (moduleLock)
             {
-                var module = new DbgEngModule(baseAddress, imageName, moduleName, moduleSize);
+                var module = new DbgEngModule(baseAddress, imageName, moduleName, moduleSize, peFile);
 
                 //If somehow the same module is loaded at the same address multiple times without being unloaded, this may potentially
                 //indicate a bug and we'd like this to explode

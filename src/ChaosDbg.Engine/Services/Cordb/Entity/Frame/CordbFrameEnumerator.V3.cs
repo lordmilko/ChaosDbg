@@ -53,6 +53,8 @@ namespace ChaosDbg.Cordb
                  *   impossible to get an internal frame in V3, because CordbStackWalk::GetFrameWorker() asserts when the frame type is kExplicitFrame
                  */
 
+                var process = accessor.Thread.Process;
+
                 //If we can't query for frames because the thread has died, not much we can really do!
                 if (accessor.CorDebugThread.TryCreateStackWalk(out var stackWalk) != S_OK)
                     return Array.Empty<CordbFrame>();
@@ -102,22 +104,20 @@ namespace ChaosDbg.Cordb
                         else if (frame is CorDebugNativeFrame native)
                             results.Add(GetRuntimeNativeFrame(native, context));
                         else if (frame is CorDebugILFrame il)
-                            results.Add(GetILFrame(il, context));
+                            results.Add(GetILFrame(process, il, context));
                         else
                             throw new NotImplementedException($"Don't know how to handle a {frame.GetType().Name}");
                     }
                 }
 
-                var process = accessor.Thread.Process;
-
                 if (process.Session.IsInterop)
-                    return ResolveNativeFrames(process.Handle, accessor.Handle, process.DAC.DataTarget, process.DbgHelp, results);
+                    return ResolveNativeFrames(process, accessor.Handle, process.DAC.DataTarget, process.DbgHelp, results);
 
                 return results.ToArray();
             }
 
             private static CordbFrame[] ResolveNativeFrames(
-                IntPtr hProcess,
+                CordbProcess process,
                 IntPtr hThread,
                 ICLRDataTarget dataTarget,
                 DbgHelpSession dbgHelpSession,
@@ -137,7 +137,7 @@ namespace ChaosDbg.Cordb
                 using var walker = new NativeStackWalker(dataTarget, dbgHelpSession);
 
                 //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(hProcess, hThread, frames[0].Context).ToArray();
+                var nativeFrames = walker.Walk(dbgHelpSession.hProcess, hThread, frames[0].Context).ToArray();
 
                 //Concat our native and ICorDebug derived frames together. The stack pointer of each frame should increase
                 //as you go from more recent function calls to older function calls. I'm not sure if this solution of merging
@@ -164,8 +164,10 @@ namespace ChaosDbg.Cordb
                         if (i < allFrames.Length - 1 && allFrames[i + 1].Value is CordbFrame c2 && !(c2 is CordbNativeTransitionFrame) && c2.Context.SP == item.SP)
                             continue;
 
+                        var module = process.Modules.GetModule(native.IP);
+
                         //It's a normal NativeFrame then
-                        newFrames.Add(new CordbNativeFrame(native));
+                        newFrames.Add(new CordbNativeFrame(native, module));
                     }
                     else
                     {
@@ -190,13 +192,15 @@ namespace ChaosDbg.Cordb
                     throw new NotImplementedException($"Handling a {corDebugNativeFrame.GetType().Name} that contains a function (and therefore also a name that can be retrieved from {nameof(MetaDataImport)}) is not implemented.");
 
                 //It's a runtime native frame for sure then
-                return new CordbRuntimeNativeFrame(corDebugNativeFrame, context);
+                return new CordbRuntimeNativeFrame(corDebugNativeFrame, null, context);
             }
 
-            private static CordbFrame GetILFrame(CorDebugILFrame corDebugILFrame, CrossPlatformContext context)
+            private static CordbFrame GetILFrame(CordbProcess process, CorDebugILFrame corDebugILFrame, CrossPlatformContext context)
             {
+                var module = process.Modules.GetModule(corDebugILFrame.Function.Module);
+
                 //Just a regular old IL frame
-                return new CordbILFrame(corDebugILFrame, context);
+                return new CordbILFrame(corDebugILFrame, module, context);
             }
         }
     }

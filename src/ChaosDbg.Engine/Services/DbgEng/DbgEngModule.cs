@@ -1,4 +1,6 @@
-﻿namespace ChaosDbg.DbgEng
+﻿using ChaosLib.Metadata;
+
+namespace ChaosDbg.DbgEng
 {
     /// <summary>
     /// Represents a module that has been loaded into a DbgEng debugger.
@@ -15,12 +17,15 @@
 
         public long EndAddress => BaseAddress + Size;
 
-        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize)
+        public IPEFile PEFile { get; }
+
+        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize, IPEFile peFile)
         {
             BaseAddress = baseAddress;
             FileName = fileName;
             ModuleName = moduleName;
             Size = moduleSize;
+            PEFile = peFile;
         }
 
         public override string ToString()

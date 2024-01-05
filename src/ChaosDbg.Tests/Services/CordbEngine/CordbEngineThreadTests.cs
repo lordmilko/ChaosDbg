@@ -140,6 +140,188 @@ namespace ChaosDbg.Tests
             );
         }
 
+        #region Shutdown
+
+        [TestMethod]
+        public void CordbEngine_Managed_Detach()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    ctx.CordbEngine.Detach();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                }
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Managed_Terminate()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    ctx.CordbEngine.Terminate();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                }
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Interop_Detach()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    AssertEx.Throws<DebugException>(
+                        () => ctx.CordbEngine.Detach(),
+                        "Error HRESULT CORDBG_E_INTEROP_NOT_SUPPORTED has been returned from a call to a COM component."
+                    );
+                },
+                useInterop: true
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Interop_Terminate()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    ctx.CordbEngine.Terminate();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                },
+                useInterop: true
+            );
+        }
+
+        #endregion
+        #region Shutdown (Already Terminated)
+
+        [TestMethod]
+        public void CordbEngine_Managed_Detach_AlreadyTerminated()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    Process.GetProcessById(ctx.CordbEngine.Process.Id).Kill();
+
+                    ctx.CordbEngine.Detach();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                }
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Managed_Terminate_AlreadyTerminated()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    Process.GetProcessById(ctx.CordbEngine.Process.Id).Kill();
+
+                    ctx.CordbEngine.Terminate();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                }
+            );
+        }
+
+        //Interop detach not supported
+
+        [TestMethod]
+        public void CordbEngine_Interop_Terminate_AlreadyTerminated()
+        {
+            TestDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    Process.GetProcessById(ctx.CordbEngine.Process.Id).Kill();
+
+                    ctx.CordbEngine.Terminate();
+
+                    Assert.IsNull(ctx.CordbEngine.Process);
+                },
+                useInterop: true
+            );
+        }
+
+        #endregion
+        #region Main Thread
+
+        [TestMethod]
+        public void CordbEngine_Thread_MainThread_ManagedProcess_Managed_Attach()
+        {
+            TestDebugAttach(
+                NativeTestType.Com,
+                ctx =>
+                {
+                    var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
+
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Program.Main"));
+                }
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Thread_MainThread_ManagedProcess_Interop_Attach()
+        {
+            TestDebugAttach(
+                NativeTestType.Com,
+                ctx =>
+                {
+                    var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
+
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Program.Main"));
+                },
+                useInterop: true
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Thread_MainThread_NativeProcess_Managed_Attach()
+        {
+            TestDebugAttach(
+                NativeTestType.Com,
+                ctx =>
+                {
+                    var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
+
+                    //The real main thread will now be a transition frame
+
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Example.Signal"));
+                },
+                native: true
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Thread_MainThread_NativeProcess_Interop_Attach()
+        {
+            TestDebugAttach(
+                NativeTestType.Com,
+                ctx =>
+                {
+                    var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
+
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "Native.x64!wmain+D6"));
+                },
+                useInterop: true,
+                native: true
+            );
+        }
+
+        #endregion
+
         [TestRuntimeMethod]
         public void CordbEngine_Thread_Managed_Type(bool netCore)
         {
@@ -151,9 +333,9 @@ namespace ChaosDbg.Tests
 
                     Assert.AreEqual(3, threads.Length);
 
-                    Assert.IsNull(threads[0].Type);
-                    Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[1].Type);
-                    Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[2].Type);
+                    Assert.IsNull(threads[0].SpecialType);
+                    Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[1].SpecialType);
+                    Assert.AreEqual(TlsThreadTypeFlag.ThreadType_Threadpool_Worker, threads[2].SpecialType);
                 },
                 netCore: netCore
             );
@@ -172,7 +354,7 @@ namespace ChaosDbg.Tests
                     var nativeThreads = threads.Where(t => !t.IsManaged).ToArray();
 
                     bool HasThreads(CordbThread[] candidates, TlsThreadTypeFlag type, int count) =>
-                        candidates.Count(c => c.Type == type) >= count;
+                        candidates.Count(c => c.SpecialType == type) >= count;
 
                     Assert.IsTrue(HasThreads(managedThreads, TlsThreadTypeFlag.ThreadType_Threadpool_Worker, 2), "Didn't have threadpool workers");
                     Assert.IsTrue(HasThreads(nativeThreads, TlsThreadTypeFlag.ThreadType_Finalizer, 1), "Didn't have a Finalizer");

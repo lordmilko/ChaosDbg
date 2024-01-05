@@ -1,30 +1,23 @@
-﻿using ClrDebug;
+﻿using ChaosLib.Metadata;
+using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
-    public class CordbManagedModule : ICordbModule
+    public class CordbManagedModule : CordbModule
     {
-        long IDbgModule.BaseAddress => BaseAddress;
-        long IDbgModule.EndAddress => EndAddress;
+        public new CORDB_ADDRESS BaseAddress => base.BaseAddress;
 
-        public CORDB_ADDRESS BaseAddress { get; }
+        public new CORDB_ADDRESS EndAddress => base.EndAddress;
 
         public CordbNativeModule NativeModule { get; set; }
 
-        public int Size { get; }
+        public CorDebugModule CorDebugModule { get; }
 
-        public CORDB_ADDRESS EndAddress => BaseAddress + Size;
-
-        private readonly CorDebugModule corDebugModule;
-
-        public CordbManagedModule(CorDebugModule corDebugModule)
+        public CordbManagedModule(CorDebugModule corDebugModule, IPEFile peFile) : base(corDebugModule.Name, corDebugModule.BaseAddress, corDebugModule.Size, peFile)
         {
-            this.corDebugModule = corDebugModule;
-
-            BaseAddress = corDebugModule.BaseAddress;
-            Size = corDebugModule.Size;
+            CorDebugModule = corDebugModule;
         }
 
-        public override string ToString() => corDebugModule.ToString();
+        public override string ToString() => CorDebugModule.ToString();
     }
 }

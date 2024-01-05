@@ -110,17 +110,14 @@ namespace ChaosDbg
                 if (!result)
                     break;
 
-                string function = null;
-
-                if (dbgHelpSession.TrySymFromAddr(stackFrame.AddrPC.Offset, out var symbol) == S_OK)
-                    function = symbol.ToString();
+                dbgHelpSession.TrySymFromAddr(stackFrame.AddrPC.Offset, out var symbol);
 
                 string moduleName = null;
 
                 if (dbgHelpSession.TrySymGetModuleInfo64(stackFrame.AddrPC.Offset, out var moduleInfo) == S_OK)
                     moduleName = Path.GetFileNameWithoutExtension(moduleInfo.ImageName);
 
-                var newFrame = new NativeFrame(stackFrame, function, moduleName, new CrossPlatformContext(context.Flags, raw));
+                var newFrame = new NativeFrame(stackFrame, symbol, moduleName, new CrossPlatformContext(context.Flags, raw));
 
                 if (predicate != null && !predicate(newFrame))
                     yield break;

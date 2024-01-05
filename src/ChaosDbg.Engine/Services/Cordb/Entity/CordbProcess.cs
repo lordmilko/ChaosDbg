@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using ChaosDbg.DAC;
 using ChaosLib;
 using ClrDebug;
@@ -169,6 +170,20 @@ namespace ChaosDbg.Cordb
 
             //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
             DbgHelp = new DbgHelpSession(corDebugProcess.Handle, invadeProcess: false);
+        }
+
+        /// <summary>
+        /// Initiates a request that the target process be terminated, and waits for the <see cref="CorDebugManagedCallbackKind.ExitProcess"/> event to be emitted.
+        /// </summary>
+        internal void Terminate()
+        {
+            Debug.Assert(Session.WaitExitProcess == null);
+
+            Session.WaitExitProcess = new TaskCompletionSource<object>();
+
+            CorDebugProcess.Terminate(0);
+
+            Session.WaitExitProcess.Task.Wait();
         }
 
         public void Dispose()

@@ -25,20 +25,22 @@ namespace ChaosDbg
         public long BP { get; }
         public long Return { get; }
 
-        public string FunctionName { get; }
+        public string FunctionName => Symbol.ToString();
 
         public string ModuleName { get; }
 
+        public SymFromAddrResult Symbol { get; }
+
         public CrossPlatformContext Context { get; }
 
-        public NativeFrame(in STACKFRAME_EX stackFrame, string functionName, string moduleName, CrossPlatformContext context)
+        public NativeFrame(in STACKFRAME_EX stackFrame, SymFromAddrResult symbol, string moduleName, CrossPlatformContext context)
         {
             IP = stackFrame.AddrPC.Offset;
             SP = stackFrame.AddrStack.Offset;
             BP = stackFrame.AddrFrame.Offset;
             Return = stackFrame.AddrReturn.Offset;
 
-            FunctionName = functionName;
+            Symbol = symbol;
             ModuleName = moduleName;
 
             Context = context;

@@ -1,4 +1,6 @@
-﻿namespace ChaosDbg
+﻿using ChaosLib.Metadata;
+
+namespace ChaosDbg
 {
     public interface IDbgModule
     {
@@ -7,5 +9,7 @@
         int Size { get; }
 
         long EndAddress { get; }
+
+        IPEFile PEFile { get; }
     }
 }

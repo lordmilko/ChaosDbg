@@ -8,7 +8,7 @@ namespace ChaosDbg.Cordb
     /// </summary>
     class CordbILFrame : CordbFrame<CorDebugILFrame>
     {
-        public CordbILFrame(CorDebugILFrame corDebugFrame, CrossPlatformContext context) : base(corDebugFrame, context)
+        public CordbILFrame(CorDebugILFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
         }
     }

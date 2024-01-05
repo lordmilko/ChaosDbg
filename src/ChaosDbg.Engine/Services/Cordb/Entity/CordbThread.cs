@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using ChaosLib;
 using ClrDebug;
 using ThreadState = ClrDebug.ThreadState;
+using Win32Process = System.Diagnostics.Process;
+using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Cordb
 {
@@ -22,9 +25,9 @@ namespace ChaosDbg.Cordb
             {
                 var builder = new StringBuilder();
 
-                var type = Type;
+                var type = SpecialType;
 
-                var typeStr = type == null ? null : Type + " ";
+                var typeStr = type == null ? null : SpecialType + " ";
 
                 if (!IsManaged)
                     builder.Append($"[Native] {typeStr}{Id}");
@@ -56,6 +59,11 @@ namespace ChaosDbg.Cordb
         public int Id => Accessor.Id;
 
         /// <summary>
+        /// Gets the unique ID of the thread inside the debugger engine.
+        /// </summary>
+        public int UserId { get; }
+
+        /// <summary>
         /// Gets the handle of this thread.
         /// </summary>
         public IntPtr Handle => Accessor.Handle;
@@ -67,15 +75,32 @@ namespace ChaosDbg.Cordb
         public RemoteTeb Teb { get; }
 
         /// <summary>
-        /// Gets whether this thread has sent an exit notification to the debugger.
+        /// Gets whether this thread has received an exit notification from a debugger event callback.
         /// </summary>
         public bool Exited { get; internal set; }
 
         /// <summary>
-        /// Gets whether the thread is currently alive.<para/>
-        /// Threads may die prior to an ExitThread() event having occurred, and may even die while the process is broken into.
+        /// Gets whether the thread is still alive, as seen by the operating system.
         /// </summary>
         public bool IsAlive
+        {
+            get
+            {
+                /* When we receive the EXIT_THREAD_DEBUG_EVENT notification, the thread is still running, and is inside of NtTerminateThread.
+                 * WaitForSingleObject is supposed to tell you when a thread ends, but it doesn't - maybe it's because what we have is a copy
+                 * of the handle to the thread? GetExitCodeThread also apparently isn't reliable. Even calling GetThreadId on the handle of the
+                 * terminated thread doesn't work. As such, we seem to have no choice but to enumerate the threads of the target process, and
+                 * CreateToolhelp32Snapshot is very annoying to work with as it can sometimes spuriously fail; thus, we are forced to use
+                 * System.Diagnostics.Process instead */
+                return Win32Process.GetProcessById(Process.Id).Threads.Cast<ProcessThread>().Any(t => t.Id == Id);
+            }
+        }
+
+        /// <summary>
+        /// Gets whether the thread is currently alive as reported by the DAC.<para/>
+        /// Threads may die prior to an ExitThread() event having occurred, and may even die while the process is broken into.
+        /// </summary>
+        public bool DacIsAlive
         {
             get
             {
@@ -115,10 +140,27 @@ namespace ChaosDbg.Cordb
         }
 
         /// <summary>
-        /// Gets the type of this thread within the CLR.<para/>
+        /// Gets the information about the thread that is stored in the DAC.<para/>
+        /// If the thread is not currently visible to the DAC, this property returns null.
+        /// </summary>
+        internal DacpThreadData? DacThreadData
+        {
+            get
+            {
+                if (Process.DAC.Threads.TryGetValue(Id, false, out var dacThread))
+                    return dacThread;
+
+                return null;
+            }
+        }
+
+        #region Type / State
+
+        /// <summary>
+        /// Gets the type of this thread within the CLR, if it has a special type.<para/>
         /// If this thread does not have a special type, this property returns null.
         /// </summary>
-        public TlsThreadTypeFlag? Type
+        public TlsThreadTypeFlag? SpecialType
         {
             get
             {
@@ -184,7 +226,10 @@ namespace ChaosDbg.Cordb
                         if (Exited)
                             return null;
 
-                        var eeTlsDataValue = memoryReader.ReadPointer(eeTlsDataAddr);
+                        //Threads that were started as native threads may have garbage pointed to by
+                        //their ThreadLocalStoragePointer, so we can't trist anything
+                        if (memoryReader.TryReadPointer(eeTlsDataAddr, out var eeTlsDataValue) != S_OK)
+                            return null;
 
                         if (eeTlsDataValue == 0)
                             return null;
@@ -200,15 +245,65 @@ namespace ChaosDbg.Cordb
                     if (Exited)
                         return null;
 
-                    var value = (TlsThreadTypeFlag) memoryReader.ReadPointer(structAddr + memoryReader.PointerSize * (int) PredefinedTlsSlots.TlsIdx_ThreadType);
+                    var typeAddr = structAddr + memoryReader.PointerSize * (int) PredefinedTlsSlots.TlsIdx_ThreadType;
 
-                    if (value == 0)
+                    //Threads that were started as native threads may have garbage pointed to by
+                    //their ThreadLocalStoragePointer, so we can't trist anything
+                    if (memoryReader.TryReadPointer(typeAddr, out var rawType) != S_OK)
                         return null;
 
-                    return value;
+                    if (rawType == 0)
+                        return null;
+
+                    return (TlsThreadTypeFlag) rawType;
                 }, null);
             }
         }
+
+        /// <summary>
+        /// Gets the current state of the thread, as reported by the DAC.<para/>
+        /// If the thread is not currently visible to the DAC, this property returns null.
+        /// </summary>
+        public ThreadState? DacState => DacThreadData?.state;
+
+        //Type
+
+        /// <summary>
+        /// Gets whether or not this is the main managed thread.
+        /// </summary>
+        public bool IsMain { get; internal set; }
+
+        public bool IsDebuggerHelper => IsSpecialType(TlsThreadTypeFlag.ThreadType_DbgHelper);
+
+        public bool IsFinalizer => IsSpecialType(TlsThreadTypeFlag.ThreadType_Finalizer);
+
+        public bool IsGC => IsSpecialType(TlsThreadTypeFlag.ThreadType_GC);
+
+        public bool IsShutdownHelper => IsSpecialType(TlsThreadTypeFlag.ThreadType_ShutdownHelper);
+
+        public bool IsSuspendingEE => IsSpecialType(TlsThreadTypeFlag.ThreadType_DynamicSuspendEE);
+
+        public bool IsThreadpoolGate => IsSpecialType(TlsThreadTypeFlag.ThreadType_Gate);
+
+        public bool IsThreadpoolTimer => IsSpecialType(TlsThreadTypeFlag.ThreadType_Timer);
+
+        public bool IsThreadpoolWait => IsSpecialType(TlsThreadTypeFlag.ThreadType_Wait);
+
+        //Type || State
+
+        public bool IsThreadpoolCompletionPort => IsSpecialType(TlsThreadTypeFlag.ThreadType_Threadpool_IOCompletion) || IsState(ThreadState.TS_CompletionPortThread);
+
+        public bool IsThreadpoolWorker => IsSpecialType(TlsThreadTypeFlag.ThreadType_Threadpool_Worker) || IsState(ThreadState.TS_TPWorkerThread);
+
+        //State
+
+        //Helpers
+
+        private bool IsSpecialType(TlsThreadTypeFlag type) => SpecialType?.HasFlag(type) == true;
+
+        private bool IsState(ThreadState state) => DacState?.HasFlag(state) == true;
+
+        #endregion
 
         /// <summary>
         /// Gets whether this thread has ever executed managed code.
@@ -217,8 +312,9 @@ namespace ChaosDbg.Cordb
 
         public CordbFrame[] StackTrace => Accessor.StackTrace;
 
-        public CordbThread(ICordbThreadAccessor threadAccessor, CordbProcess process)
+        public CordbThread(int userId, ICordbThreadAccessor threadAccessor, CordbProcess process)
         {
+            UserId = userId;
             Accessor = threadAccessor;
             Process = process;
 

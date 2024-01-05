@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using ChaosLib.Memory;
 using ClrDebug;
 using ClrDebug.DbgEng;
 
@@ -9,6 +11,13 @@ namespace ChaosDbg.DbgEng
     /// </summary>
     class DbgEngMemoryStream : RemoteMemoryStream
     {
+        public static Stream CreateRelative(DebugClient client, long absoluteAddress)
+        {
+            var inner = new DbgEngMemoryStream(client);
+            inner.Seek(absoluteAddress, SeekOrigin.Begin);
+            return new RelativeToAbsoluteStream(inner, absoluteAddress);
+        }
+
         /* Objects that store DbgEngMemoryStream may not get disposed. This can cause a big race condition, wherein during application shutdown
          * the NativeLibraryProvider unloads dbgeng.dll, but the finalizer of DbgEngMemoryStream hasn't been called yet, leading to an access violation
          * when it is eventually called and the DebugClient's destructor tries to call Release(). Since any DebugClient that would be capsulated

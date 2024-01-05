@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 using ChaosLib;
 using ClrDebug;
 
@@ -86,6 +87,8 @@ namespace ChaosDbg.Cordb
         public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
 
         internal bool IsAttaching { get; set; }
+
+        public TaskCompletionSource<object> WaitExitProcess { get; set; }
 
         private bool disposed;
 

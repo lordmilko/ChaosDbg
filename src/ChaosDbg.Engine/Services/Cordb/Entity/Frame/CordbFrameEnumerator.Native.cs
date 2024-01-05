@@ -27,7 +27,7 @@ namespace ChaosDbg.Cordb
 
                 var frames = walker.Walk(process.Handle, accessor.Handle, context).ToArray();
 
-                return frames.Select(f => (CordbFrame) new CordbNativeFrame(f)).ToArray();
+                return frames.Select(f => (CordbFrame) new CordbNativeFrame(f, process.Modules.GetModule(f.IP))).ToArray();
             }
         }
     }

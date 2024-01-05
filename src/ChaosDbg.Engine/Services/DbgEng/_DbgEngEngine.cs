@@ -57,12 +57,15 @@ namespace ChaosDbg.DbgEng
         #endregion
 
         private readonly NativeLibraryProvider nativeLibraryProvider;
+        private readonly DbgEngEngineServices services;
 
-        public DbgEngEngine(NativeLibraryProvider nativeLibraryProvider)
+        public DbgEngEngine(
+            NativeLibraryProvider nativeLibraryProvider,
+            DbgEngEngineServices services)
         {
             this.nativeLibraryProvider = nativeLibraryProvider;
+            this.services = services;
 
-            Modules = new DbgEngModuleStore();
             Threads = new DbgEngThreadStore();
         }
 
@@ -87,6 +90,8 @@ namespace ChaosDbg.DbgEng
                 CreateDebugClient(),
                 cancellationToken
             );
+
+            Modules = new DbgEngModuleStore(Session, services);
 
             //We must start the debugger thread AFTER the Session variable has been assigned to
             Session.Start();

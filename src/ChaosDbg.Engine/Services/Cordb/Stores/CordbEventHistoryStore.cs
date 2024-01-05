@@ -39,7 +39,7 @@ namespace ChaosDbg.Cordb
         {
             lock (objLock)
             {
-                NativeEventCount++;
+                ManagedEventCount++;
 
                 history.Add(item);
             }
