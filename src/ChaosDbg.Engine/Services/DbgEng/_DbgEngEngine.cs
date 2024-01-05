@@ -7,7 +7,7 @@ namespace ChaosDbg.DbgEng
 {
     //Engine startup/state/general code
 
-    public partial class DbgEngEngine : IDisposable
+    public partial class DbgEngEngine : IDbgEngineInternal, IDisposable
     {
         /// <summary>
         /// Gets the current <see cref="EngineClient"/>. This property should only be accessed on the engine thread.
@@ -56,14 +56,10 @@ namespace ChaosDbg.DbgEng
 
         #endregion
 
-        private readonly NativeLibraryProvider nativeLibraryProvider;
         private readonly DbgEngEngineServices services;
 
-        public DbgEngEngine(
-            NativeLibraryProvider nativeLibraryProvider,
-            DbgEngEngineServices services)
+        public DbgEngEngine(DbgEngEngineServices services)
         {
-            this.nativeLibraryProvider = nativeLibraryProvider;
             this.services = services;
 
             Threads = new DbgEngThreadStore();
@@ -74,10 +70,12 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         internal void WakeEngineForInput() => Session.UiClient.ExitDispatch(Session.EngineClientRaw);
 
-        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default) =>
+        [Obsolete("Do not call this method. Use DbgEngEngineProvider.CreateProcess() instead")]
+        void IDbgEngineInternal.CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default) =>
+        [Obsolete("Do not call this method. Use DbgEngEngineProvider.Attach() instead")]
+        void IDbgEngineInternal.Attach(AttachProcessOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         private void CreateSession(object options, CancellationToken cancellationToken)
@@ -99,7 +97,7 @@ namespace ChaosDbg.DbgEng
 
         private DebugClient CreateDebugClient()
         {
-            var debugCreate = nativeLibraryProvider.GetExport<DebugCreateDelegate>(WellKnownNativeLibrary.DbgEng, "DebugCreate");
+            var debugCreate = services.NativeLibraryProvider.GetExport<DebugCreateDelegate>(WellKnownNativeLibrary.DbgEng, "DebugCreate");
 
             debugCreate(DebugClient.IID_IDebugClient, out var pDebugClient).ThrowOnNotOK();
 

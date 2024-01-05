@@ -6,16 +6,17 @@ using ChaosDbg.Cordb;
 
 namespace chaos
 {
-    class CordbClient
+    class CordbClient : IDisposable
     {
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
+        private CordbEngineProvider engineProvider;
         private CordbEngine engine;
         private RelayParser commandDispatcher;
 
-        public CordbClient(CordbEngine engine, CommandBuilder commandBuilder)
+        public CordbClient(CordbEngineProvider engineProvider, CommandBuilder commandBuilder)
         {
-            this.engine = engine;
+            this.engineProvider = engineProvider;
             commandDispatcher = commandBuilder.Build();
         }
 
@@ -25,7 +26,7 @@ namespace chaos
 
             RegisterCallbacks();
 
-            engine.CreateProcess(executable, minimized, interop);
+            engine = (CordbEngine) engineProvider.CreateProcess(executable, minimized, interop);
 
             EngineLoop();
         }
@@ -101,6 +102,12 @@ namespace chaos
             e.Cancel = true;
 
             engine.Break();
+        }
+
+        public void Dispose()
+        {
+            engine?.Dispose();
+            wakeEvent.Dispose();
         }
     }
 }

@@ -9,9 +9,9 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void DbgEngEngine_Launch_NativeOnPath()
         {
-            using var engine = GetService<DbgEngEngine>();
+            var engineProvider = GetService<DbgEngEngineProvider>();
 
-            engine.CreateProcess("notepad", true);
+            using var engine = engineProvider.CreateProcess("notepad", true);
         }
     }
 }

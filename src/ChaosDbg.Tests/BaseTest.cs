@@ -48,14 +48,14 @@ namespace ChaosDbg.Tests
                 {
                     var serviceCollection = new ServiceCollection
                     {
-                        typeof(DbgEngEngine),
+                        typeof(CordbEngineProvider),
+                        typeof(DbgEngEngineProvider),
                         typeof(NativeLibraryProvider),
 
                         typeof(CordbEngineServices),
                         typeof(DbgEngEngineServices),
 
                         { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
-                        { typeof(ICordbEngine), typeof(CordbEngine) },
                         { typeof(IPEFileProvider), typeof(PEFileProvider) },
                         { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                         { typeof(ISigReader), typeof(SigReader) }
@@ -127,13 +127,13 @@ namespace ChaosDbg.Tests
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
                 throw new InvalidOperationException("ICorDebug can only be interacted with from an MTA thread. Attempting to interact with ICorDebug (such as calling Stop()) will cause E_NOINTERFACE errors.");
 
-            using var cordbEngine = (CordbEngine) GetService<ICordbEngine>();
+            var cordbEngineProvider = GetService<CordbEngineProvider>();
 
             var path = GetTestAppPath(matchCurrentProcess, netCore, native);
 
             Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
-            cordbEngine.CreateProcess(
+            using var cordbEngine = (CordbEngine) cordbEngineProvider.CreateProcess(
                 $"\"{path}\" {(testType.IsLeft ? testType.Left.ToString() : ((int) testType.Right).ToString())} {EventName}",
                 useInterop: useInterop,
                 exeKind: exeKind);
@@ -155,8 +155,8 @@ namespace ChaosDbg.Tests
                 {
                     //Note: creating a DebugClient will cause DbgHelp's global options to be modified
 
-                    var dbgEngEngine = GetService<DbgEngEngine>();
-                    dbgEngEngine.Attach(cordbEngine.Process.Id, true);
+                    var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
+                    var dbgEngEngine = dbgEngEngineProvider.Attach(cordbEngine.Process.Id, true);
                     dbgEngEngine.WaitForBreak();
 
                     return dbgEngEngine;
@@ -191,9 +191,9 @@ namespace ChaosDbg.Tests
                     //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
                     Thread.Sleep(100);
 
-                    using var cordbEngine = (CordbEngine) GetService<ICordbEngine>();
+                    var cordbEngineProvider = GetService<CordbEngineProvider>();
 
-                    cordbEngine.Attach(process.Id, useInterop);
+                    using var cordbEngine = (CordbEngine) cordbEngineProvider.Attach(process.Id, useInterop);
 
                     //I don't really know the best way to wait for the initial attach events to complete yet, so for now we'll do this
 
@@ -206,8 +206,8 @@ namespace ChaosDbg.Tests
                     {
                         //Note: creating a DebugClient will cause DbgHelp's global options to be modified
 
-                        var dbgEngEngine = GetService<DbgEngEngine>();
-                        dbgEngEngine.Attach(cordbEngine.Process.Id, true);
+                        var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
+                        var dbgEngEngine = dbgEngEngineProvider.Attach(cordbEngine.Process.Id, true);
                         dbgEngEngine.WaitForBreak();
 
                         return dbgEngEngine;

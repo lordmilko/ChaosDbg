@@ -2,16 +2,16 @@
 
 namespace ChaosDbg.Cordb
 {
-    public static class CordbEngineExtensions
+    public static class CordbEngineProviderExtensions
     {
-        public static void CreateProcess(
-            this ICordbEngine engine,
+        public static ICordbEngine CreateProcess(
+            this CordbEngineProvider engineProvider,
             string commandLine,
             bool startMinimized = false,
             bool useInterop = false,
             ExeKind? exeKind = null)
         {
-            engine.CreateProcess(
+            return engineProvider.CreateProcess(
                 new CreateProcessOptions(commandLine)
                 {
                     StartMinimized = startMinimized,
@@ -21,9 +21,12 @@ namespace ChaosDbg.Cordb
             );
         }
 
-        public static void Attach(this CordbEngine engine, int processId, bool useInterop = false)
+        public static ICordbEngine Attach(
+            this CordbEngineProvider engineProvider,
+            int processId,
+            bool useInterop = false)
         {
-            engine.Attach(
+            return engineProvider.Attach(
                 new AttachProcessOptions(processId)
                 {
                     UseInterop = useInterop

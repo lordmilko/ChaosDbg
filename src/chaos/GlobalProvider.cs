@@ -52,8 +52,8 @@ namespace chaos
                 typeof(CordbClient),
                 typeof(CommandBuilder),
 
-                typeof(DbgEngEngine),
-                typeof(CordbEngine),
+                typeof(DbgEngEngineProvider),
+                typeof(CordbEngineProvider),
                 typeof(NativeLibraryProvider),
 
                 typeof(CordbEngineServices),

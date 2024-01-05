@@ -2,7 +2,7 @@
 
 namespace ChaosDbg
 {
-    public interface IDbgEngine
+    public interface IDbgEngine : IDisposable
     {
         #region ChaosDbg Event Handlers
 

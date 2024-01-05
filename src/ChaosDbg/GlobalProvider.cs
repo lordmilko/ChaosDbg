@@ -46,7 +46,7 @@ namespace ChaosDbg
         {
             var services = new ServiceCollection
             {
-                typeof(DbgEngEngine),
+                typeof(DbgEngEngineProvider),
                 typeof(NativeLibraryProvider),
 
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },

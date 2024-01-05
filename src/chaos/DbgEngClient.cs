@@ -12,12 +12,14 @@ namespace chaos
 
         public void Execute(string executable, bool minimized)
         {
-            var engine = GlobalProvider.ServiceProvider.GetService<DbgEngEngine>();
+            var engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
 
-            engine.EngineOutput += Engine_EngineOutput;
+            var engine = engineProvider.CreateProcess(executable, minimized, e =>
+            {
+                e.EngineOutput += Engine_EngineOutput;
 
-            engine.EngineStatusChanged += Engine_EngineStatusChanged;
-            engine.CreateProcess(executable, minimized);
+                e.EngineStatusChanged += Engine_EngineStatusChanged;
+            });
 
             EngineLoop(engine);
         }

@@ -7,7 +7,7 @@ namespace ChaosDbg.Cordb
 {
     //Engine startup/state/general code
 
-    public partial class CordbEngine : ICordbEngine, IDisposable
+    public partial class CordbEngine : ICordbEngine, IDbgEngineInternal, IDisposable
     {
         #region State
 
@@ -20,26 +20,23 @@ namespace ChaosDbg.Cordb
 
         #endregion
 
-        private readonly IExeTypeDetector exeTypeDetector;
         private readonly CordbEngineServices services;
         private bool disposed;
 
-        public CordbEngine(
-            IExeTypeDetector exeTypeDetector,
-            NativeLibraryProvider nativeLibraryProvider,
-            CordbEngineServices services)
+        public CordbEngine(CordbEngineServices services)
         {
             //Ensure the right DbgHelp gets loaded before we need it
-            nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+            services.NativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
 
-            this.exeTypeDetector = exeTypeDetector;
             this.services = services;
         }
 
-        public void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default) =>
+        [Obsolete("Do not call this method. Use CordbEngineProvider.CreateProcess() instead")]
+        void IDbgEngineInternal.CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        public void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default) =>
+        [Obsolete("Do not call this method. Use CordbEngineProvider.Attach() instead")]
+        void IDbgEngineInternal.Attach(AttachProcessOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         private void CreateSession(object options, CancellationToken cancellationToken)
