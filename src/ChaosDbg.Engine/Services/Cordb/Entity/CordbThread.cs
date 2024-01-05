@@ -209,12 +209,14 @@ namespace ChaosDbg.Cordb
 
                     long structAddr;
 
+                    bool implicitTLS = false;
+
                     if (slotValue == 0)
                     {
                         if (Exited)
                             return null;
 
-                        //OK, maybe it's in ThreadLocalStoragePointer
+                        //OK, maybe it's in ThreadLocalStoragePointer (implicit TLS)
                         slotValue = Teb.GetTlsPointerValue(tlsIndex);
 
                         //If we still didn't get anything, the thread isn't related to the CLR
@@ -227,13 +229,14 @@ namespace ChaosDbg.Cordb
                             return null;
 
                         //Threads that were started as native threads may have garbage pointed to by
-                        //their ThreadLocalStoragePointer, so we can't trist anything
+                        //their ThreadLocalStoragePointer, so we can't trust anything
                         if (memoryReader.TryReadPointer(eeTlsDataAddr, out var eeTlsDataValue) != S_OK)
                             return null;
 
                         if (eeTlsDataValue == 0)
                             return null;
 
+                        implicitTLS = true;
                         structAddr = eeTlsDataValue;
                     }
                     else
@@ -252,8 +255,20 @@ namespace ChaosDbg.Cordb
                     if (memoryReader.TryReadPointer(typeAddr, out var rawType) != S_OK)
                         return null;
 
-                    if (rawType == 0)
+                    //A super mega large value with the highest bit set will be a negative value
+                    if (rawType <= 0)
                         return null;
+
+                    if (implicitTLS && !IsManaged)
+                    {
+                        //If this is a native thread, the trail we followed from the ThreadLocalStoragePointer could be random data
+                        //unrelated to the CLR. If the rawType is higher than the highest known valid type, we'll say its bogus
+
+                        var highest = (int) Enum.GetValues(typeof(TlsThreadTypeFlag)).Cast<TlsThreadTypeFlag>().Last();
+
+                        if (rawType > highest)
+                            return null;
+                    }
 
                     return (TlsThreadTypeFlag) rawType;
                 }, null);

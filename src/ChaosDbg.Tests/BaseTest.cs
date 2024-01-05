@@ -140,7 +140,7 @@ namespace ChaosDbg.Tests
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
-            var pid = cordbEngine.Process.Id;
+            var win32Process = cordbEngine.Process.Win32Process;
 
             try
             {
@@ -168,7 +168,8 @@ namespace ChaosDbg.Tests
             {
                 try
                 {
-                    Process.GetProcessById(pid).Kill();
+                    if (!win32Process.HasExited)
+                        win32Process.Kill();
                 }
                 catch
                 {
@@ -197,8 +198,12 @@ namespace ChaosDbg.Tests
 
                     //I don't really know the best way to wait for the initial attach events to complete yet, so for now we'll do this
 
+                    Debug.WriteLine("Waiting for attach...");
+
                     while (cordbEngine.Session.IsAttaching)
                         Thread.Sleep(100);
+
+                    Debug.WriteLine("!!! Got attach!");
 
                     cordbEngine.Break();
 
@@ -208,7 +213,12 @@ namespace ChaosDbg.Tests
 
                         var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
                         var dbgEngEngine = dbgEngEngineProvider.Attach(cordbEngine.Process.Id, true);
+
+                        Debug.WriteLine("Waiting for break...");
+
                         dbgEngEngine.WaitForBreak();
+
+                        Debug.WriteLine("!!! Got break!");
 
                         return dbgEngEngine;
                     }));

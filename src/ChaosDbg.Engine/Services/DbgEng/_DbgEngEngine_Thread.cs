@@ -25,17 +25,6 @@ namespace ChaosDbg.DbgEng
             //we define a special purpose "buffer client" that has its own output callbacks that write to an array.
             Session.CreateBufferClient();
 
-            /* The DbgEngEngine class will serve as both the output and event handlers. The reason for this is that only the class that owns an event
-             * handler is allowed to invoke it. If we had separate classes for our engine, thread and event callbacks, we would have to write a lot of "middleware"
-             * events to relay the same event over and over so the owning class can dispatch it further. Having everything in one big class simplifies dispatching
-             * of events as well as accessing engine resources */
-            EngineClient.OutputCallbacks = this;
-            EngineClient.EventCallbacks = this;
-
-            //We also serve as our input handler. This is the same thing that WinDbg does. Inside our input handler we call ReturnInput()
-            //against the UI Client
-            EngineClient.InputCallbacks = this;
-
             EngineClient.Control.EngineOptions =
                 DEBUG_ENGOPT.INITIAL_BREAK | //Break immediately upon starting the debug session
                 DEBUG_ENGOPT.FINAL_BREAK;    //Break when the debug target terminates
@@ -62,6 +51,20 @@ namespace ChaosDbg.DbgEng
 
             if (launchInfo is AttachProcessOptions a && a.NonInvasive)
                 attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+
+            //Hook up callbacks last. If multiple engines are running simultaneously, a broadcast to all clients may result in us receiving notifications that don't belong to us.
+            //We don't want to trip over such alerts when we're not ready to receive them yet
+
+            /* The DbgEngEngine class will serve as both the output and event handlers. The reason for this is that only the class that owns an event
+             * handler is allowed to invoke it. If we had separate classes for our engine, thread and event callbacks, we would have to write a lot of "middleware"
+             * events to relay the same event over and over so the owning class can dispatch it further. Having everything in one big class simplifies dispatching
+             * of events as well as accessing engine resources */
+            EngineClient.OutputCallbacks = this;
+            EngineClient.EventCallbacks = this;
+
+            //We also serve as our input handler. This is the same thing that WinDbg does. Inside our input handler we call ReturnInput()
+            //against the UI Client
+            EngineClient.InputCallbacks = this;
 
             //Now let's attach to it
             var hr = EngineClient.TryAttachProcess(0, Target.ProcessId, attachFlags);

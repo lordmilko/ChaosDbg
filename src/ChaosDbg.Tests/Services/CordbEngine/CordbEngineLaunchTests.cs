@@ -8,7 +8,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ChaosDbg.Tests
 {
     [MTATestClass]
-    [DoNotParallelize]
     public class CordbEngineLaunchTests : BaseTest
     {
         [TestMethod]

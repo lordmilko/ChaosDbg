@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using ClrDebug;
 using ClrDebug.DbgEng;
 using static ChaosDbg.EventExtensions;
@@ -156,6 +157,8 @@ namespace ChaosDbg.DbgEng
 
         private void ChangeEngineState_ExecutionStatus(long argument)
         {
+            Debug.Assert(Session != null, "Session was null. Is a stale DebugClient attempting to reuse its event callbacks?");
+
             //The debuggee's execution status is changing (e.g. going from running to broken
             //into). However, sometimes DbgEng may be working on stuff internally that inadvertently
             //causes a ChangeEngineState() event to occur but we don't actually need to react to it yet.

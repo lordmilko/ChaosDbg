@@ -88,7 +88,7 @@ namespace ChaosDbg.Cordb
 
         internal bool IsAttaching { get; set; }
 
-        public TaskCompletionSource<object> WaitExitProcess { get; set; }
+        public TaskCompletionSource<object> WaitExitProcess { get; } = new TaskCompletionSource<object>();
 
         private bool disposed;
 
@@ -120,17 +120,23 @@ namespace ChaosDbg.Cordb
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();
 
+            //Wait for the engine thread to end. If we're going to terminate the target process, we need to do this
+            //prior to disposing our callbacks (since after they're disposed, they won't accept new events, which means
+            //we'll miss our ExitProcess event)
+            EngineThread.Dispose();
+
             //The unmanaged callback has thread responsible for dispatching
             //in band callbacks that needs to be disposed
             UnmanagedCallback?.Dispose();
             ManagedCallback?.Dispose();
 
-            //Wait for the engine thread to end
-            EngineThread.Dispose();
-
             Process?.Dispose();
 
             //Clear out essential debugger objects
+
+            //We should have already terminated and nullified our ICorDebug upon terminating the process, however
+            //we terminate it again here just in case we introduce a bug where we don't terminate it
+            CorDebug?.Terminate();
             CorDebug = null;
             ManagedCallback = null;
 

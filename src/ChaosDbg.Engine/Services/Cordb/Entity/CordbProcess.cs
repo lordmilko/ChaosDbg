@@ -101,6 +101,8 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CorDebugProcess CorDebugProcess { get; }
 
+        public Process Win32Process { get; }
+
         /// <summary>
         /// Gets the container containing the threads that have been loaded into the current process.
         /// </summary>
@@ -159,6 +161,7 @@ namespace ChaosDbg.Cordb
                 throw new ArgumentNullException(nameof(services));
 
             CorDebugProcess = corDebugProcess;
+            Win32Process = Process.GetProcessById(corDebugProcess.Id);
             Session = session;
             Is32Bit = is32Bit;
             CommandLine = commandLine;
@@ -175,13 +178,23 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Initiates a request that the target process be terminated, and waits for the <see cref="CorDebugManagedCallbackKind.ExitProcess"/> event to be emitted.
         /// </summary>
+        [Obsolete("Do not call this method directly. Call CordbEngine.Terminate() instead")]
         internal void Terminate()
         {
-            Debug.Assert(Session.WaitExitProcess == null);
+            var hr = CorDebugProcess.TryTerminate(0);
 
-            Session.WaitExitProcess = new TaskCompletionSource<object>();
+            switch (hr)
+            {
+                //If we're requesting termination at the same time that ICorDebug notices that the process has now terminated,
+                //it will terminate and neuter the object, and we'll get this response back
+                case HRESULT.CORDBG_E_PROCESS_TERMINATED:
+                case HRESULT.CORDBG_E_OBJECT_NEUTERED:
+                    break;
 
-            CorDebugProcess.Terminate(0);
+                default:
+                    hr.ThrowOnNotOK();
+                    break;
+            }
 
             Session.WaitExitProcess.Task.Wait();
         }

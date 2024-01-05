@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Diagnostics;
+using System.Linq;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Metadata;
@@ -9,7 +10,6 @@ using TestApp;
 namespace ChaosDbg.Tests
 {
     [MTATestClass]
-    [DoNotParallelize]
     public class CordbEngineThreadTests : BaseTest
     {
         #region StackTrace
@@ -253,6 +253,13 @@ namespace ChaosDbg.Tests
                 },
                 useInterop: true
             );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Shutdown_Cleanup_Threads()
+        {
+            for (var i = 0; i < 10; i++)
+                CordbEngine_Thread_NativeToManaged_Bookkeeping_Attach();
         }
 
         #endregion

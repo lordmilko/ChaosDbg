@@ -13,13 +13,29 @@ namespace ChaosDbg.Cordb
         {
             CreateDebugTarget(launchInfo);
 
-            Session.TargetCreated.Set();
-
-            while (!Session.IsEngineCancellationRequested) //temp
+            try
             {
-                Session.EngineThread.Dispatcher.DrainQueue();
+                Session.TargetCreated.Set();
 
-                Thread.Sleep(100); //temp
+                while (!Session.IsEngineCancellationRequested) //temp
+                {
+                    Session.EngineThread.Dispatcher.DrainQueue();
+
+                    Thread.Sleep(100); //temp
+                }
+            }
+            finally
+            {
+                //If we haven't already detached from the target process, terminate it now
+                var localProcess = Process;
+
+                if (localProcess != null)
+                {
+                    localProcess.CorDebugProcess.TryStop(0);
+
+                    //When we get our ExitProcess event, we'll terminate our ICorDebug
+                    Terminate();
+                }
             }
         }
 

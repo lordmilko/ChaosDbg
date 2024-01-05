@@ -247,6 +247,20 @@ namespace ChaosDbg.DbgEng
             }
 
             EngineThread.Dispose();
+
+            /* We need to remove our DebugClient instances from g_Clients. If we don't, if we create another
+             * DebugClient in the future, many functions including NotifyChangeEngineState() will attempt to
+             * notify our stale clients. Clients are removed from g_Clients in DebugClient::Unlink(), which is
+             * only called via ~DebugClient(). Separate to this, DebugClient::Destroy() frees all resources
+             * associated with a DebugClient, and disables any future callbacks on the client. Destroy() is called
+             * after the final Release() but before the destructor runs */
+
+            //Dispose() will clear out and dispose all RuntimeCallableWrapper members stored on the DebugClient,
+            //which should bring the reference count to 0
+            uiClient?.Dispose();
+            engineClient?.Dispose();
+            bufferClient?.Dispose();
+
             uiClient = null;
             engineClient = null;
             bufferClient = null;
