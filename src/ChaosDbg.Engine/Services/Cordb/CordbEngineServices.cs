@@ -1,4 +1,5 @@
 ﻿using ChaosDbg.Disasm;
+using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
 
@@ -15,17 +16,21 @@ namespace ChaosDbg.Cordb
 
         public INativeDisassemblerProvider NativeDisasmProvider { get; }
 
+        public ILDisassemblerProvider ILDisasmProvider { get; }
+
         public IPEFileProvider PEFileProvider { get; }
 
         public CordbEngineServices(
             IExeTypeDetector exeTypeDetector,
             NativeLibraryProvider nativeLibraryProvider,
             INativeDisassemblerProvider nativeDisasmProvider,
+            ILDisassemblerProvider ilDisasmProvider,
             IPEFileProvider peFileProvider)
         {
             ExeTypeDetector = exeTypeDetector;
             NativeLibraryProvider = nativeLibraryProvider;
             NativeDisasmProvider = nativeDisasmProvider;
+            ILDisasmProvider = ilDisasmProvider;
             PEFileProvider = peFileProvider;
         }
     }

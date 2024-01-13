@@ -1,6 +1,6 @@
 ﻿using Iced.Intel;
 
-namespace ChaosDbg
+namespace ChaosDbg.Disasm
 {
     static class FormatterOutputExtensions
     {

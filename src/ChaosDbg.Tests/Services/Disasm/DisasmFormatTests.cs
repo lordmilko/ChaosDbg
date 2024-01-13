@@ -42,10 +42,14 @@ namespace ChaosDbg.Tests
         public void DisasmFormat_DbgEng_PtrOffset_Hex() =>
             Test("00000000 ff7510          push    dword ptr [ebp+10h]", 0xff, 0x75, 0x10);
 
+        [TestMethod]
+        public void DisasmFormat_DbgEng_IPOffset_Hex() =>
+            Test(new byte[]{0x83, 0x3d, 0x86, 0xe5, 0xde, 0xff, 0x00}, "00007ffe`a7565f13 833d86e5deff00  cmp     dword ptr [00007ffe`a73544a0],0", 0x00007ffea7565f13, false);
+
         private void Test(string expected, params byte[] value) =>
             Test(value, expected);
 
-        private void Test<T>(T value, string expected)
+        private void Test<T>(T value, string expected, long ip = 0, bool is32Bit = true)
         {
             var formatter = DbgEngFormatter.Default;
 
@@ -57,7 +61,7 @@ namespace ChaosDbg.Tests
                 actual = formatter.Formatter.FormatInt64((long)(object)value, formatter.ImmediateOptions);
             else if (typeof(T) == typeof(byte[]))
             {
-                var dis = CreateDisassembler(0, (byte[])(object)value);
+                var dis = CreateDisassembler(ip, is32Bit, (byte[])(object)value);
                 var instr = dis.Disassemble();
                 actual = dis.Format(instr);
             }

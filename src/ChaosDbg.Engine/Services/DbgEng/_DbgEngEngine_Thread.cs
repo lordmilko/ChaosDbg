@@ -50,7 +50,12 @@ namespace ChaosDbg.DbgEng
             var attachFlags = DEBUG_ATTACH.DEFAULT;
 
             if (launchInfo is AttachProcessOptions a && a.NonInvasive)
+            {
                 attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+
+                if (a.NoSuspend)
+                    attachFlags |= DEBUG_ATTACH.NONINVASIVE_NO_SUSPEND;
+            }
 
             //Hook up callbacks last. If multiple engines are running simultaneously, a broadcast to all clients may result in us receiving notifications that don't belong to us.
             //We don't want to trip over such alerts when we're not ready to receive them yet

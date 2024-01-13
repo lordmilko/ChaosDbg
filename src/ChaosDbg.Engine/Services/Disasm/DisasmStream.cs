@@ -6,7 +6,8 @@ using ChaosLib.Memory;
 namespace ChaosDbg.Disasm
 {
     /// <summary>
-    /// Represents a stream that is used to read disassembly information from a target.
+    /// Represents a stream that is used to read native disassembly information from a target while recording
+    /// the bytes that a given instruction was comprised of.
     /// </summary>
     public sealed class DisasmStream : RelayStream
     {

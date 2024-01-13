@@ -2,13 +2,14 @@
 {
     /// <summary>
     /// Represents an unresolved transition to or from native code that may resolve to multiple
-    /// <see cref="CordbNativeFrame"/> instances.
+    /// <see cref="CordbNativeFrame"/> instances.<para/>
+    /// This frame type is unrelated to <see cref="CordbILTransitionFrame"/>.
     /// </summary>
-    class CordbNativeTransitionFrame : CordbFrame
+    public class CordbNativeTransitionFrame : CordbFrame
     {
         public override string Name => "Transition Frame";
 
-        public CordbNativeTransitionFrame(CrossPlatformContext context) : base(null, null, context)
+        internal CordbNativeTransitionFrame(CrossPlatformContext context) : base(null, null, context)
         {
         }
     }

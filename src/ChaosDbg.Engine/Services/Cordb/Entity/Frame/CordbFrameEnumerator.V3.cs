@@ -102,7 +102,7 @@ namespace ChaosDbg.Cordb
                         else if (frame is CorDebugInternalFrame @internal)
                             throw new NotImplementedException($"V3 stack walker returned a {frame.GetType().Name}. This should be impossible.");
                         else if (frame is CorDebugNativeFrame native)
-                            results.Add(GetRuntimeNativeFrame(native, context));
+                            results.Add(GetRuntimeNativeFrame(process, native, context));
                         else if (frame is CorDebugILFrame il)
                             results.Add(GetILFrame(process, il, context));
                         else
@@ -182,14 +182,22 @@ namespace ChaosDbg.Cordb
                 return newFrames.ToArray();
             }
 
-            private static CordbFrame GetRuntimeNativeFrame(CorDebugNativeFrame corDebugNativeFrame, CrossPlatformContext context)
+            private static CordbFrame GetRuntimeNativeFrame(CordbProcess process, CorDebugNativeFrame corDebugNativeFrame, CrossPlatformContext context)
             {
                 //It should be a "runtime native" frame. In the V3 stackwalker, this basically refers to frames that would have previously
                 //been referred to as "internal frames". A CorDebugNativeFrame does not contain an IL frame inside it when it either has no metadata,
                 //or when its function type is "native". In the latter case, there is metadata we can get at to name the function.
 
                 if (corDebugNativeFrame.TryGetFunction(out var function) == S_OK)
-                    throw new NotImplementedException($"Handling a {corDebugNativeFrame.GetType().Name} that contains a function (and therefore also a name that can be retrieved from {nameof(MetaDataImport)}) is not implemented.");
+                {
+                    //It sounds like it might be a P/Invoke or a QCall
+
+                    var module = process.Modules.GetModule(function.Module);
+
+                    var result = new CordbILTransitionFrame(corDebugNativeFrame, module, context);
+
+                    return result;
+                }
 
                 //It's a runtime native frame for sure then
                 return new CordbRuntimeNativeFrame(corDebugNativeFrame, null, context);

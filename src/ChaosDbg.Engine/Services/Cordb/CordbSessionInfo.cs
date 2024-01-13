@@ -90,12 +90,16 @@ namespace ChaosDbg.Cordb
 
         public TaskCompletionSource<object> WaitExitProcess { get; } = new TaskCompletionSource<object>();
 
+        public CordbEngineServices Services { get; }
+
         private bool disposed;
 
-        public CordbSessionInfo(ThreadStart threadProc, CancellationToken cancellationToken)
+        public CordbSessionInfo(CordbEngineServices services, ThreadStart threadProc, CancellationToken cancellationToken)
         {
             if (threadProc == null)
                 throw new ArgumentNullException(nameof(threadProc));
+
+            Services = services;
 
             EngineThread = new DispatcherThread("Cordb Engine Thread", threadProc);
 

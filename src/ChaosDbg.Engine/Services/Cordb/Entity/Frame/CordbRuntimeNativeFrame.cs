@@ -1,5 +1,4 @@
-﻿using ChaosLib;
-using ClrDebug;
+﻿using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
@@ -8,11 +7,11 @@ namespace ChaosDbg.Cordb
     /// In the V2 stack walking API these frames most likely would have been represented as <see cref="CorDebugInternalFrame"/> types.<para/>
     /// "True" native frames are modelled using the <see cref="CordbNativeFrame"/> type.
     /// </summary>
-    class CordbRuntimeNativeFrame : CordbFrame<CorDebugNativeFrame>
+    public class CordbRuntimeNativeFrame : CordbFrame<CorDebugNativeFrame>
     {
         protected override string DebuggerDisplay => "[Runtime] " + base.DebuggerDisplay;
 
-        public CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        internal CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
         }
     }

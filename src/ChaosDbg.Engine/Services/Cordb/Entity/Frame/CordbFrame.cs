@@ -44,7 +44,7 @@ namespace ChaosDbg.Cordb
             get
             {
                 if (name == null && CorDebugFrame != null && !(this is CordbRuntimeNativeFrame))
-                    name = CordbFormatter.FunctionName(CorDebugFrame.Function);
+                    name = ((CordbManagedModule) Module).MetaDataProvider.ResolveMethodDef(CorDebugFrame.FunctionToken).ToString();
 
                 return name;
             }
@@ -62,6 +62,6 @@ namespace ChaosDbg.Cordb
             Context = context;
         }
 
-        public override string ToString() => Name;
+        public override string ToString() => Name ?? $"[{GetType().Name}] 0x{Context.IP:X}";
     }
 }

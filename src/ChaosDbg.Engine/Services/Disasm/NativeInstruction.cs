@@ -1,4 +1,5 @@
-﻿using Iced.Intel;
+﻿using System.Diagnostics;
+using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
@@ -18,6 +19,8 @@ namespace ChaosDbg.Disasm
         /// Gets the bytes that comprise the read <see cref="Instruction"/>.
         /// </summary>
         byte[] Bytes { get; }
+
+        string ToString(DisasmFormatOptions format);
     }
 
     public class NativeInstruction : INativeInstruction
@@ -28,15 +31,18 @@ namespace ChaosDbg.Disasm
 
         public byte[] Bytes { get; }
 
-        public NativeInstruction(Instruction instruction, byte[] bytes)
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        private DbgEngFormatter formatter;
+
+        internal NativeInstruction(Instruction instruction, byte[] bytes, DbgEngFormatter formatter)
         {
             Instruction = instruction;
             Bytes = bytes;
+            this.formatter = formatter;
         }
 
-        public override string ToString()
-        {
-            return DbgEngFormatter.Default.Format(this);
-        }
+        public override string ToString() => formatter.Format(this);
+
+        public string ToString(DisasmFormatOptions format) => formatter.Format(this, format);
     }
 }

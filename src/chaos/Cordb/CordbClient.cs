@@ -3,6 +3,7 @@ using System.Threading;
 using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
+using ChaosDbg.Engine;
 
 namespace chaos
 {
@@ -13,20 +14,23 @@ namespace chaos
         private CordbEngineProvider engineProvider;
         private CordbEngine engine;
         private RelayParser commandDispatcher;
+        private IServiceProvider serviceProvider;
 
-        public CordbClient(CordbEngineProvider engineProvider, CommandBuilder commandBuilder)
+        public CordbClient(CordbEngineProvider engineProvider, CommandBuilder commandBuilder, IServiceProvider serviceProvider)
         {
             this.engineProvider = engineProvider;
             commandDispatcher = commandBuilder.Build();
+            this.serviceProvider = serviceProvider;
         }
 
         public void Execute(string executable, bool minimized, bool interop)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
 
-            RegisterCallbacks();
+            engine = (CordbEngine) engineProvider.CreateProcess(executable, minimized, interop, initCallback: RegisterCallbacks);
 
-            engine = (CordbEngine) engineProvider.CreateProcess(executable, minimized, interop);
+            //This is very dodgy, and we're relying on the premise that we'll never create more than one engine per process
+            ((ServiceProvider) serviceProvider).AddSingleton(engine);
 
             EngineLoop();
         }
@@ -81,7 +85,7 @@ namespace chaos
             }
         }
 
-        private void RegisterCallbacks()
+        private void RegisterCallbacks(ICordbEngine engine)
         {
             engine.EngineStatusChanged += (s, e) =>
             {

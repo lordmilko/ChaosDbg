@@ -6,9 +6,9 @@ namespace ChaosDbg.Cordb
     /// Represents a frame that is internal to the runtime that is on the stack. In the V3 stack walking API, these should not exist.<para/>
     /// Encapsulates the <see cref="CorDebugInternalFrame"/> type.
     /// </summary>
-    class CordbInternalFrame : CordbFrame<CorDebugInternalFrame>
+    public class CordbInternalFrame : CordbFrame<CorDebugInternalFrame>
     {
-        public CordbInternalFrame(CorDebugInternalFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        internal CordbInternalFrame(CorDebugInternalFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
         }
     }

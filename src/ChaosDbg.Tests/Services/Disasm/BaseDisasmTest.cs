@@ -6,7 +6,7 @@ namespace ChaosDbg.Tests
 {
     public abstract class BaseDisasmTest
     {
-        protected INativeDisassembler CreateDisassembler(long ip, params byte[] bytes)
+        protected INativeDisassembler CreateDisassembler(long ip, bool is32Bit, params byte[] bytes)
         {
             var stream = new MemoryStream(bytes);
 
@@ -21,7 +21,7 @@ namespace ChaosDbg.Tests
             var rvaStream = new PERvaToPhysicalStream(stream, peFile);
             rvaStream.Seek(0, SeekOrigin.Begin);
 
-            var engine = new NativeStreamDisassembler(rvaStream, true);
+            var engine = new NativeStreamDisassembler(rvaStream, is32Bit);
 
             return engine;
         }

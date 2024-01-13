@@ -9,13 +9,13 @@ namespace ChaosDbg.Cordb
     /// have been completely "synthesized" by performing a manual stack walk where the V3 stack walker has informed
     /// us that one or more native frames should exist.
     /// </summary>
-    class CordbNativeFrame : CordbFrame
+    public class CordbNativeFrame : CordbFrame
     {
         public override string Name { get; }
 
         public SymFromAddrResult Symbol { get; }
 
-        public CordbNativeFrame(NativeFrame nativeFrame, CordbModule module) : base(null, module, nativeFrame.Context)
+        internal CordbNativeFrame(NativeFrame nativeFrame, CordbModule module) : base(null, module, nativeFrame.Context)
         {
             string name;
 

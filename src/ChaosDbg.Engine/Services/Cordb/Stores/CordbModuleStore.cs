@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -14,25 +15,28 @@ namespace ChaosDbg.Cordb
         private Dictionary<CORDB_ADDRESS, CordbNativeModule> nativeModules = new Dictionary<CORDB_ADDRESS, CordbNativeModule>();
 
         private CordbProcess process;
-        private CordbEngineServices services;
 
-        public CordbModuleStore(CordbProcess process, CordbEngineServices services)
+        public CordbModuleStore(CordbProcess process)
         {
             //We don't need to worry about attach; we'll receive fake module load messages for both
             //native and managed modules
 
             this.process = process;
-            this.services = services;
         }
 
         internal CordbModule Add(CorDebugModule corDebugModule)
         {
-            var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, corDebugModule.BaseAddress);
-            var peFile = services.PEFileProvider.ReadStream(stream, true);
+            IPEFile peFile = null;
+
+            if (!corDebugModule.IsDynamic)
+            {
+                var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, corDebugModule.BaseAddress);
+                peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+            }
 
             lock (moduleLock)
             {
-                var module = new CordbManagedModule(corDebugModule, peFile);
+                var module = new CordbManagedModule(corDebugModule, process, peFile);
 
                 managedModules.Add(corDebugModule.BaseAddress, module);
 
@@ -57,7 +61,7 @@ namespace ChaosDbg.Cordb
             var baseAddress = (long) (void*) loadDll.lpBaseOfDll;
 
             var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, baseAddress);
-            var peFile = services.PEFileProvider.ReadStream(stream, true);
+            var peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
 
             var name = CordbNativeModule.GetNativeModuleName(loadDll);
 
@@ -68,7 +72,7 @@ namespace ChaosDbg.Cordb
                 //The only way to get the image size is to read the PE header;
                 //DbgEng does that too
 
-                var native = new CordbNativeModule(name, baseAddress, peFile);
+                var native = new CordbNativeModule(name, baseAddress, process, peFile);
 
                 nativeModules.Add(baseAddress, native);
 

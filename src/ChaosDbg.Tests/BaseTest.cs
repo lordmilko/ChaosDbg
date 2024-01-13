@@ -6,6 +6,7 @@ using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
+using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -54,6 +55,8 @@ namespace ChaosDbg.Tests
 
                         typeof(CordbEngineServices),
                         typeof(DbgEngEngineServices),
+
+                        typeof(ILDisassemblerProvider),
 
                         { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
                         { typeof(IPEFileProvider), typeof(PEFileProvider) },
@@ -156,8 +159,10 @@ namespace ChaosDbg.Tests
                     //Note: creating a DebugClient will cause DbgHelp's global options to be modified
 
                     var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
-                    var dbgEngEngine = dbgEngEngineProvider.Attach(cordbEngine.Process.Id, true);
+                    var dbgEngEngine = dbgEngEngineProvider.Attach(cordbEngine.Process.Id, nonInvasive: true, noSuspend: true);
                     dbgEngEngine.WaitForBreak();
+
+                    dbgEngEngine.Execute(".loadby sos clr");
 
                     return dbgEngEngine;
                 }));

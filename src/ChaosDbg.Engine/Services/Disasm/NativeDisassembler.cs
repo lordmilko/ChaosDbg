@@ -130,7 +130,7 @@ namespace ChaosDbg.Disasm
                             yield break;
 
                         //The stream moved. Write out the previous instruction followed by the one we just read
-                        yield return new NativeInstruction(previousInstr, previousInstrBytes);
+                        yield return new NativeInstruction(previousInstr, previousInstrBytes, Formatter);
 
                         //Fall through to return the second instruction we read as well
                     }
@@ -138,7 +138,7 @@ namespace ChaosDbg.Disasm
                     //Extract and clear the bytes that were read from the last operation
                     var bytes = Stream.ExtractReadBytes();
 
-                    yield return new NativeInstruction(instr, bytes);
+                    yield return new NativeInstruction(instr, bytes, Formatter);
                 }                
             }
             finally
@@ -160,7 +160,7 @@ namespace ChaosDbg.Disasm
 
         //Formatting relies on the symbol resolver, thus it must be part of the disassembler and cannot simply
         //be a static/standalone type
-        public string Format(INativeInstruction instruction) => Formatter.Format(instruction);
+        public string Format(INativeInstruction instruction, DisasmFormatOptions format = null) => Formatter.Format(instruction, format);
 
         public void Dispose()
         {

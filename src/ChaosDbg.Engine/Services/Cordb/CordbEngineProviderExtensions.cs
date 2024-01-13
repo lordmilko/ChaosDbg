@@ -1,4 +1,5 @@
-﻿using ChaosDbg.Metadata;
+﻿using System;
+using ChaosDbg.Metadata;
 
 namespace ChaosDbg.Cordb
 {
@@ -9,7 +10,8 @@ namespace ChaosDbg.Cordb
             string commandLine,
             bool startMinimized = false,
             bool useInterop = false,
-            ExeKind? exeKind = null)
+            ExeKind? exeKind = null,
+            Action<ICordbEngine> initCallback = null)
         {
             return engineProvider.CreateProcess(
                 new CreateProcessOptions(commandLine)
@@ -17,7 +19,8 @@ namespace ChaosDbg.Cordb
                     StartMinimized = startMinimized,
                     UseInterop = useInterop,
                     ExeKind = exeKind
-                }
+                },
+                initCallback: initCallback
             );
         }
 

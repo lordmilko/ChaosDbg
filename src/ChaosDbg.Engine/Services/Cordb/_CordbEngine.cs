@@ -43,6 +43,7 @@ namespace ChaosDbg.Cordb
                 throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
 
             Session = new CordbSessionInfo(
+                services,
                 () => ThreadProc(options),
                 cancellationToken
             );

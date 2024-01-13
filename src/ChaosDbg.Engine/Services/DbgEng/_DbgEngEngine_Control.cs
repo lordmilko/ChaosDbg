@@ -21,6 +21,12 @@ namespace ChaosDbg.DbgEng
         public void Invoke(Action<DebugClient> action) =>
             Session.EngineThread.Invoke(() => action(Session.EngineClient));
 
+        public void Execute(string command) =>
+            Invoke(c => c.Control.Execute(DEBUG_OUTCTL.THIS_CLIENT, command, DEBUG_EXECUTE.DEFAULT));
+
+        public string[] ExecuteBufferedCommand(string command) =>
+            ExecuteBufferedCommand(c => c.Control.Execute(DEBUG_OUTCTL.THIS_CLIENT, command, DEBUG_EXECUTE.DEFAULT));
+
         /// <summary>
         /// Executes a command that emits string values to output callbacks that should be captured and returned
         /// without affecting the output of the primary output callbacks.

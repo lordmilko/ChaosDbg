@@ -80,7 +80,7 @@ namespace ChaosDbg.Cordb
             Session.CorDebug = corDebug;
             Session.ManagedCallback = cb;
             Session.UnmanagedCallback = ucb;
-            Session.Process = new CordbProcess(process, Session, services, is32Bit, commandLine);
+            Session.Process = new CordbProcess(process, Session, is32Bit, commandLine);
             Session.IsInterop = isInterop;
         }
     }

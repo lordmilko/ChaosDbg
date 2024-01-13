@@ -19,11 +19,13 @@ namespace ChaosDbg.DbgEng
         public static DbgEngEngine Attach(
             this DbgEngEngineProvider engineProvider,
             int processId,
-            bool nonInvasive = false)
+            bool nonInvasive = false,
+            bool noSuspend = false)
         {
             return engineProvider.Attach(new AttachProcessOptions(processId)
             {
-                NonInvasive = nonInvasive
+                NonInvasive = nonInvasive,
+                NoSuspend = noSuspend
             });
         }
     }

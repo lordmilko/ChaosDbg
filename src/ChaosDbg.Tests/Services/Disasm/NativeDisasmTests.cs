@@ -28,7 +28,7 @@ namespace ChaosDbg.Tests
                 var peFile = new PEFile(relativeDbgEngMemoryStream, true);
                 relativeDbgEngMemoryStream.Seek(peFile.OptionalHeader.AddressOfEntryPoint, SeekOrigin.Begin);
 
-                var dis = new NativeStreamDisassembler(dbgEngMemoryStream, peFile.OptionalHeader.Magic == PEMagic.PE32, new DbgEngSymbolProvider(client));
+                var dis = new NativeStreamDisassembler(dbgEngMemoryStream, peFile.OptionalHeader.Magic == PEMagic.PE32, new DbgEngDisasmSymbolResolver(client));
 
                 CompareDisassembly(client, dis, baseAddress + peFile.OptionalHeader.AddressOfEntryPoint);
             });

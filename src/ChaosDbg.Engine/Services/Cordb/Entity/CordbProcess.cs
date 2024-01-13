@@ -147,7 +147,6 @@ namespace ChaosDbg.Cordb
         public CordbProcess(
             CorDebugProcess corDebugProcess,
             CordbSessionInfo session,
-            CordbEngineServices services,
             bool is32Bit,
             string commandLine)
         {
@@ -157,9 +156,6 @@ namespace ChaosDbg.Cordb
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
 
-            if (services == null)
-                throw new ArgumentNullException(nameof(services));
-
             CorDebugProcess = corDebugProcess;
             Win32Process = Process.GetProcessById(corDebugProcess.Id);
             Session = session;
@@ -167,7 +163,7 @@ namespace ChaosDbg.Cordb
             CommandLine = commandLine;
 
             Threads = new CordbThreadStore(this);
-            Modules = new CordbModuleStore(this, services);
+            Modules = new CordbModuleStore(this);
 
             DAC = new DacProvider(this);
 

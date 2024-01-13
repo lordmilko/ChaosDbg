@@ -165,7 +165,7 @@ namespace ChaosDbg.Cordb
             get
             {
                 /* When interop debugging, we may receive an EXIT_THREAD_DEBUG_EVENT at any time, even when the debuggee is supposed
-                 * to be "stopped". Try and bail out at every possible opportunity if we were notified this threat has now terminated,
+                 * to be "stopped". Try and bail out at every possible opportunity if we were notified this thread has now terminated,
                  * and wrap in a try/catch that will do a hard check whether the thread is actually running or not and rethrow on failure
                  * if the thread is in fact still running */
 
@@ -266,7 +266,9 @@ namespace ChaosDbg.Cordb
 
                         var highest = (int) Enum.GetValues(typeof(TlsThreadTypeFlag)).Cast<TlsThreadTypeFlag>().Last();
 
-                        if (rawType > highest)
+                        //If every flag is set, the maximum possible value will be (highest * 2) - 1
+                        //(e.g. if the highest is 2, flags 1 + 2 being set = 3. (2 * 2) - 1 = 3
+                        if (rawType >= (highest * 2))
                             return null;
                     }
 

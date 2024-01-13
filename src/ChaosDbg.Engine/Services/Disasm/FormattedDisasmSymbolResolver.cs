@@ -4,14 +4,14 @@ using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
-    class FormattedSymbolProvider : ISymbolResolver
+    class FormattedDisasmSymbolResolver : ISymbolResolver
     {
         private readonly ISymbolResolver symbolResolver;
         private Formatter displacementFormatter;
         private NumberFormattingOptions displacementOpts;
         private NumberFormattingOptions addressOpts;
 
-        public FormattedSymbolProvider(ISymbolResolver symbolResolver)
+        public FormattedDisasmSymbolResolver(ISymbolResolver symbolResolver)
         {
             if (symbolResolver == null)
                 throw new ArgumentNullException(nameof(symbolResolver));
@@ -71,6 +71,7 @@ namespace ChaosDbg.Disasm
 
                 builder.Append(")");
 
+                //We might typically expect that addresses of things will be in the ds: segment. Iced won't display the segment however if useSymbol is true (set by the result of TryGetSymbol)
                 symbol = new SymbolResult(address, builder.ToString());
             }
 

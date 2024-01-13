@@ -24,36 +24,42 @@ namespace ChaosDbg.Disasm
         /// Formats a given instruction as a string.
         /// </summary>
         /// <param name="instruction">The instruction to format.</param>
+        /// <param name="format">A set of options that allow customizing how the instruction is formatted.</param>
         /// <returns>The formatted instruction.</returns>
-        public string Format(INativeInstruction instruction)
+        public string Format(INativeInstruction instruction, DisasmFormatOptions format = null)
         {
             if (instruction == null)
                 throw new ArgumentNullException(nameof(instruction));
+
+            format ??= DisasmFormatOptions.Default;
 
             //Format the instruction in the same style as DbgEng. 
 
             var formatWriter = new StringOutput();
 
-            //Format the instruction pointer as a 32-bit or 64-bit number depending on our target bitness
-            formatWriter.Write(
-                instruction.Instruction.CodeSize == CodeSize.Code32 ?
-                    Formatter.FormatInt32((int)instruction.IP, ImmediateOptions) :
-                    Formatter.FormatInt64(instruction.IP, ImmediateOptions)
-            );
+            if (!format.Simple)
+            {
+                //Format the instruction pointer as a 32-bit or 64-bit number depending on our target bitness
+                formatWriter.Write(
+                    instruction.Instruction.CodeSize == CodeSize.Code32 ?
+                        Formatter.FormatInt32((int) instruction.IP, ImmediateOptions) :
+                        Formatter.FormatInt64(instruction.IP, ImmediateOptions)
+                );
 
-            formatWriter.Write(" ");
-
-            //Convert each byte into a two digit lowercase hexadecimal value.
-            foreach (var @byte in instruction.Bytes)
-                formatWriter.Write(@byte.ToString("X2").ToLower());
-
-            //Add some padding so that the instruction details are nicely aligned after the bytes
-            var padding = 15 - (instruction.Bytes.Length * 2);
-
-            for (var i = 0; i < padding; i++)
                 formatWriter.Write(" ");
 
-            formatWriter.Write(" ");
+                //Convert each byte into a two digit lowercase hexadecimal value.
+                foreach (var @byte in instruction.Bytes)
+                    formatWriter.Write(@byte.ToString("X2").ToLower());
+
+                //Add some padding so that the instruction details are nicely aligned after the bytes
+                var padding = 15 - (instruction.Bytes.Length * 2);
+
+                for (var i = 0; i < padding; i++)
+                    formatWriter.Write(" ");
+
+                formatWriter.Write(" ");
+            }
 
             //Now that we've processed the bytes, display the actual instruction
             Formatter.Format(instruction.Instruction, formatWriter);
@@ -92,10 +98,10 @@ namespace ChaosDbg.Disasm
 
             //When an address is resolved to a symbol, we want to display the symbol address e.g. notepad!foo (12345678).
             //Unfortunately, Iced will use the normal hex suffix for the address enclosed in brackets. As such, we manually
-            //hack this in FormattedSymbolProvider
+            //hack this in FormattedDisasmSymbolResolver
             opts.ShowSymbolAddress = false;
 
-            var masmFormatter = new MasmFormatter(opts, symbolResolver == null ? null : new FormattedSymbolProvider(symbolResolver), this);
+            var masmFormatter = new MasmFormatter(opts, symbolResolver == null ? null : new FormattedDisasmSymbolResolver(symbolResolver), this);
 
             return masmFormatter;
         }
@@ -157,12 +163,27 @@ namespace ChaosDbg.Disasm
                     break;
 
                 case OpKind.Memory:
-                    //It's something like ebp+0Ch. We want the displacement
-                    //to be capitalized. When MemoryBase is None, it could be
-                    //a memory offset from some segment, which we don't care to
-                    //change the formatting of
                     if (instruction.MemoryBase != Register.None)
-                        numberOptions.UppercaseHex = true;
+                    {
+                        if (instruction.MemoryBase == Register.EIP || instruction.MemoryBase == Register.RIP)
+                        {
+                            //It's an instruction like cmp dword ptr [00007ffe`a73544a0],0
+                            //We don't want to display a "h" suffix, and we need to include leading zeros
+                            numberOptions.Suffix = null;
+
+                            //In a sense, the operand is "relative to IP" (hence why IP is the MemoryBase). LeadingZeros
+                            //won't do what we want - we need to use DisplacementLeadingZeros instead
+                            numberOptions.DisplacementLeadingZeros = true;
+                        }
+                        else
+                        {
+                            //It's something like ebp+0Ch. We want the displacement
+                            //to be capitalized. When MemoryBase is None, it could be
+                            //a memory offset from some segment, which we don't care to
+                            //change the formatting of
+                            numberOptions.UppercaseHex = true;
+                        }
+                    }
 
                     break;
             }

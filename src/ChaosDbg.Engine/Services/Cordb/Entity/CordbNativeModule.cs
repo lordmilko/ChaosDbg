@@ -20,7 +20,7 @@ namespace ChaosDbg.Cordb
 
         public CordbManagedModule ManagedModule { get; set; }
 
-        public CordbNativeModule(string name, long baseAddress, IPEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, peFile)
+        public CordbNativeModule(string name, long baseAddress, CordbProcess process, IPEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, process, peFile)
         {
             var fileName = Path.GetFileName(name);
 
