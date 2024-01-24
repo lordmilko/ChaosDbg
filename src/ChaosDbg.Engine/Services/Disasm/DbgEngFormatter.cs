@@ -31,13 +31,13 @@ namespace ChaosDbg.Disasm
             if (instruction == null)
                 throw new ArgumentNullException(nameof(instruction));
 
-            format ??= DisasmFormatOptions.Default;
+            format ??= DisasmFormatOptions.DbgEng;
 
             //Format the instruction in the same style as DbgEng. 
 
             var formatWriter = new StringOutput();
 
-            if (!format.Simple)
+            if (format.IP)
             {
                 //Format the instruction pointer as a 32-bit or 64-bit number depending on our target bitness
                 formatWriter.Write(
@@ -47,7 +47,10 @@ namespace ChaosDbg.Disasm
                 );
 
                 formatWriter.Write(" ");
+            }
 
+            if (format.Bytes)
+            {
                 //Convert each byte into a two digit lowercase hexadecimal value.
                 foreach (var @byte in instruction.Bytes)
                     formatWriter.Write(@byte.ToString("X2").ToLower());

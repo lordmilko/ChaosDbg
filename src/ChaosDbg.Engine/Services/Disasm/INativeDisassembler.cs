@@ -9,6 +9,11 @@ namespace ChaosDbg.Disasm
     public interface INativeDisassembler : IDisposable
     {
         /// <summary>
+        /// Gets or sets the address of the next instruction to be disassembled.
+        /// </summary>
+        long IP { get; set; }
+
+        /// <summary>
         /// Creates an enumeration that disassembles instructions starting from the current position until
         /// an invalid instruction is encountered.
         /// </summary>

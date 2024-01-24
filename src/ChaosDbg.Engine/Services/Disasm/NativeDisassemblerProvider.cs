@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using ChaosLib.Memory;
 using ChaosLib.Metadata;
 using Iced.Intel;
 
@@ -47,8 +48,13 @@ namespace ChaosDbg.Disasm
         }
 
         /// <inheritdoc />
-        public INativeDisassembler CreateDisassembler(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null) =>
-            new NativeStreamDisassembler(stream, is32Bit, symbolResolver);
+        public INativeDisassembler CreateDisassembler(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null)
+        {
+            if (stream is MemoryStream)
+                throw new ArgumentException($"Cannot create an {nameof(INativeDisassembler)} using a stream of type '{nameof(MemoryStream)}'. Consider encapsulating this stream in an {nameof(AbsoluteToRelativeStream)}, specifying the module base.", nameof(stream));
+
+            return new NativeStreamDisassembler(stream, is32Bit, symbolResolver);
+        }
 
         /// <inheritdoc />
         public INativeDisassembler CreateDisassembler(string path, ISymbolResolver symbolResolver = null)

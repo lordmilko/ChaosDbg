@@ -6,7 +6,7 @@ namespace ChaosDbg.Disasm
     /// <summary>
     /// Represents a native CPU instruction and its corresponding bytes.
     /// </summary>
-    public interface INativeInstruction
+    public interface INativeInstruction : IInstruction
     {
         long IP { get; }
 
@@ -25,6 +25,8 @@ namespace ChaosDbg.Disasm
 
     public class NativeInstruction : INativeInstruction
     {
+        long IInstruction.Address => IP;
+
         public long IP => (long) Instruction.IP;
 
         public Instruction Instruction { get; }

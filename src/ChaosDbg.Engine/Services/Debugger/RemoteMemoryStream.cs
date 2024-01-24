@@ -5,6 +5,9 @@ using ClrDebug;
 
 namespace ChaosDbg
 {
+    /// <summary>
+    /// Represents an abstract stream of memory in a remote processes address space.
+    /// </summary>
     abstract class RemoteMemoryStream : AbsoluteStream
     {
         public override bool CanRead => true;
@@ -29,7 +32,7 @@ namespace ChaosDbg
 
             //I don't understand why, but if we pass buffer to TryReadVirtual, buffer's contents
             //won't be seen by the caller, so we have to create a temporary buffer instead
-            Array.Copy(value, buffer, count);
+            Array.Copy(value, buffer, value.Length);
 
             Position += value.Length;
 

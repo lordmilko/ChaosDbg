@@ -46,10 +46,50 @@ namespace ChaosDbg.Tests
         public void DisasmFormat_DbgEng_IPOffset_Hex() =>
             Test(new byte[]{0x83, 0x3d, 0x86, 0xe5, 0xde, 0xff, 0x00}, "00007ffe`a7565f13 833d86e5deff00  cmp     dword ptr [00007ffe`a73544a0],0", 0x00007ffea7565f13, false);
 
+        [TestMethod]
+        public void DisasmFormat_ToString_DbgEng()
+        {
+            Test(
+                new byte[] { 0xff, 0x75, 0x08 },
+                "00000000 ff7508          push    dword ptr [ebp+8]",
+                format: DisasmFormatOptions.DbgEng
+            );
+        }
+
+        [TestMethod]
+        public void DisasmFormat_ToString_NoIPOrBytes()
+        {
+            Test(
+                new byte[] { 0xff, 0x75, 0x08 },
+                "push    dword ptr [ebp+8]",
+                format: DisasmFormatOptions.Default
+            );
+        }
+
+        [TestMethod]
+        public void DisasmFormat_ToString_IPOnly()
+        {
+            Test(
+                new byte[] { 0xff, 0x75, 0x08 },
+                "00000000 push    dword ptr [ebp+8]",
+                format: DisasmFormatOptions.Default.WithIP(true)
+            );
+        }
+
+        [TestMethod]
+        public void DisasmFormat_ToString_BytesOnly()
+        {
+            Test(
+                new byte[] { 0xff, 0x75, 0x08 },
+                "ff7508          push    dword ptr [ebp+8]",
+                format: DisasmFormatOptions.Default.WithBytes(true)
+            );
+        }
+
         private void Test(string expected, params byte[] value) =>
             Test(value, expected);
 
-        private void Test<T>(T value, string expected, long ip = 0, bool is32Bit = true)
+        private void Test<T>(T value, string expected, long ip = 0, bool is32Bit = true, DisasmFormatOptions format = null)
         {
             var formatter = DbgEngFormatter.Default;
 
@@ -63,7 +103,7 @@ namespace ChaosDbg.Tests
             {
                 var dis = CreateDisassembler(ip, is32Bit, (byte[])(object)value);
                 var instr = dis.Disassemble();
-                actual = dis.Format(instr);
+                actual = dis.Format(instr, format);
             }
             else
                 throw new NotImplementedException($"Don't know how to format value of type '{typeof(T).Name}'");

@@ -11,6 +11,20 @@ namespace ChaosDbg.Disasm
     /// </summary>
     public abstract class NativeDisassembler : INativeDisassembler
     {
+        /// <summary>
+        /// Gets or sets the current position of the instruction pointer,
+        /// controlling the address of the instruction that will next be disassembled.
+        /// </summary>
+        public long IP
+        {
+            get => Stream.Position;
+            set
+            {
+                Stream.Position = value;
+                Decoder.IP = (ulong) value;
+            }
+        }
+
         #region Stream
 
         private DisasmStream stream;

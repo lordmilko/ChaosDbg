@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
@@ -52,6 +53,7 @@ namespace ChaosDbg.Tests
                         typeof(CordbEngineProvider),
                         typeof(DbgEngEngineProvider),
                         typeof(NativeLibraryProvider),
+                        typeof(PEMetadataProvider),
 
                         typeof(CordbEngineServices),
                         typeof(DbgEngEngineServices),
