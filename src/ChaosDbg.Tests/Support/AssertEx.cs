@@ -23,5 +23,18 @@ namespace ChaosDbg.Tests
                 throw;
             }
         }
+
+        public static void ArrayEqual<T1, T2>(T1[] expected, T2[] actual, string what, Func<T2, object> selector = null)
+        {
+            Assert.AreEqual(expected.Length, actual.Length, $"{what} expected array length was incorrect. Expected: {string.Join(", ", expected)}. Actual: {string.Join(", ", actual)}");
+
+            for (var i = 0; i < expected.Length; i++)
+            {
+                var expectedElm = expected[i].ToString();
+                var actualElm = (selector == null ? actual[i] : selector(actual[i])).ToString();
+
+                Assert.AreEqual(expectedElm, actualElm, $"{what} value at index {i} was incorrect");
+            }
+        }
     }
 }
