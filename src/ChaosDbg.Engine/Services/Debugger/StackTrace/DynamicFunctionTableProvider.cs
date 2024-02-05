@@ -20,12 +20,14 @@ namespace ChaosDbg
          * will immediately start spiralling into incoherence. */
 
         private ICLRDataTarget dataTarget;
-        private Dictionary<string, IntPtr> loadedLibraries = new Dictionary<string, IntPtr>();
+        private DynamicFunctionTableCache dynamicFunctionTableCache;
+        private Dictionary<string, (IntPtr hModule, POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK callback)> loadedLibraries = new Dictionary<string, (IntPtr hModule, POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK callback)>();
         private bool disposed;
 
-        public DynamicFunctionTableProvider(ICLRDataTarget dataTarget)
+        public DynamicFunctionTableProvider(ICLRDataTarget dataTarget, DynamicFunctionTableCache dynamicFunctionTableCache)
         {
             this.dataTarget = dataTarget;
+            this.dynamicFunctionTableCache = dynamicFunctionTableCache;
         }
 
         public bool TryGetDynamicFunctionEntry(IntPtr hProcess, long address, out RUNTIME_FUNCTION match)
@@ -116,42 +118,22 @@ namespace ChaosDbg
 
             if (targetAddress > table.MinimumAddress && targetAddress < table.MaximumAddress && outOfProcessDll != null)
             {
-                if (!loadedLibraries.TryGetValue(outOfProcessDll, out var hModule))
+                if (!loadedLibraries.TryGetValue(outOfProcessDll, out var existing))
                 {
-                    hModule = Kernel32.LoadLibrary(outOfProcessDll);
-                    loadedLibraries[outOfProcessDll] = hModule;
+                    var hModule = Kernel32.LoadLibrary(outOfProcessDll);
+
+                    var pCallback = Kernel32.GetProcAddress(hModule, Ntdll.OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK_EXPORT_NAME);
+                    var callback = Marshal.GetDelegateForFunctionPointer<POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK>(pCallback);
+
+                    existing = (hModule, callback);
+
+                    loadedLibraries[outOfProcessDll] = existing;
                 }
 
-                var pCallback = Kernel32.GetProcAddress(hModule, Ntdll.OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK_EXPORT_NAME);
-                var callback = Marshal.GetDelegateForFunctionPointer<POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK>(pCallback);
-
-                var status = callback(hProcess, tablePtr, out var entries, out var pFunctions);
-
-                if (status != NTSTATUS.STATUS_SUCCESS)
+                if (!dynamicFunctionTableCache.TryGetOrAdd(hProcess, existing.hModule, existing.callback, tablePtr, out var functionEntries))
                     return false;
 
-                if ((IntPtr) pFunctions == IntPtr.Zero)
-                    return false;
-
-                var original = pFunctions;
-
-                try
-                {
-                    var functionEntries = new RUNTIME_FUNCTION[entries];
-
-                    for (var i = 0; i < entries; i++, pFunctions++)
-                        functionEntries[i] = *pFunctions;
-
-                    return TrySearchFunctionEntries(table, functionEntries, targetAddress, out match);
-                }
-                finally
-                {
-                    //DbgEng calls RtlFreeHeap(RtlProcessHeap()). RtlProcessHeap is defined as NtCurrentPeb()->ProcessHeap, which we can't access in C#.
-                    //kernel32!GetProcessHeap seems to do the same thing however: HeapFree ultimately defers to RtlpFreeHeapInternal and when you look
-                    //at how mscordacwks allocates its buffer, it uses HeapAlloc, which means whatever it's doing must be the normal rules that all
-                    //out of proc callback DLLs must follow
-                    Kernel32.HeapFree(Kernel32.GetProcessHeap(), 0, (IntPtr) original);
-                }
+                return TrySearchFunctionEntries(table, functionEntries, targetAddress, out match);
             }
 
             return false;
@@ -210,7 +192,7 @@ namespace ChaosDbg
                 return;
 
             foreach (var value in loadedLibraries.Values)
-                Kernel32.FreeLibrary(value);
+                Kernel32.FreeLibrary(value.hModule);
 
             loadedLibraries.Clear();
 

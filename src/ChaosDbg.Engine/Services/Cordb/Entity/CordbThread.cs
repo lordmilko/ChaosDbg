@@ -158,12 +158,17 @@ namespace ChaosDbg.Cordb
 
         /// <summary>
         /// Gets the type of this thread within the CLR, if it has a special type.<para/>
-        /// If this thread does not have a special type, this property returns null.
+        /// If this thread does not have a special type, or the CLR has not yet been loaded,
+        /// this property returns null.
         /// </summary>
         public TlsThreadTypeFlag? SpecialType
         {
             get
             {
+                //Can't create SOS before we've loaded the CLR
+                if (Process.Session.EventHistory.ManagedEventCount == 0)
+                    return null;
+
                 /* When interop debugging, we may receive an EXIT_THREAD_DEBUG_EVENT at any time, even when the debuggee is supposed
                  * to be "stopped". Try and bail out at every possible opportunity if we were notified this thread has now terminated,
                  * and wrap in a try/catch that will do a hard check whether the thread is actually running or not and rethrow on failure

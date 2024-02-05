@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Runtime.InteropServices;
 using ChaosLib;
+using ChaosLib.Metadata;
 using ClrDebug;
-using static ClrDebug.HRESULT;
 
 namespace ChaosDbg
 {
@@ -17,16 +16,24 @@ namespace ChaosDbg
         private DbgHelpSession dbgHelpSession;
         private DynamicFunctionTableProvider dynamicFunctionTableProvider;
         private IntPtr dynamicFunctionTableResult;
+        private Func<long, (IDisplacedSymbol symbol, ISymbolModule module)> getSymbol;
 
         public NativeStackWalker(
             ICLRDataTarget dataTarget,
-            DbgHelpSession dbgHelpSession)
+            DbgHelpSession dbgHelpSession,
+            DynamicFunctionTableCache dynamicFunctionTableCache,
+            Func<long, (IDisplacedSymbol, ISymbolModule)> getSymbol)
         {
             if (dataTarget == null)
                 throw new ArgumentNullException(nameof(dataTarget));
 
             this.dataTarget = new CLRDataTarget(dataTarget);
             this.dbgHelpSession = dbgHelpSession;
+
+            //While our DbgHelpSession can retrieve modules for us, we want to retrieve enhanced ISymbol/ISymbolModule instances.
+            //If we already have an ISymbolModule stored somewhere else (which is likely in a debugger), use those existing instances
+            //instead
+            this.getSymbol = getSymbol;
 
             /* I can't believe how long I spent trying to figure out why StackWalkEx was giving me different results
              * to what DbgEng yields, only to stumble upon this post from Microsoft after I had finally emerged from
@@ -38,7 +45,7 @@ namespace ChaosDbg
              * so I'm ignoring that issue for now */
             if (this.dataTarget.MachineType != IMAGE_FILE_MACHINE.I386)
             {
-                dynamicFunctionTableProvider = new DynamicFunctionTableProvider(dataTarget);
+                dynamicFunctionTableProvider = new DynamicFunctionTableProvider(dataTarget, dynamicFunctionTableCache);
                 dbgHelpSession.FunctionEntryCallback = DynamicFunctionCallback;
             }
         }
@@ -110,14 +117,9 @@ namespace ChaosDbg
                 if (!result)
                     break;
 
-                dbgHelpSession.TrySymFromAddr(stackFrame.AddrPC.Offset, out var symbol);
+                var symbolResult = getSymbol(stackFrame.AddrPC.Offset);
 
-                string moduleName = null;
-
-                if (dbgHelpSession.TrySymGetModuleInfo64(stackFrame.AddrPC.Offset, out var moduleInfo) == S_OK)
-                    moduleName = Path.GetFileNameWithoutExtension(moduleInfo.ImageName);
-
-                var newFrame = new NativeFrame(stackFrame, symbol, moduleName, new CrossPlatformContext(context.Flags, raw));
+                var newFrame = new NativeFrame(stackFrame, symbolResult.symbol, symbolResult.module, new CrossPlatformContext(context.Flags, raw));
 
                 if (predicate != null && !predicate(newFrame))
                     yield break;
@@ -140,16 +142,16 @@ namespace ChaosDbg
              * At this initial stage, handling all these corner cases is too much effort. This can be revisited in
              * the future when some specific stack trace issues arise */
 
-            //Just try and resolve the address based on the modules that are known to DbgEng (which should be all modules,
-            //since we should be informing DbgEng whenever modules are loaded when doing interop debugging). If we're trying
+            //Just try and resolve the address based on the modules that are known to DbgHelp (which should be all modules,
+            //since we should be informing DbgHelp whenever modules are loaded when doing interop debugging). If we're trying
             //to resolve the function table of an address in a CLR method, this will occur in the DynamicFunctionCallback()
-            //registered above after DbgEng's normal resolution logic fails
+            //registered above after DbgHelp's normal resolution logic fails
             return DbgHelp.Native.SymFunctionTableAccess64(hProcess, addrBase);
         }
 
         private long GetModuleBase(IntPtr hProcess, long qwAddr)
         {
-            //DbgEng searches the modules it knows about, and if no module is found, defers to querying for dynamic function tables directly.
+            //DbgHelp searches the modules it knows about, and if no module is found, defers to querying for dynamic function tables directly.
             //All modules we know about should be known to DbgHelp as well, so we're fine to just call SymGetModuleBase64() directly
 
             var result = DbgHelp.Native.SymGetModuleBase64(hProcess, qwAddr);

@@ -18,10 +18,22 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool IsCLR { get; }
 
+        /// <summary>
+        /// Provides access to any symbol information that is available for this module.
+        /// </summary>
+        public ISymbolModule SymbolModule { get; }
+
         public CordbManagedModule ManagedModule { get; set; }
 
-        public CordbNativeModule(string name, long baseAddress, CordbProcess process, IPEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, process, peFile)
+        public CordbNativeModule(
+            string name,
+            long baseAddress,
+            CordbProcess process,
+            IPEFile peFile,
+            ISymbolModule symbolModule) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, process, peFile)
         {
+            SymbolModule = symbolModule;
+
             var fileName = Path.GetFileName(name);
 
             IsCLR = StringComparer.OrdinalIgnoreCase.Equals(fileName, "coreclr.dll") || StringComparer.OrdinalIgnoreCase.Equals(fileName, "clr.dll");

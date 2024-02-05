@@ -42,7 +42,7 @@ namespace ChaosDbg.Metadata
             //Is this a .NET executable? And if so what kind of .NET executable is it?
 
             //Does it have an IMAGE_COR20_HEADER?
-            var pe = peFileProvider.ReadFile(filePath);
+            var pe = peFileProvider.ReadFile(filePath, flags: PEFileDirectoryFlags.ImportTable | PEFileDirectoryFlags.Cor20Header);
 
             if (pe.Cor20Header != null)
                 return DetectDotnetType(filePath);

@@ -10,6 +10,9 @@ namespace ChaosDbg
 
         long EndAddress { get; }
 
+        /// <summary>
+        /// Gets the virtual PE File of this module.
+        /// </summary>
         IPEFile PEFile { get; }
     }
 }

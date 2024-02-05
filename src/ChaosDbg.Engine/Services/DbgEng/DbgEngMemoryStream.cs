@@ -11,7 +11,7 @@ namespace ChaosDbg.DbgEng
     /// </summary>
     class DbgEngMemoryStream : RemoteMemoryStream
     {
-        public static Stream CreateRelative(DebugClient client, long absoluteAddress)
+        public static RelativeToAbsoluteStream CreateRelative(DebugClient client, long absoluteAddress)
         {
             var inner = new DbgEngMemoryStream(client);
             inner.Seek(absoluteAddress, SeekOrigin.Begin);

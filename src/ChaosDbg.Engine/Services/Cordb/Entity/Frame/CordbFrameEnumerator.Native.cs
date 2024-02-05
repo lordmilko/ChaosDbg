@@ -20,14 +20,19 @@ namespace ChaosDbg.Cordb
                 var process = accessor.Thread.Process;
                 var dataTarget = (ICLRDataTarget) process.DAC.DataTarget;
 
-                using var walker = new NativeStackWalker(dataTarget, process.DbgHelp);
+                using var walker = new NativeStackWalker(
+                    dataTarget,
+                    process.DbgHelp,
+                    process.Session.PauseContext.DynamicFunctionTableCache,
+                    addr => GetModuleSymbol(addr, process)
+                );
 
                 var contextFlags = GetContextFlags(process.MachineType);
                 var context = new CrossPlatformContext(contextFlags, dataTarget.GetThreadContext<CROSS_PLATFORM_CONTEXT>(accessor.Id, contextFlags));
 
                 var frames = walker.Walk(process.Handle, accessor.Handle, context).ToArray();
 
-                return frames.Select(f => (CordbFrame) new CordbNativeFrame(f, process.Modules.GetModule(f.IP))).ToArray();
+                return frames.Select(f => (CordbFrame) new CordbNativeFrame(f, process.Modules.GetModuleForAddress(f.IP))).ToArray();
             }
         }
     }

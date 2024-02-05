@@ -1,4 +1,4 @@
-﻿using ChaosLib;
+﻿using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -11,18 +11,24 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbNativeFrame : CordbFrame
     {
+        /// <summary>
+        /// Gets the display name of this frame.
+        /// </summary>
         public override string Name { get; }
 
-        public SymFromAddrResult Symbol { get; }
+        /// <summary>
+        /// Gets the symbol that is associated with this frame, if one exists.
+        /// </summary>
+        public IDisplacedSymbol Symbol { get; }
 
         internal CordbNativeFrame(NativeFrame nativeFrame, CordbModule module) : base(null, module, nativeFrame.Context)
         {
             string name;
 
             if (nativeFrame.FunctionName != null)
-                name = $"{nativeFrame.ModuleName}!{nativeFrame.FunctionName}";
-            else if (nativeFrame.ModuleName != null)
-                name = $"{nativeFrame.ModuleName}!{nativeFrame.IP:X}";
+                name = nativeFrame.FunctionName;
+            else if (nativeFrame.Module != null)
+                name = $"{nativeFrame.Module}!{nativeFrame.IP:X}";
             else
                 name = null;
 

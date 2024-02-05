@@ -1,8 +1,12 @@
 ﻿using System.Diagnostics;
 using ChaosLib;
+using ChaosLib.Metadata;
 
 namespace ChaosDbg
 {
+    /// <summary>
+    /// Represents a stack frame that was found by a <see cref="NativeStackWalker"/>.
+    /// </summary>
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
     class NativeFrame
     {
@@ -11,10 +15,10 @@ namespace ChaosDbg
             get
             {
                 if (FunctionName != null)
-                    return $"{ModuleName}!{FunctionName}";
+                    return FunctionName;
 
-                if (ModuleName != null)
-                    return $"{ModuleName}!{IP:X}";
+                if (Module != null)
+                    return $"{Module}!{IP:X}";
 
                 return $"IP = {IP:X}, SP = {SP:X}, BP = {BP:X}";
             }
@@ -27,13 +31,13 @@ namespace ChaosDbg
 
         public string FunctionName => Symbol.ToString();
 
-        public string ModuleName { get; }
+        public ISymbolModule Module { get; }
 
-        public SymFromAddrResult Symbol { get; }
+        public IDisplacedSymbol Symbol { get; }
 
         public CrossPlatformContext Context { get; }
 
-        public NativeFrame(in STACKFRAME_EX stackFrame, SymFromAddrResult symbol, string moduleName, CrossPlatformContext context)
+        public NativeFrame(in STACKFRAME_EX stackFrame, IDisplacedSymbol symbol, ISymbolModule module, CrossPlatformContext context)
         {
             IP = stackFrame.AddrPC.Offset;
             SP = stackFrame.AddrStack.Offset;
@@ -41,7 +45,7 @@ namespace ChaosDbg
             Return = stackFrame.AddrReturn.Offset;
 
             Symbol = symbol;
-            ModuleName = moduleName;
+            Module = module;
 
             Context = context;
 

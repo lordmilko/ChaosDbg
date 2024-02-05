@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ChaosDbg.Analysis;
 using ChaosLib.Metadata;
 using ClrDebug;
 
@@ -31,7 +32,11 @@ namespace ChaosDbg.Cordb
             if (!corDebugModule.IsDynamic)
             {
                 var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, corDebugModule.BaseAddress);
-                peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+
+                //We don't need to worry about getting symbol information for managed modules. If a module is a C++/CLI module,
+                //we'll get a native module load event prior to this managed load event, and we'll get the native symbol information
+                //in that event.
+                peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All);
             }
 
             lock (moduleLock)
@@ -66,13 +71,19 @@ namespace ChaosDbg.Cordb
             var name = CordbNativeModule.GetNativeModuleName(loadDll);
 
             process.DbgHelp.AddModule(name, baseAddress, peFile.OptionalHeader.SizeOfImage);
+            var symbolModule = new DbgHelpSymbolModule(process.DbgHelp, name, baseAddress);
+
+            //We have an unfortunate timing issue here. We want to read the whole PE File, but doing so
+            //can require access to symbols in order to read ExceptionData correctly. So, we must populate
+            //the data directories after we've read the symbols
+            peFile.ReadDataDirectories(stream, PEFileDirectoryFlags.All, new PESymbolResolver(symbolModule));
 
             lock (moduleLock)
             {
                 //The only way to get the image size is to read the PE header;
                 //DbgEng does that too
 
-                var native = new CordbNativeModule(name, baseAddress, process, peFile);
+                var native = new CordbNativeModule(name, baseAddress, process, peFile, symbolModule);
 
                 nativeModules.Add(baseAddress, native);
 
@@ -141,21 +152,33 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        internal CordbModule GetModule(long ip)
+        internal CordbModule GetModuleForAddress(long address)
+        {
+            if (TryGetModuleForAddress(address, out var module))
+                return module;
+
+            //Note: this method is used in contexts here it's assumed we MUST have a return type. If we modify this method to return null,
+            //we should update the description in CordbFrame.Module which says you only have a null module when it's a dynamically generated module
+
+            throw new InvalidOperationException($"Could not find which module address 0x{address:X} belongs to");
+        }
+
+        internal bool TryGetModuleForAddress(long address, out CordbModule module)
         {
             lock (moduleLock)
             {
                 foreach (var item in nativeModules.Values)
                 {
-                    if (ip >= item.BaseAddress && ip <= item.EndAddress)
-                        return item;
+                    if (address >= item.BaseAddress && address <= item.EndAddress)
+                    {
+                        module = item;
+                        return true;
+                    }
                 }
             }
 
-            //Note: this method is used in contexts here it's assumed we MUST have a return type. If we modify this method to return null,
-            //we should update the description in CordbFrame.Module which says you only have a null module when it's a dynamically generated module
-
-            throw new InvalidOperationException($"Could not find which module address 0x{ip:X} belongs to");
+            module = null;
+            return false;
         }
 
         public IEnumerator<CordbModule> GetEnumerator()

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ChaosLib;
+using ChaosLib.Metadata;
 using ClrDebug;
 using static ClrDebug.HRESULT;
 
@@ -14,6 +15,29 @@ namespace ChaosDbg.Cordb
     {
         //The mimimum we need for stack walking is IP, SP and BP. There is a big gotcha in AMD64: you also need to include CONTEXT_INTEGER if you want to get Rbp!
         private static ContextFlags GetContextFlags(IMAGE_FILE_MACHINE machineType) => machineType == IMAGE_FILE_MACHINE.I386 ? ContextFlags.X86ContextControl : ContextFlags.AMD64ContextControl | ContextFlags.AMD64ContextInteger;
+
+        private static (IDisplacedSymbol symbol, ISymbolModule module) GetModuleSymbol(long addr, CordbProcess process)
+        {
+            /* In order to use fancy ISymbol objects, we need an ISymbolModule (which ISymbol objects depend on).
+             * We already have ISymbolModule objects saved on the modules maintained by our debugger, so retrieve
+             * those instead of creating duplicate instances */
+
+            if (process.Modules.TryGetModuleForAddress(addr, out var module))
+            {
+                if (module is CordbNativeModule m)
+                {
+                    //I suppose it's possible to have an assembly with absolutely no symbols in it?
+                    var result = m.SymbolModule.GetSymbolFromAddress(addr);
+
+                    return (result, m.SymbolModule);
+                }
+            }
+
+            if (process.DbgHelp.TrySymFromAddr(addr, out var symbolResult) == HRESULT.S_OK)
+                throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.SymbolInfo.ModuleBase:X} which ChaosDbg wasn't able to detect as having symbols.");
+
+            return default;
+        }
 
         /// <summary>
         /// Implements a stack frame enumerator compatible with .NET Framework 4+
@@ -134,7 +158,12 @@ namespace ChaosDbg.Cordb
                 if (frames.Count == 0)
                     return Array.Empty<CordbFrame>();
 
-                using var walker = new NativeStackWalker(dataTarget, dbgHelpSession);
+                using var walker = new NativeStackWalker(
+                    dataTarget,
+                    dbgHelpSession,
+                    process.Session.PauseContext.DynamicFunctionTableCache,
+                    addr => GetModuleSymbol(addr, process)
+                );
 
                 //First, let's get all native frames starting from the top of the stack
                 var nativeFrames = walker.Walk(dbgHelpSession.hProcess, hThread, frames[0].Context).ToArray();
@@ -164,7 +193,7 @@ namespace ChaosDbg.Cordb
                         if (i < allFrames.Length - 1 && allFrames[i + 1].Value is CordbFrame c2 && !(c2 is CordbNativeTransitionFrame) && c2.Context.SP == item.SP)
                             continue;
 
-                        var module = process.Modules.GetModule(native.IP);
+                        var module = process.Modules.GetModuleForAddress(native.IP);
 
                         //It's a normal NativeFrame then
                         newFrames.Add(new CordbNativeFrame(native, module));

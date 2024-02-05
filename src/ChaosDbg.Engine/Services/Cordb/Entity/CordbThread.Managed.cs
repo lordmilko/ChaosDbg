@@ -23,7 +23,7 @@ namespace ChaosDbg.Cordb
             /// however does not change when the managed thread moves to a different OS thread. This is not the same as
             /// the managed thread ID.
             /// </summary>
-            public int Id => CorDebugThread.Id;
+            public int Id { get; }
 
             /// <summary>
             /// Gets the true OS thread that this managed thread is bound to. If the managed thread moves to a different
@@ -44,6 +44,11 @@ namespace ChaosDbg.Cordb
             public ManagedAccessor(CorDebugThread corDebugThread)
             {
                 CorDebugThread = corDebugThread;
+
+                //We need to get this ID to remove the thread from the CordbThreadStore,
+                //however in rare scenarios the object will already be neutered and
+                //asking for it from the CorDebugThread will fail
+                Id = CorDebugThread.Id;
             }
         }
     }

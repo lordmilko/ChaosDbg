@@ -82,6 +82,11 @@ namespace ChaosDbg.Cordb
         /// </summary>
         internal CordbCallbackContext CallbackContext { get; }
 
+        /// <summary>
+        /// Stores temporary state while the debugger is paused.
+        /// </summary>
+        internal CordbPauseContext PauseContext { get; } = new CordbPauseContext();
+
         internal CordbEventHistoryStore EventHistory { get; } = new CordbEventHistoryStore();
 
         public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);

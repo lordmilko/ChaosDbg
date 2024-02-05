@@ -5,9 +5,12 @@ using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /// <summary>
+    /// Represents a stream capable of reading memory from a target process via an <see cref="ICLRDataTarget"/>.
+    /// </summary>
     class CordbMemoryStream : RemoteMemoryStream
     {
-        public static Stream CreateRelative(ICLRDataTarget dataTarget, long absoluteAddress)
+        public static RelativeToAbsoluteStream CreateRelative(ICLRDataTarget dataTarget, long absoluteAddress)
         {
             var inner = new CordbMemoryStream(dataTarget);
             inner.Seek(absoluteAddress, SeekOrigin.Begin);

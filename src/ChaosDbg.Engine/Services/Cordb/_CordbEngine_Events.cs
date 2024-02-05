@@ -73,6 +73,7 @@ namespace ChaosDbg.Cordb
 
             Session.CurrentStopCount++;
             Session.CallbackContext.Clear();
+            Session.PauseContext.Clear();
         }
 
         #endregion
