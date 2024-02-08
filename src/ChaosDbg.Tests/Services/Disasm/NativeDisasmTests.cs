@@ -5,7 +5,7 @@ using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosLib.Memory;
 using ClrDebug.DbgEng;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -28,13 +28,13 @@ namespace ChaosDbg.Tests
                 var peFile = new PEFile(relativeDbgEngMemoryStream, true);
                 relativeDbgEngMemoryStream.Seek(peFile.OptionalHeader.AddressOfEntryPoint, SeekOrigin.Begin);
 
-                var dis = new NativeStreamDisassembler(dbgEngMemoryStream, peFile.OptionalHeader.Magic == PEMagic.PE32, new DbgEngDisasmSymbolResolver(client));
+                var dis = new NativeDisassembler(dbgEngMemoryStream, peFile.OptionalHeader.Magic == PEMagic.PE32, new DbgEngDisasmSymbolResolver(client));
 
                 CompareDisassembly(client, dis, baseAddress + peFile.OptionalHeader.AddressOfEntryPoint);
             });
         }
 
-        private void CompareDisassembly(DebugClient client, NativeStreamDisassembler dis, long startIP)
+        private void CompareDisassembly(DebugClient client, NativeDisassembler dis, long startIP)
         {
             string DisDbgEng()
             {

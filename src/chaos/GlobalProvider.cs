@@ -6,8 +6,10 @@ using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
+using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace chaos
 {
@@ -58,6 +60,8 @@ namespace chaos
 
                 typeof(CordbEngineServices),
                 typeof(DbgEngEngineServices),
+
+                typeof(ILDisassemblerProvider),
 
                 { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },

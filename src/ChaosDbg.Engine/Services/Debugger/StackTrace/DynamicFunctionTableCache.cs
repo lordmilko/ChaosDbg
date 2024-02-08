@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using ChaosLib;
+using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg

@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb

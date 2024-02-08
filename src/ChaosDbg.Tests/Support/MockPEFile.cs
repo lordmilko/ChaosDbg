@@ -1,5 +1,6 @@
 ﻿using System;
-using ChaosLib.Metadata;
+using System.IO;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.Tests
 {
@@ -11,10 +12,19 @@ namespace ChaosDbg.Tests
         public IImageSectionHeader[] SectionHeaders { get; }
         public IImageExportDirectoryInfo ExportDirectory { get; }
         public IImageImportDescriptorInfo[] ImportDirectory { get; }
+        public IImageResourceDirectoryInfo ResourceDirectory { get; }
         public IImageRuntimeFunctionInfo[] ExceptionDirectory { get; }
-        public IImageCor20Header Cor20Header { get; }
         public IImageDebugDirectoryInfo DebugDirectoryInfo { get; }
-        public IImageResourceDirectoryInfo ResourceDirectoryInfo { get; }
+        public IImageBoundImportDescriptorInfo[] BoundImportTableDirectory { get; }
+        public IImageThunkDataInfo[] ImportAddressTableDirectory { get; }
+        public IImageDelayLoadDescriptorInfo[] DelayImportTableDirectory { get; }
+        public IImageCor20Header Cor20Header { get; }
+
+        public void ReadDataDirectories(Stream stream, PEFileDirectoryFlags flags, IPESymbolResolver symbolResolver = null)
+        {
+            throw new NotImplementedException();
+        }
+
         public bool TryGetDirectoryOffset(IImageDataDirectory entry, out int offset, bool canCrossSectionBoundary)
         {
             throw new NotImplementedException();

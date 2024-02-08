@@ -10,6 +10,7 @@ using ChaosDbg.Engine;
 using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
 

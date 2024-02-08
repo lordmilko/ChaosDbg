@@ -7,7 +7,7 @@ using ChaosDbg.Text;
 using ChaosDbg.Theme;
 using ChaosLib.Memory;
 using ClrDebug.DbgEng;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.ViewModel
 {

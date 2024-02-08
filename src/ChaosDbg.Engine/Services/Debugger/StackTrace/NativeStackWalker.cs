@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using ChaosDbg.Disasm;
 using ChaosDbg.Text;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg
 {

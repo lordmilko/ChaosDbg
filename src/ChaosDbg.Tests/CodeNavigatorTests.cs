@@ -2,7 +2,7 @@
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.Text;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests

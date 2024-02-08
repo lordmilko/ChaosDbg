@@ -1,6 +1,6 @@
 ﻿using System.IO;
 using ChaosDbg.Disasm;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.Tests
 {
@@ -21,7 +21,7 @@ namespace ChaosDbg.Tests
             var rvaStream = new PERvaToPhysicalStream(stream, peFile);
             rvaStream.Seek(0, SeekOrigin.Begin);
 
-            var engine = new NativeStreamDisassembler(rvaStream, is32Bit);
+            var engine = new NativeDisassembler(rvaStream, is32Bit);
 
             return engine;
         }

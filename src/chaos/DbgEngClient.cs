@@ -10,18 +10,22 @@ namespace chaos
     {
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
+        private DbgEngEngine engine;
+
         public void Execute(string executable, bool minimized)
         {
+            Console.CancelKeyPress += Console_CancelKeyPress;
+
             var engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
 
-            var engine = engineProvider.CreateProcess(executable, minimized, e =>
+            engine = engineProvider.CreateProcess(executable, minimized, e =>
             {
                 e.EngineOutput += Engine_EngineOutput;
 
                 e.EngineStatusChanged += Engine_EngineStatusChanged;
             });
 
-            EngineLoop(engine);
+            EngineLoop();
         }
 
         private void Engine_EngineStatusChanged(object sender, EngineStatusChangedEventArgs e)
@@ -30,7 +34,7 @@ namespace chaos
                 wakeEvent.Set();
         }
 
-        private void EngineLoop(DbgEngEngine engine)
+        private void EngineLoop()
         {
             while (true)
             {
@@ -39,13 +43,13 @@ namespace chaos
                 //An event was received! Output our current state and prompt for user input
                 //client.Control.OutputCurrentState(DEBUG_OUTCTL.ALL_CLIENTS, DEBUG_CURRENT.DEFAULT);
 
-                InputLoop(engine);
+                InputLoop();
 
                 wakeEvent.Reset();
             }
         }
 
-        private void InputLoop(DbgEngEngine engine)
+        private void InputLoop()
         {
             var client = engine.Session.UiClient;
 
@@ -63,6 +67,17 @@ namespace chaos
                 //and things can get back to normal
                 engine.Invoke(c => c.Control.TryExecute(DEBUG_OUTCTL.ALL_CLIENTS, command, DEBUG_EXECUTE.NOT_LOGGED));
             }
+        }
+
+        private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            //todo: my dbgeng client doesnt work at all? it just hangs when we hit g to resume and the process
+            //never starts
+
+            //Don't terminate our process!
+            e.Cancel = true;
+
+            engine.ActiveClient.Control.SetInterrupt(DEBUG_INTERRUPT.ACTIVE);
         }
 
         private void Engine_EngineOutput(object sender, EngineOutputEventArgs e)

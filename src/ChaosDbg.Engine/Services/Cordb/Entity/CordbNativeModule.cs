@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Handle;
 using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb

@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.DbgEng
 {

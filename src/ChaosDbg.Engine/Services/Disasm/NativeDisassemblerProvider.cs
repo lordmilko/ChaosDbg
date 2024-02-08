@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using ChaosLib.Memory;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm
@@ -53,7 +53,7 @@ namespace ChaosDbg.Disasm
             if (stream is MemoryStream)
                 throw new ArgumentException($"Cannot create an {nameof(INativeDisassembler)} using a stream of type '{nameof(MemoryStream)}'. Consider encapsulating this stream in an {nameof(AbsoluteToRelativeStream)}, specifying the module base.", nameof(stream));
 
-            return new NativeStreamDisassembler(stream, is32Bit, symbolResolver);
+            return new NativeDisassembler(stream, is32Bit, symbolResolver);
         }
 
         /// <inheritdoc />
@@ -75,7 +75,7 @@ namespace ChaosDbg.Disasm
 
             rvaStream.Seek(entryPoint, SeekOrigin.Begin);
 
-            return new NativeStreamDisassembler(rvaStream, is32Bit);            
+            return new NativeDisassembler(rvaStream, is32Bit);            
         }
     }
 }

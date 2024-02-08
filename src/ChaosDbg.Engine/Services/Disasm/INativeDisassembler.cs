@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace ChaosDbg.Disasm
 {
@@ -8,6 +9,11 @@ namespace ChaosDbg.Disasm
     /// </summary>
     public interface INativeDisassembler : IDisposable
     {
+        /// <summary>
+        /// Gets the underlying stream of this <see cref="INativeDisassembler"/>.
+        /// </summary>
+        Stream BaseStream { get; }
+
         /// <summary>
         /// Gets or sets the address of the next instruction to be disassembled.
         /// </summary>

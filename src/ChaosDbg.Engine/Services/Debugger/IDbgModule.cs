@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg
 {

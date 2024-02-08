@@ -1,7 +1,7 @@
 ﻿using ChaosDbg.Disasm;
 using ChaosDbg.IL;
 using ChaosDbg.Metadata;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.Cordb
 {

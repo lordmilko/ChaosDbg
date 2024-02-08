@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
