@@ -71,7 +71,7 @@ namespace ChaosDbg.Cordb
 
             var name = CordbNativeModule.GetNativeModuleName(loadDll);
 
-            process.DbgHelp.AddModule(name, baseAddress, peFile.OptionalHeader.SizeOfImage);
+            process.DbgHelp.AddVirtualModule(name, baseAddress, peFile.OptionalHeader.SizeOfImage);
             var symbolModule = new DbgHelpSymbolModule(process.DbgHelp, name, baseAddress);
 
             //We have an unfortunate timing issue here. We want to read the whole PE File, but doing so

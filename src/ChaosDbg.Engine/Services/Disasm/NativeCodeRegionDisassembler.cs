@@ -9,98 +9,93 @@ using Iced.Intel;
 namespace ChaosDbg.Disasm
 {
     /// <summary>
-    /// Provides facilities for disassembling a complete <see cref="NativeFunction"/> from
-    /// a <see cref="INativeDisassembler"/>.
+    /// Provides facilities for disassembling a <see cref="NativeCodeRegionCollection"/> that approximately resembles a function from an <see cref="INativeDisassembler"/>.
     /// </summary>
-    class NativeFunctionDisassembler
+    class NativeCodeRegionDisassembler
     {
         private HashSet<long> seenIPs = new HashSet<long>();
         private HashSet<long> allMissingJumps = new HashSet<long>();
 
-        private List<NativeFunctionChunk> functionChunks = new List<NativeFunctionChunk>();
+        private List<NativeCodeRegion> regionsFound = new List<NativeCodeRegion>();
 
-        //Stores all unresolved references within each chunk for the purposes of constructing
-        //the references between each chunk at the end
-        private Dictionary<NativeFunctionChunk, long[]> chunkToRefAddresses = new Dictionary<NativeFunctionChunk, long[]>();
+        //Stores all unresolved references within each region. Allows unwinding bad regions and iterating over the references between regions when processing jump tables
+        private Dictionary<NativeCodeRegion, Dictionary<long, INativeInstruction>> regionToRefAddresses = new Dictionary<NativeCodeRegion, Dictionary<long, INativeInstruction>>();
 
         private INativeDisassembler nativeDisassembler;
         private long functionAddress;
-        private ISymbol symbol;
         private DisasmFunctionResolutionContext context;
 
         //If we encounter bad instructions and cannot repair them, the entire function
         //is flagged as bad. We won't know its memory range; we'll need to rely on identifying
         //the surrounding entities to do this
         private bool badFunction;
-        private BadFunctionReason badFunctionReason;
+        private NativeCodeDiscoveryError badFunctionReason;
 
-        internal NativeFunctionDisassembler(
+        internal NativeCodeRegionDisassembler(
             INativeDisassembler nativeDisassembler,
             long address,
-            ISymbol symbol,
             DisasmFunctionResolutionContext context)
         {
             this.nativeDisassembler = nativeDisassembler;
             this.functionAddress = address;
-            this.symbol = symbol;
             this.context = context;
         }
 
-        public Either<NativeFunction, BadNativeFunction> Disassemble()
+        public NativeCodeRegionCollection Disassemble()
         {
-            functionChunks.Add(DisassembleFunctionChunk(functionAddress));
+            regionsFound.Add(DisassembleCodeRegion(functionAddress));
 
-            BadNativeFunction MakeBadFunction()
+            bool ShouldReturnBadFunction()
             {
-                PatchChunkReferences();
+                if (badFunction)
+                {
+                    if (badFunctionReason != NativeCodeDiscoveryError.FunctionSizeThresholdReached)
+                        return true;
 
-                return new BadNativeFunction(
-                    functionAddress,
-                    symbol,
-                    badFunctionReason,
-                    functionChunks.ToArray()
-                );
+                    if (context.AllowFunctionSizeThresholdReached(functionAddress))
+                    {
+                        badFunction = false;
+                        badFunctionReason = default;
+                    }
+                    else
+                        return true;
+                }
+
+                return false;
             }
 
-            if (badFunction)
-                return MakeBadFunction();
+            if (ShouldReturnBadFunction())
+                return new NativeCodeRegionCollection(functionAddress, regionsFound, badFunctionReason);
 
             while (allMissingJumps.Count > 0)
             {
-                var chunkAddr = allMissingJumps.First();
+                var regionAddr = allMissingJumps.First();
 
-                functionChunks.Add(DisassembleFunctionChunk(chunkAddr));
+                var region = DisassembleCodeRegion(regionAddr);
 
-                if (badFunction)
-                    return MakeBadFunction();
+                //Already seen
+                if (region == null)
+                    allMissingJumps.Remove(regionAddr);
+                else
+                    regionsFound.Add(region);
 
-                const int maxChunks = 4000;
+                if (ShouldReturnBadFunction())
+                    return new NativeCodeRegionCollection(functionAddress, regionsFound, badFunctionReason);
 
-                if (functionChunks.Count > maxChunks)
-                    throw new InvalidOperationException($"Attempted to disassemble more than {maxChunks} chunks in a single function. This indicates a runaway disassembly has occurred."); //fail, clearly we're missing something here cos there shouldnt be that many chunks
+                const int maxRegions = 4000;
+
+                if (regionsFound.Count > maxRegions)
+                    throw new InvalidOperationException($"Attempted to disassemble more than {maxRegions} regions in a single function. This indicates a runaway disassembly has occurred."); //fail, clearly we're missing something here cos there shouldnt be that many regions
             }
 
-            PatchChunkReferences();
+            regionsFound.RemoveAll(v => v == null);
 
-#if DEBUG
-            //Assert that we patched all required chunk references
-
-            foreach (var chunk in functionChunks)
-            {
-                if (chunk.Instructions.Any(i => i.Instruction.FlowControl is FlowControl.UnconditionalBranch or FlowControl.IndirectBranch))
-                    Debug.Assert(chunk.RefsFromThis != null);
-            }
-#endif
-
-            return new NativeFunction(functionAddress, symbol, functionChunks.OrderBy(v => v.StartAddress).ToArray());
+            return new NativeCodeRegionCollection(functionAddress, regionsFound, NativeCodeDiscoveryError.None);
         }
 
-        private NativeFunctionChunk DisassembleFunctionChunk(long chunkAddr)
+        private NativeCodeRegion DisassembleCodeRegion(long regionAddr)
         {
-            if (TryGetDuplicateChunk(chunkAddr, out var existingChunk))
-                return existingChunk;
-
-            var chunkMissingJumps = new HashSet<long>();
+            var regionMissingJumps = new Dictionary<long, INativeInstruction>();
 
             var instrs = new List<INativeInstruction>();
 
@@ -111,13 +106,16 @@ namespace ChaosDbg.Disasm
             //and signify that that was in fact the end of the function
             var lastInt3Index = -1;
 
-            long functionChunkEndThreshold = -1;
+            long functionRegionEndThreshold = -1;
 
             if (context != null)
-                functionChunkEndThreshold = context.GetFunctionChunkEndThreshold(chunkAddr);
+                functionRegionEndThreshold = context.GetCodeRegionEndThreshold(regionAddr);
 
-            foreach (var instr in nativeDisassembler.EnumerateInstructions(chunkAddr))
+            foreach (var instr in nativeDisassembler.EnumerateInstructions(regionAddr))
             {
+                if (context != null && !context.ShouldProcessInstruction(instr.Address))
+                    break;
+
                 //While there is technically an instruction whose bytes consists of all 0's, we don't expect
                 //that should ever be the first instruction of a function, so we say if we're trying to disassemble
                 //all 0's it probably isn't a function. If it is, leave it to the user to force reinterpret it themselves
@@ -126,18 +124,18 @@ namespace ChaosDbg.Disasm
 
                 //If we've either run into the next entity, or run out of room in the PE section or module,
                 //we've got a big problem
-                if (context != null && instr.IP > functionChunkEndThreshold)
+                if (context != null && instr.IP > functionRegionEndThreshold)
                 {
                     var callIndex = instrs.FindLastIndex(i => i.Instruction.Mnemonic == Mnemonic.Call);
 
-                    if (callIndex != -1)
+                    if (callIndex != -1 && !context.AllowFunctionSizeThresholdReached(functionAddress))
                     {
                         RemoveInstructions(instrs, callIndex + 1, RemoveJumpTarget);
                     }
                     else
                     {
                         badFunction = true;
-                        badFunctionReason = BadFunctionReason.FunctionSizeThresholdReached;
+                        badFunctionReason = NativeCodeDiscoveryError.FunctionSizeThresholdReached;
                     }
 
                     break;
@@ -147,7 +145,7 @@ namespace ChaosDbg.Disasm
                 {
                     //We're either going to repair the function or mark it s bad.
                     //Either way, we break
-                    ProcessInvalid(chunkAddr, instrs, instr, lastInt3Index, RemoveJumpTarget);
+                    ProcessInvalid(regionAddr, instrs, instr, lastInt3Index, RemoveJumpTarget);
                     break;
                 }
 
@@ -172,9 +170,9 @@ namespace ChaosDbg.Disasm
                 if (end)
                     break;
 
-                //If we're now processing random function chunks, and we processed the function chunk that
+                //If we're now processing random function regions, and we processed the function region that
                 //sits directly after the current one first, then when we see that we've already seen this IP
-                //before we know that we're at the end of the current chunk
+                //before we know that we're at the end of the current region
                 if (!seenIPs.Add(instr.IP))
                     break;
 
@@ -190,7 +188,7 @@ namespace ChaosDbg.Disasm
                     if (!seenIPs.Contains(addr))
                     {
                         allMissingJumps.Add(addr);
-                        chunkMissingJumps.Add(addr);
+                        regionMissingJumps[addr] = instr;
                     }
                 }
 
@@ -199,7 +197,7 @@ namespace ChaosDbg.Disasm
                     if (allMissingJumps.Contains(addr))
                     {
                         allMissingJumps.Remove(addr);
-                        chunkMissingJumps.Remove(addr);
+                        regionMissingJumps.Remove(addr);
                     }
                 }
 
@@ -208,12 +206,12 @@ namespace ChaosDbg.Disasm
                     case FlowControl.ConditionalBranch:
                     case FlowControl.IndirectBranch:
                     case FlowControl.UnconditionalBranch:
-                        ProcessJump(icedInstr, ref end, AddJumpTarget);
+                        ProcessJump(regionAddr, icedInstr, instrs, ref end, AddJumpTarget);
                         break;
 
                     case FlowControl.Interrupt:
-                        if (!ProcessInterrupt(chunkAddr, icedInstr, didAllowInt3, ref allowInt3, ref end))
-                            end = true; //If there was an issue (which may not be the case), we want to record the bad chunk in a BadNativeFunction
+                        if (!ProcessInterrupt(regionAddr, icedInstr, didAllowInt3, ref allowInt3, ref end))
+                            end = true; //If there was an issue (which may not be the case), we want to record the bad region in a BadNativeFunction
                         break;
 
                     case FlowControl.Return:
@@ -226,66 +224,12 @@ namespace ChaosDbg.Disasm
             }
 
             if (instrs.Count == 0)
-            {
-                badFunction = true;
-                badFunctionReason = BadFunctionReason.EmptyChunk;
-            }
+                return null;
 
-            var chunk = new NativeFunctionChunk(chunkAddr, instrs.ToArray());
-            chunkToRefAddresses[chunk] = chunkMissingJumps.ToArray();
+            var region = new NativeCodeRegion(regionAddr, instrs);
+            regionToRefAddresses[region] = regionMissingJumps;
 
-            return chunk;
-        }
-
-        private bool TryGetDuplicateChunk(long chunkAddr, out NativeFunctionChunk result)
-        {
-            //If we disassemble a standalone chunk first, and then later on try and disassemble the larger function,
-            //we've already disassembled the chunk standalone, so just return the existing chunk and flag it as a duplicate
-            if (context != null && context.TryGetDuplicateChunk(chunkAddr, out var existingChunk))
-            {
-                allMissingJumps.Remove(chunkAddr);
-
-                foreach (var refFromThis in existingChunk.RefsFromThis)
-                {
-                    if (!functionChunks.Any(c => c.StartAddress == refFromThis.StartAddress))
-                        allMissingJumps.Add(refFromThis.StartAddress);
-                }
-
-                var chunkInstructions = new List<INativeInstruction>();
-
-                foreach (var instr in existingChunk.Instructions)
-                {
-                    //There's a conditional jump from another chunk going partway into this chunk
-                    if (allMissingJumps.Contains(instr.Address))
-                        allMissingJumps.Remove(instr.Address);
-
-                    if (!seenIPs.Add(instr.Address))
-                    {
-                        //We've already seen part of this new chunk as part of another chunk we processed from scratch.
-                        //This indicates that perhaps there might be multiple symbols targeting multiple sections of a function
-                        //(such as ntdll!RtlpInterlockedPopEntrySList). Not sure if this may also indicate something to do with
-                        //having an UnwindData item part way through another item as well
-
-                        break;
-                    }
-
-                    chunkInstructions.Add(instr);
-                }
-
-                if (functionChunks.Any(c => c.StartAddress == existingChunk.StartAddress))
-                    throw new InvalidOperationException($"Failed to retrieve chunk previously disassembled by another function: the current function already has a chunk with address {existingChunk.StartAddress:X} already.");
-
-                //PatchChunkReferences will mutate the object. We don't want to modify the original chunk object
-                var fakeChunk = new NativeFunctionChunk(existingChunk.StartAddress, chunkInstructions.ToArray());
-
-                chunkToRefAddresses[fakeChunk] = existingChunk.RefsFromThis.Select(v => v.StartAddress).ToArray();
-
-                result = fakeChunk;
-                return true;
-            }
-
-            result = null;
-            return false;
+            return region;
         }
 
         private bool DoesFunctionLookFinished(List<INativeInstruction> instrs, Action<long> removeJumpTarget)
@@ -305,7 +249,7 @@ namespace ChaosDbg.Disasm
 
             switch (lastIcedInstr.Mnemonic)
             {
-                //If the call never returned, we would have aborted the function chunk already...unless its something like ntdll!RtlRaiseStatus,
+                //If the call never returned, we would have aborted the function region already...unless its something like ntdll!RtlRaiseStatus,
                 //which never returns!
                 case Mnemonic.Call:
                     switch (lastIcedInstr.Op0Kind)
@@ -334,12 +278,16 @@ namespace ChaosDbg.Disasm
                      * if the previous instruction was also an int 3, that means we've got two int 3's in a row. Our assumption
                      * that the previous int 3 should be allowed was wrong. Remove it, and signify that it's the end of the function
                      * e.g. ntdll!RtlCultureNameToLCID */
+                    context?.Unsee(instrs[instrs.Count - 1].Address);
                     instrs.RemoveAt(instrs.Count - 1);
 
                     //If we had a nop and gave it the benefit of the doubt, and then wound up with two int 3's, not only do we want to rewind
                     //the int 3's, but we should also get rid of this pointless nop
                     if (instrs.Count > 0 && instrs[instrs.Count - 1].Instruction.Mnemonic == Mnemonic.Nop)
+                    {
+                        context?.Unsee(instrs[instrs.Count - 1].Address);
                         instrs.RemoveAt(instrs.Count - 1);
+                    }
 
                     return true;
 
@@ -372,7 +320,7 @@ namespace ChaosDbg.Disasm
                 }
             }
 
-            /* Ostensibly, we'd like to have special logic that checks whether we already have any chunks, and if we have a ret in any chunk,
+            /* Ostensibly, we'd like to have special logic that checks whether we already have any regions, and if we have a ret in any region,
              * we're done. But we can't rely on that. iertutil!IEConfiguration_SetBrowserAppProfile moves a HRESULT into ebx, calls int 3 and
              * then jumps back into its normal code path */
 
@@ -436,7 +384,7 @@ namespace ChaosDbg.Disasm
             return false;
         }
 
-        private bool ProcessInvalid(long chunkAddr, List<INativeInstruction> instrs, INativeInstruction instr, int lastInt3Index, Action<long> removeJumpTarget)
+        private bool ProcessInvalid(long regionAddr, List<INativeInstruction> instrs, INativeInstruction instr, int lastInt3Index, Action<long> removeJumpTarget)
         {
             //EnumerateInstructions() normally may only abort when multiple bad instructions in a row are encountered, however
             //we are not so lenient. We need to know that what we're reading is valid
@@ -480,17 +428,17 @@ namespace ChaosDbg.Disasm
 
                 if (!foundEnd)
                 {
-                    if (!TryRewindInvalidChunks(chunkAddr))
+                    if (!TryRewindInvalidRegions(regionAddr))
                     {
                         //The entire memory range of this function cannot be trusted
                         //e.g. System.Data!?System_Data_SqlClient_TdsParser__cctor@@000001
                         badFunction = true;
-                        badFunctionReason = BadFunctionReason.InvalidInstruction;
+                        badFunctionReason = NativeCodeDiscoveryError.InvalidInstruction;
                         return false;
                     }
                     else
                     {
-                        //The current chunk is not valid
+                        //The current region is not valid
                         return false;
                     }
                 }
@@ -500,11 +448,15 @@ namespace ChaosDbg.Disasm
         }
 
         private void ProcessJump(
+            long regionAddr,
             Instruction icedInstr,
+            List<INativeInstruction> instrs,
             ref bool end,
             Action<long> addJumpTarget)
         {
             long target = 0;
+
+            var isUnconditionalJump = icedInstr.FlowControl is FlowControl.UnconditionalBranch or FlowControl.IndirectBranch;
 
             switch (icedInstr.Op0Kind)
             {
@@ -523,14 +475,20 @@ namespace ChaosDbg.Disasm
                     break;
 
                 case OpKind.Register:
-                    end = true;
+                    if (isUnconditionalJump && context != null && context.TryGetJumpTable(functionAddress, new RegionPathEnumerator(regionAddr, instrs, this), out var jumpTableTargets))
+                    {
+                        foreach (var item in jumpTableTargets)
+                            addJumpTarget(item);
+
+                        return;
+                    }
+                    else
+                        end = true;
                     break;
 
                 default:
                     throw new NotImplementedException($"Don't know how to handle jump operand {icedInstr.Op0Kind}");
             }
-
-            var isUnconditionalJump = icedInstr.FlowControl is FlowControl.UnconditionalBranch or FlowControl.IndirectBranch;
 
             if (target != 0)
             {
@@ -553,11 +511,11 @@ namespace ChaosDbg.Disasm
             }
         }
 
-        private bool ProcessInterrupt(long chunkAddr, Instruction icedInstr, bool didAllowInt3, ref bool allowInt3, ref bool end)
+        private bool ProcessInterrupt(long regionAddr, Instruction icedInstr, bool didAllowInt3, ref bool allowInt3, ref bool end)
         {
             if (icedInstr.Code == Code.Int3)
             {
-                if (context != null && context.IsInt3UnwindBlock(chunkAddr))
+                if (context != null && context.IsInt3UnwindBlock(regionAddr))
                     end = true;
 
                 if (!didAllowInt3)
@@ -570,22 +528,22 @@ namespace ChaosDbg.Disasm
                     case OpKind.Immediate8:
                         switch (icedInstr.Immediate8)
                         {
-                            case 0x29:
+                            case WellKnownInterrupt.FailFast:
                                 end = true; //Fast fail: immediately terminates the calling process with minimum overhead
                                 break;
 
-                            case 0x2C: //assertion failure
-                            case 0x2E: //syscall
+                            case WellKnownInterrupt.AssertionFailure: //assertion failure
+                            case WellKnownInterrupt.Syscall: //syscall
                                 break;
 
-                            case 0x2D: //apparently used to send a prompt to the debugger from the debuggee
+                            case WellKnownInterrupt.DebuggerPrompt:
                                 //Typically an int 2Dh should be followed by an int 3, e.g. in ntdll!DebugPrompt
                                 allowInt3 = true;
                                 break;
 
                             default:
                                 badFunction = true;
-                                badFunctionReason = BadFunctionReason.UnknownInterrupt;
+                                badFunctionReason = NativeCodeDiscoveryError.UnknownInterrupt;
                                 return false;
                         }
                         break;
@@ -593,7 +551,7 @@ namespace ChaosDbg.Disasm
                     default:
                         //e.g. int1 has 0 operands, hence why it hits this outer default
                         badFunction = true;
-                        badFunctionReason = BadFunctionReason.UnknownInterrupt;
+                        badFunctionReason = NativeCodeDiscoveryError.UnknownInterrupt;
 
                         return false;
                 }
@@ -607,6 +565,8 @@ namespace ChaosDbg.Disasm
             for (var i = index + 1; i < instrs.Count; i++)
             {
                 var instr = instrs[i];
+
+                context?.Unsee(instr.Address);
 
                 long target = 0;
 
@@ -632,59 +592,59 @@ namespace ChaosDbg.Disasm
             instrs.RemoveRange(index, instrs.Count - index);
         }
 
-        private bool TryRewindInvalidChunks(long chunkAddr)
+        private bool TryRewindInvalidRegions(long regionAddr)
         {
             /* We've been lead astray. Most likely there was a call + int 3 that we tried to proceed
              * past at one point, but this has backfired spectacularly on us. That mistake may have been made
-             * several chunks away from now, so we would need to trace backwards from the current chunk to our previous
-             * chunks to find the point at which we made the mistake. Then, we'd also need to delete any chunks we created
-             * that depend on the chunks we've created (and then the chunks that depend on them, etc)
+             * several regions away from now, so we would need to trace backwards from the current region to our previous
+             * regions to find the point at which we made the mistake. Then, we'd also need to delete any regions we created
+             * that depend on the regions we've created (and then the regions that depend on them, etc)
              * An example of this is windows.storage!wil::ActivityBase<CloudFileProvider,0,0,5,16777216,_TlgReflectorTag_Param0IsProviderType>::ActivityData<CloudFileProvider,_TlgReflectorTag_Param0IsProviderType>::SetStopResult
              * We don't see that wil::details::WilFailFast doesn't return, we spiral out of control */
 
-            //We already know this chunk isn't salvagable, so our first point of call is to find the chunk that jumped to this chunk
+            //We already know this region isn't salvagable, so our first point of call is to find the region that jumped to this region
 
-            var chunksToRemove = new Stack<long>();
+            var regionsToRemove = new Stack<long>();
 
-            chunksToRemove.Push(chunkAddr);
+            regionsToRemove.Push(regionAddr);
 
             var didRepairAnything = false;
 
-            var originalFunctionChunks = functionChunks.ToList();
-            var originalChunkToRefAddresses = chunkToRefAddresses.ToDictionary(kv => kv.Key, kv => kv.Value);
+            var originalFunctionRegions = regionsFound.ToList();
+            var originalRegionToRefAddresses = regionToRefAddresses.ToDictionary(kv => kv.Key, kv => kv.Value);
 
-            while (chunksToRemove.Count > 0)
+            while (regionsToRemove.Count > 0)
             {
-                var currentChunk = chunksToRemove.Pop();
+                var currentRegion = regionsToRemove.Pop();
 
-                var parentList = chunkToRefAddresses.Where(kv => kv.Value.Contains(currentChunk)).ToArray();
+                var parentList = regionToRefAddresses.Where(kv => kv.Value.ContainsKey(currentRegion)).ToArray();
 
                 if (parentList.Length > 1)
-                    throw new NotImplementedException("There should never be more than one parent that was the first to reference a chunk");
+                    throw new NotImplementedException("There should never be more than one parent that was the first to reference a region");
 
                 if (parentList.Length == 0)
                 {
-                    //We don't have this chunk anymore (or maybe never had it)
+                    //We don't have this region anymore (or maybe never had it)
                     continue;
                 }
 
                 var parent = parentList[0];
 
-                //Since we're assuming that the whole chunk may have been garbage, search from the front
+                //Since we're assuming that the whole region may have been garbage, search from the front
                 //rather than the back
 
                 var oldInstructions = parent.Key.Instructions;
 
-                var didRepairChunk = false;
+                var didRepairRegion = false;
 
-                //The current chunk is on the chopping block. Either it's going to be repaired
+                //The current region is on the chopping block. Either it's going to be repaired
                 //(in which case we'll re-add it) or it's completely tained (in which case it should
                 //stay removed)
-                functionChunks.Remove(parent.Key);
-                var newRefsFromChunk = chunkToRefAddresses[parent.Key].ToList();
-                chunkToRefAddresses.Remove(parent.Key);
+                regionsFound.Remove(parent.Key);
+                var newRefsFromRegion = regionToRefAddresses[parent.Key].ToDictionary(v => v.Key, v => v.Value);
+                regionToRefAddresses.Remove(parent.Key);
 
-                for (var i = 0; i < oldInstructions.Length; i++)
+                for (var i = 0; i < oldInstructions.Count; i++)
                 {
                     var instr = oldInstructions[i];
 
@@ -697,34 +657,34 @@ namespace ChaosDbg.Disasm
                             //Any jump targets we encounter while removing instructions
                             //also have to be removed
 
-                            if (newRefsFromChunk.Remove(a))
+                            if (newRefsFromRegion.Remove(a))
                             {
-                                //This address was indeed listed as a chunk
+                                //This address was indeed listed as a region
 
-                                //If it hasn't been turned into a chunk yet, we can
+                                //If it hasn't been turned into a region yet, we can
                                 //just remove it from the list. Otherwise, we need to locate
-                                //and remove the chunk
+                                //and remove the region
                                 if (!allMissingJumps.Remove(a))
-                                    chunksToRemove.Push(a);
+                                    regionsToRemove.Push(a);
                             }
                         });
 
-                        var newChunk = new NativeFunctionChunk(parent.Key.StartAddress, newInstructions.ToArray());
+                        var newRegion = new NativeCodeRegion(parent.Key.StartAddress, newInstructions);
 
-                        functionChunks.Add(newChunk);
+                        regionsFound.Add(newRegion);
 
-                        chunkToRefAddresses[parent.Key] = newRefsFromChunk.ToArray();
+                        regionToRefAddresses[parent.Key] = newRefsFromRegion;
 
-                        didRepairChunk = true;
+                        didRepairRegion = true;
                         didRepairAnything = true;
                         break;
                     }
                 }
 
-                if (!didRepairChunk)
+                if (!didRepairRegion)
                 {
-                    //OK, this chunk is bad too then
-                    chunksToRemove.Push(parent.Key.StartAddress);
+                    //OK, this region is bad too then
+                    regionsToRemove.Push(parent.Key.StartAddress);
                 }
             }
 
@@ -732,37 +692,70 @@ namespace ChaosDbg.Disasm
                 return false;
 
             //If we removed _everything_ then this was a total fail!
-            if (functionChunks.Count == 0)
+            if (regionsFound.Count == 0)
             {
-                //Restore the information we know about the bad function chunks we removed
+                //Restore the information we know about the bad function regions we removed
                 //so that they can be reported in the BadNativeFunction
-                functionChunks = originalFunctionChunks;
-                chunkToRefAddresses = originalChunkToRefAddresses;
+                regionsFound = originalFunctionRegions;
+                regionToRefAddresses = originalRegionToRefAddresses;
                 return false;
             }
 
             return true;
         }
 
-        private void PatchChunkReferences()
+        internal struct RegionPathEnumerator
         {
-            var refsToThisMap = functionChunks.ToDictionary(v => v, v => new List<NativeFunctionChunk>());
+            private long rootRegionAddr;
 
-            foreach (var kv in chunkToRefAddresses)
+            public List<INativeInstruction> RootInstructions { get; }
+
+            private NativeCodeRegionDisassembler nativeFunctionDisassembler;
+            private NativeCodeRegion currentRegion;
+            private int currentRegionJumpIndex;
+
+            public (IList<INativeInstruction> Instrs, int JumpIndex) Current
             {
-                var foundChunks = kv.Value
-                    .Select(addr => functionChunks.SingleOrDefault(c => c.StartAddress == addr))
-                    .Where(match => match != null)
-                    .ToArray();
+                get
+                {
+                    if (currentRegion == null)
+                        return (RootInstructions, RootInstructions.Count - 1);
 
-                foreach (var chunk in foundChunks)
-                    refsToThisMap[chunk].Add(kv.Key);
-
-                kv.Key.RefsFromThis = foundChunks;
+                    return (currentRegion.Instructions, currentRegionJumpIndex);
+                }
             }
 
-            foreach (var kv in refsToThisMap)
-                kv.Key.RefsToThis = kv.Value.ToArray();
+            public RegionPathEnumerator(long rootRegionAddr, List<INativeInstruction> rootInstrs, NativeCodeRegionDisassembler nativeFunctionDisassembler)
+            {
+                this.rootRegionAddr = rootRegionAddr;
+                RootInstructions = rootInstrs;
+                this.nativeFunctionDisassembler = nativeFunctionDisassembler;
+                currentRegion = null;
+                currentRegionJumpIndex = 0;
+            }
+
+            public bool MoveNext()
+            {
+                var currentAddr = currentRegion?.StartAddress ?? rootRegionAddr;
+
+                foreach (var kv in nativeFunctionDisassembler.regionToRefAddresses)
+                {
+                    if (kv.Value.TryGetValue(currentAddr, out var instr))
+                    {
+                        currentRegion = kv.Key;
+                        currentRegionJumpIndex = kv.Key.Instructions.IndexOf(instr);
+                        Debug.Assert(currentRegionJumpIndex != -1);
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            public void Reset()
+            {
+                currentRegion = null;
+            }
         }
     }
 }

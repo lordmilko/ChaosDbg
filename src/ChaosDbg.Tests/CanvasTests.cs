@@ -217,6 +217,7 @@ namespace ChaosDbg.Tests
 
                     var cf = new ConditionFactory(new UIA3PropertyLibrary());
 
+                    //I think this is referencing the x:Name from the TextPaneControl
                     var ctrl = flaWindow.FindFirstDescendant(cf.ByAutomationId("Canvas"));
 
                     var builder = new SelectionBuilder(canvas, ctrl);

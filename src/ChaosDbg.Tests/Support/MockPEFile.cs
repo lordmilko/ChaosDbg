@@ -15,6 +15,7 @@ namespace ChaosDbg.Tests
         public IImageResourceDirectoryInfo ResourceDirectory { get; }
         public IImageRuntimeFunctionInfo[] ExceptionDirectory { get; }
         public IImageDebugDirectoryInfo DebugDirectoryInfo { get; }
+        public IImageLoadConfigDirectory LoadConfigDirectory { get; }
         public IImageBoundImportDescriptorInfo[] BoundImportTableDirectory { get; }
         public IImageThunkDataInfo[] ImportAddressTableDirectory { get; }
         public IImageDelayLoadDescriptorInfo[] DelayImportTableDirectory { get; }

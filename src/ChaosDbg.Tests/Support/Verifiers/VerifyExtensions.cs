@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Text;
@@ -56,5 +57,21 @@ namespace ChaosDbg.Tests
         #endregion
 
         public static CordbThreadVerifier Verify(this CordbThread thread) => new CordbThreadVerifier(thread);
+
+        public static void Verify(this ChunkGraph[] chunks, params Action<ChunkGraph>[] verifiers)
+        {
+            Assert.AreEqual(verifiers.Length, chunks.Length);
+
+            for (var i = 0; i < chunks.Length; i++)
+                verifiers[i](chunks[i]);
+        }
+
+        public static void Verify(this ChunkGraph graph, params string[] expected)
+        {
+            Assert.IsTrue(expected.Length == graph.Vertices.Count, $"Expected: {string.Join(", ", expected)}, Actual: {string.Join(", ", graph.Vertices)}");
+
+            for (var i = 0; i < graph.Vertices.Count; i++)
+                Assert.AreEqual(expected[i], graph.Vertices[i].ToString());
+        }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace ChaosDbg.Analysis
@@ -157,10 +158,27 @@ namespace ChaosDbg.Analysis
 
                     var currentByte = bytes[j];
 
+                    //For debugging
+                    var previous = current;
+
                     current = current.ChildNodes[currentByte];
                     j++;
                 } while (current != null);
             }
+        }
+
+        public IEnumerable<ByteMatch> GetMatches(Stream stream)
+        {
+            var longestCandidate = Candidates.Max(c => c.Bytes.Length);
+
+            var bytes = new byte[longestCandidate];
+
+            var read = stream.Read(bytes, 0, longestCandidate);
+
+            if (read != longestCandidate)
+                Array.Resize(ref bytes, read);
+
+            return GetMatches(bytes);
         }
 
         public override string ToString()

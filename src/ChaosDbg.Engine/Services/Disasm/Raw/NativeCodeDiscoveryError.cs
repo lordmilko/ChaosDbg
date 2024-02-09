@@ -1,6 +1,6 @@
 ﻿namespace ChaosDbg.Disasm
 {
-    public enum BadFunctionReason
+    public enum NativeCodeDiscoveryError
     {
         None,
         InvalidInstruction,

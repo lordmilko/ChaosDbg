@@ -14,7 +14,7 @@ namespace ChaosDbg.Tests
             {
                 OptionalHeader = new MockImageOptionalHeader
                 {
-                    ImageBase = (ulong) ip
+                    ImageBase = ip
                 }
             };
 

@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.Tests
 {
@@ -13,7 +13,7 @@ namespace ChaosDbg.Tests
         public int AddressOfEntryPoint { get; }
         public int BaseOfCode { get; }
         public int BaseOfData { get; }
-        public ulong ImageBase { get; set; }
+        public long ImageBase { get; set; }
         public int SectionAlignment { get; }
         public int FileAlignment { get; }
         public ushort MajorOperatingSystemVersion { get; }
@@ -31,6 +31,7 @@ namespace ChaosDbg.Tests
         public ulong SizeOfStackCommit { get; }
         public ulong SizeOfHeapReserve { get; }
         public ulong SizeOfHeapCommit { get; }
+        public ImageLoaderFlags LoaderFlags { get; }
         public int NumberOfRvaAndSizes { get; }
         public IImageDataDirectory ExportTableDirectory { get; }
         public IImageDataDirectory ImportTableDirectory { get; }

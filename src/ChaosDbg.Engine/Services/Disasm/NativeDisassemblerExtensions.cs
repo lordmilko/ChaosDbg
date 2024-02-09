@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using ChaosDbg.Analysis;
 using ChaosLib.Memory;
@@ -41,14 +42,9 @@ namespace ChaosDbg.Disasm
         public static INativeInstruction[] Disassemble(this INativeDisassembler nativeDisassembler, long address, int count) =>
             nativeDisassembler.EnumerateInstructions(address).Take(count).ToArray();
 
-        public static Either<NativeFunction, BadNativeFunction> DisassembleFunction(this INativeDisassembler nativeDisassembler, long address, DisasmFunctionResolutionContext context = null) =>
-            nativeDisassembler.DisassembleFunction(address, null, context);
-
-        public static Either<NativeFunction, BadNativeFunction> DisassembleFunction(this INativeDisassembler nativeDisassembler, ISymbol symbol, DisasmFunctionResolutionContext context = null) =>
-            nativeDisassembler.DisassembleFunction(symbol.Address, symbol, context);
-
-        private static Either<NativeFunction, BadNativeFunction> DisassembleFunction(this INativeDisassembler nativeDisassembler, long address, ISymbol symbol, DisasmFunctionResolutionContext context) =>
-            new NativeFunctionDisassembler(nativeDisassembler, address, symbol, context).Disassemble();
+        [DebuggerStepThrough]
+        public static NativeCodeRegionCollection DisassembleCodeRegions(this INativeDisassembler nativeDisassembler, long address, DisasmFunctionResolutionContext context = null) =>
+            new NativeCodeRegionDisassembler(nativeDisassembler, address, context).Disassemble();
 
         #endregion
         #region INativeDisassemblerProvider

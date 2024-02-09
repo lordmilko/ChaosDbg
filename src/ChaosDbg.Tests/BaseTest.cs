@@ -41,6 +41,7 @@ namespace ChaosDbg.Tests
     {
         public TestContext TestContext { get; set; }
 
+        [ThreadStatic]
         private IServiceProvider serviceProvider;
 
         private IServiceProvider ServiceProvider
@@ -62,7 +63,7 @@ namespace ChaosDbg.Tests
                         typeof(ILDisassemblerProvider),
 
                         { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
-                        { typeof(IPEFileProvider), typeof(PEFileProvider) },
+                        { typeof(IPEFileProvider), typeof(MockPEFileProvider) },
                         { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                         { typeof(ISigReader), typeof(SigReader) }
                     };
@@ -72,6 +73,12 @@ namespace ChaosDbg.Tests
 
                 return serviceProvider;
             }
+        }
+
+        [TestInitialize]
+        public void TestInitialize()
+        {
+            serviceProvider = null;
         }
 
         protected T GetService<T>() => ServiceProvider.GetService<T>();

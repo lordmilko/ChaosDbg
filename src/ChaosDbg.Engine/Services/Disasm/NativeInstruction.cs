@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using ChaosDbg.Analysis;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm
@@ -36,12 +37,14 @@ namespace ChaosDbg.Disasm
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private DbgEngFormatter formatter;
 
-        internal NativeInstruction(Instruction instruction, byte[] bytes, DbgEngFormatter formatter)
+        internal NativeInstruction(in Instruction instruction, byte[] bytes, DbgEngFormatter formatter)
         {
             Instruction = instruction;
             Bytes = bytes;
             this.formatter = formatter;
         }
+
+        internal XRefAwareNativeInstruction ToXRefAware() => new XRefAwareNativeInstruction(Instruction, Bytes, formatter);
 
         public override string ToString() => formatter.Format(this);
 
