@@ -7,14 +7,15 @@ namespace chaos.Cordb.Commands
     [Command("~")]
     class ThreadCommands : ICustomCommandParser
     {
-        private CordbEngine engine;
+        private readonly CordbEngineProvider engineProvider;
+        private CordbEngine engine => engineProvider.ActiveEngine;
 
         private StackTraceCommands StackTraceCommand { get; }
 
-        public ThreadCommands(CordbEngine engine)
+        public ThreadCommands(CordbEngineProvider engineProvider)
         {
-            this.engine = engine;
-            StackTraceCommand = new StackTraceCommands(engine);
+            this.engineProvider = engineProvider;
+            StackTraceCommand = new StackTraceCommands(engineProvider);
         }
 
         // ~[<id>]

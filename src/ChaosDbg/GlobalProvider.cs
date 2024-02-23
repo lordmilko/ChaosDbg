@@ -5,7 +5,7 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
-using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg
 {
@@ -48,6 +48,8 @@ namespace ChaosDbg
             {
                 typeof(DbgEngEngineProvider),
                 typeof(NativeLibraryProvider),
+
+                typeof(DbgEngEngineServices),
 
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },
                 { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },

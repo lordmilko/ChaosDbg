@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -12,13 +11,6 @@ using ChaosDbg.ViewModel;
 
 namespace ChaosDbg
 {
-    class TextCanvasAutomationPeer : FrameworkElementAutomationPeer
-    {
-        public TextCanvasAutomationPeer(FrameworkElement owner) : base(owner)
-        {
-        }
-    }
-
     /// <summary>
     /// Interaction logic for TextCanvasControl.xaml
     /// </summary>
@@ -41,7 +33,7 @@ namespace ChaosDbg
 
         private static void RenderContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((UIElement)d).InvalidateVisual();
+            ((UIElement) d).InvalidateVisual();
         }
 
         #endregion
@@ -89,8 +81,6 @@ namespace ChaosDbg
 
             return base.ArrangeOverride(arrangeSize);
         }
-
-        protected override AutomationPeer OnCreateAutomationPeer() => new TextCanvasAutomationPeer(this);
 
         #region Mouse
 

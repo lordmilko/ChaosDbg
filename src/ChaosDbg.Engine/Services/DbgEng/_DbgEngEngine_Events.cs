@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -13,35 +14,30 @@ namespace ChaosDbg.DbgEng
     {
         #region ChaosDbg Event Handlers
 
-        /// <summary>
-        /// The event that occurs when the engine wishes to print output to the console.
-        /// </summary>
-        public event EventHandler<EngineOutputEventArgs> EngineOutput;
+        EventHandlerList IDbgEngineInternal.EventHandlers => EventHandlers;
 
-        /// <summary>
-        /// The event that occurs when the debugger status changes (e.g. from broken to running).
-        /// </summary>
-        public event EventHandler<EngineStatusChangedEventArgs> EngineStatusChanged;
+        //These events are private so that external types cannot attempt to bind to them. All outside binding should go
+        //through DbgEngEngineProvider. We can't pass explicitly implemented event handlers so HandleUIEvent, so annoyingly
+        //we need to define "Raise" methods for all of them
+        internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
 
-        /// <summary>
-        /// The event that occurs when a module is loaded into the current process.
-        /// </summary>
-        public event EventHandler<EngineModuleLoadEventArgs> ModuleLoad;
+        private void RaiseEngineOutput(EngineOutputEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineOutput)], args);
 
-        /// <summary>
-        /// The event that occurs when a module is unloaded from the current process.
-        /// </summary>
-        public event EventHandler<EngineModuleUnloadEventArgs> ModuleUnload;
+        private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineStatusChanged)], args);
 
-        /// <summary>
-        /// The event that occurs when a thread is created in the current process.
-        /// </summary>
-        public event EventHandler<EngineThreadCreateEventArgs> ThreadCreate;
-        
-        /// <summary>
-        /// The event that occurs when a thread exits in the current process.
-        /// </summary>
-        public event EventHandler<EngineThreadExitEventArgs> ThreadExit;
+        private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ModuleLoad)], args);
+
+        private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ModuleUnload)], args);
+
+        private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ThreadCreate)], args);
+
+        private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ThreadExit)], args);
 
         #endregion
         #region IDebugEventCallbacks
@@ -71,7 +67,7 @@ namespace ChaosDbg.DbgEng
 
             var thread = Threads.Add(userId, systemId);
             
-            HandleUIEvent(ThreadCreate, new EngineThreadCreateEventArgs(thread));
+            RaiseThreadCreate(new EngineThreadCreateEventArgs(thread));
 
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -91,7 +87,7 @@ namespace ChaosDbg.DbgEng
             var thread = Threads.Remove(systemId);
 
             if (thread != null)
-                HandleUIEvent(ThreadExit, new EngineThreadExitEventArgs(thread));
+                RaiseThreadExit(new EngineThreadExitEventArgs(thread));
             
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -120,7 +116,7 @@ namespace ChaosDbg.DbgEng
         {
             var module = Modules.Add(baseOffset, imageName, moduleName, moduleSize);
 
-            HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+            RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
 
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -130,7 +126,7 @@ namespace ChaosDbg.DbgEng
             var module = Modules.Remove(baseOffset);
 
             if (module != null)
-                HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
 
             return DEBUG_STATUS.NO_CHANGE;
         }
@@ -184,7 +180,7 @@ namespace ChaosDbg.DbgEng
                     Target.Status = newStatus;
 
                     //Notify any external subscribers (such as the UI) that the engine status ic changing
-                    HandleUIEvent(EngineStatusChanged, new EngineStatusChangedEventArgs(oldStatus, newStatus));
+                    RaiseEngineStatusChanged(new EngineStatusChangedEventArgs(oldStatus, newStatus));
                 }
             }
         }
@@ -211,7 +207,7 @@ namespace ChaosDbg.DbgEng
 
         HRESULT IDebugOutputCallbacks2.Output2(DEBUG_OUTCB which, DEBUG_OUTCBF flags, long arg, string text)
         {
-            HandleUIEvent(EngineOutput, new EngineOutputEventArgs(text));
+            RaiseEngineOutput(new EngineOutputEventArgs(text));
             return S_OK;
         }
 

@@ -12,6 +12,11 @@
             this.services = services;
         }
 
-        protected override DbgEngEngine NewEngine() => new DbgEngEngine(services);
+        protected override DbgEngEngine NewEngine()
+        {
+            var engine = new DbgEngEngine(services);
+            engine.EventHandlers.AddHandlers(events);
+            return engine;
+        }
     }
 }

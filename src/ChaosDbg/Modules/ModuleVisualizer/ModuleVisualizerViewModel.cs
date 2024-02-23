@@ -8,12 +8,12 @@ namespace ChaosDbg.ViewModel
         [Reactive]
         public virtual ModuleVisualizerContent RenderContent { get; set; }
 
-        public ModuleVisualizerViewModel(DbgEngEngine engine)
+        public ModuleVisualizerViewModel(DbgEngEngineProvider engineProvider)
         {
             RenderContent = new ModuleVisualizerContent();
 
-            engine.ModuleLoad += (s, e) => RenderContent.AddModule(e.Module);
-            engine.ModuleUnload += (s, e) => RenderContent.RemoveModule(e.Module);
+            engineProvider.ModuleLoad += (s, e) => RenderContent.AddModule(e.Module);
+            engineProvider.ModuleUnload += (s, e) => RenderContent.RemoveModule(e.Module);
         }
     }
 }

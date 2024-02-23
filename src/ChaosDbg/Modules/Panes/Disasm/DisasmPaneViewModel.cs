@@ -18,20 +18,21 @@ namespace ChaosDbg.ViewModel
 
         private Font font;
 
-        private DbgEngEngine engine;
+        private DbgEngEngineProvider engineProvider;
+        private DbgEngEngine engine => engineProvider.ActiveEngine;
         private INativeDisassemblerProvider nativeDisassemblerProvider;
         private IPEFileProvider peFileProvider;
 
         public event EventHandler<AddressChangedEventArgs> AddressChanged;
 
-        public DisasmPaneViewModel(IThemeProvider themeProvider, DbgEngEngine engine, INativeDisassemblerProvider nativeDisassemblerProvider, IPEFileProvider peFileProvider)
+        public DisasmPaneViewModel(IThemeProvider themeProvider, DbgEngEngineProvider engineProvider, INativeDisassemblerProvider nativeDisassemblerProvider, IPEFileProvider peFileProvider)
         {
             font = themeProvider.GetTheme().ContentFont;
-            this.engine = engine;
+            this.engineProvider = engineProvider;
             this.nativeDisassemblerProvider = nativeDisassemblerProvider;
             this.peFileProvider = peFileProvider;
 
-            engine.EngineStatusChanged += Engine_EngineStatusChanged;
+            engineProvider.EngineStatusChanged += Engine_EngineStatusChanged;
         }
 
         private void Engine_EngineStatusChanged(object sender, EngineStatusChangedEventArgs e)

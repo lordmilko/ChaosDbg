@@ -3,7 +3,7 @@ using System.Threading;
 using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
-using ChaosDbg.Engine;
+using ChaosDbg.DbgEng;
 
 namespace chaos
 {
@@ -12,25 +12,28 @@ namespace chaos
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
         private CordbEngineProvider engineProvider;
-        private CordbEngine engine;
+        private DbgEngEngineProvider dbgEngEngineProvider;
         private RelayParser commandDispatcher;
-        private IServiceProvider serviceProvider;
 
-        public CordbClient(CordbEngineProvider engineProvider, CommandBuilder commandBuilder, IServiceProvider serviceProvider)
+        private CordbEngine engine => engineProvider.ActiveEngine;
+
+        public CordbClient(
+            CordbEngineProvider engineProvider,
+            DbgEngEngineProvider dbgEngEngine,
+            CommandBuilder commandBuilder)
         {
             this.engineProvider = engineProvider;
+            this.dbgEngEngineProvider = dbgEngEngine;
             commandDispatcher = commandBuilder.Build();
-            this.serviceProvider = serviceProvider;
+
+            RegisterCallbacks();
         }
 
         public void Execute(string executable, bool minimized, bool interop)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
 
-            engine = (CordbEngine) engineProvider.CreateProcess(executable, minimized, interop, initCallback: RegisterCallbacks);
-
-            //This is very dodgy, and we're relying on the premise that we'll never create more than one engine per process
-            ((ServiceProvider) serviceProvider).AddSingleton(engine);
+            engineProvider.CreateProcess(executable, minimized, interop);
 
             EngineLoop();
         }
@@ -85,19 +88,19 @@ namespace chaos
             }
         }
 
-        private void RegisterCallbacks(ICordbEngine engine)
+        private void RegisterCallbacks()
         {
-            engine.EngineStatusChanged += (s, e) =>
+            engineProvider.EngineStatusChanged += (s, e) =>
             {
                 if (e.NewStatus == EngineStatus.Break)
                     wakeEvent.Set();
             };
 
-            engine.ModuleLoad += (s, e) => Console.WriteLine($"ModLoad: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
-            engine.ModuleUnload += (s, e) => Console.WriteLine($"ModUnload: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
+            engineProvider.ModuleLoad += (s, e) => Console.WriteLine($"ModLoad: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
+            engineProvider.ModuleUnload += (s, e) => Console.WriteLine($"ModUnload: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
 
-            engine.ThreadCreate += (s, e) => Console.WriteLine($"ThreadCreate {e.Thread}");
-            engine.ThreadExit += (s, e) => Console.WriteLine($"ThreadExit {e.Thread}");
+            engineProvider.ThreadCreate += (s, e) => Console.WriteLine($"ThreadCreate {e.Thread}");
+            engineProvider.ThreadExit += (s, e) => Console.WriteLine($"ThreadExit {e.Thread}");
         }
 
         private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
@@ -110,7 +113,7 @@ namespace chaos
 
         public void Dispose()
         {
-            engine?.Dispose();
+            engineProvider?.Dispose();
             wakeEvent.Dispose();
         }
     }

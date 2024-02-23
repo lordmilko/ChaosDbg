@@ -6,24 +6,22 @@ using ClrDebug.DbgEng;
 
 namespace chaos
 {
-    class DbgEngClient
+    class DbgEngClient : IDisposable
     {
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
-        private DbgEngEngine engine;
+        private DbgEngEngineProvider engineProvider;
+        private DbgEngEngine engine => engineProvider.ActiveEngine;
 
         public void Execute(string executable, bool minimized)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
 
-            var engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
+            engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
+            engineProvider.EngineOutput += Engine_EngineOutput;
+            engineProvider.EngineStatusChanged += Engine_EngineStatusChanged;
 
-            engine = engineProvider.CreateProcess(executable, minimized, e =>
-            {
-                e.EngineOutput += Engine_EngineOutput;
-
-                e.EngineStatusChanged += Engine_EngineStatusChanged;
-            });
+            engineProvider.CreateProcess(executable, minimized);
 
             EngineLoop();
         }
@@ -59,8 +57,6 @@ namespace chaos
 
                 var command = Console.ReadLine();
 
-                //client.Control.OutputPrompt(DEBUG_OUTCTL.ALL_OTHER_CLIENTS, $" {command}\n");
-
                 //If you type the command "?", it's going to say "Hit Enter" to continue. But the thing is, the Execute() method
                 //won't return until you hit enter - which means we're now deadlocked! The way you escape this is via the IDebugInputCallbacks.
                 //In your input callbacks, you should attempt to get input from the user as normal so that you may end whatever is blocking Execute()
@@ -71,9 +67,6 @@ namespace chaos
 
         private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
-            //todo: my dbgeng client doesnt work at all? it just hangs when we hit g to resume and the process
-            //never starts
-
             //Don't terminate our process!
             e.Cancel = true;
 
@@ -83,6 +76,12 @@ namespace chaos
         private void Engine_EngineOutput(object sender, EngineOutputEventArgs e)
         {
             Console.Write(e.Text);
+        }
+
+        public void Dispose()
+        {
+            engineProvider?.Dispose();
+            wakeEvent.Dispose();
         }
     }
 }

@@ -11,7 +11,7 @@ namespace ChaosDbg
         public IMemoryTextSegment[] Segments { get; }
 
         private IPEFile pe;
-        private ulong BaseAddress => pe.OptionalHeader.ImageBase;
+        private long BaseAddress => pe.OptionalHeader.ImageBase;
         private int currentSegmentIndex = 0;
         private IMemoryTextSegment currentSegment => Segments[currentSegmentIndex];
 

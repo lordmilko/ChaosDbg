@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
 using ClrDebug;
@@ -40,14 +41,27 @@ namespace ChaosDbg.Cordb
 
         #region ChaosDbg Event Handlers
 
-#pragma warning disable CS0067 //Event is never used
-        public event EventHandler<EngineOutputEventArgs> EngineOutput;
-        public event EventHandler<EngineStatusChangedEventArgs> EngineStatusChanged;
-        public event EventHandler<EngineModuleLoadEventArgs> ModuleLoad;
-        public event EventHandler<EngineModuleUnloadEventArgs> ModuleUnload;
-        public event EventHandler<EngineThreadCreateEventArgs> ThreadCreate;
-        public event EventHandler<EngineThreadExitEventArgs> ThreadExit;
-#pragma warning restore CS0067 //Event is never used
+        EventHandlerList IDbgEngineInternal.EventHandlers => EventHandlers;
+
+        internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
+
+        private void RaiseEngineOutput(EngineOutputEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineOutput)], args);
+
+        private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineStatusChanged)], args);
+
+        private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleLoad)], args);
+
+        private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleUnload)], args);
+
+        private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadCreate)], args);
+
+        private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadExit)], args);
 
         #endregion
         #region PreEvent
@@ -156,7 +170,7 @@ namespace ChaosDbg.Cordb
 
             var module = Process.Modules.Add(e.Module);
 
-            HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+            RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
         }
 
         private void UnloadModule(object sender, UnloadModuleCorDebugManagedCallbackEventArgs e)
@@ -165,7 +179,7 @@ namespace ChaosDbg.Cordb
             var module = Process.Modules.Remove(e.Module.BaseAddress);
 
             if (module != null)
-                HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
         }
 
         private void UnmanagedLoadModule(object sender, LOAD_DLL_DEBUG_INFO e)
@@ -173,7 +187,7 @@ namespace ChaosDbg.Cordb
             var module = Process.Modules.Add(e);
 
             Session.EventHistory.Add(new CordbNativeModuleLoadEventHistoryItem(module));
-            HandleUIEvent(ModuleLoad, new EngineModuleLoadEventArgs(module));
+            RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
         }
 
         private void UnmanagedUnloadModule(object sender, UNLOAD_DLL_DEBUG_INFO e)
@@ -183,7 +197,7 @@ namespace ChaosDbg.Cordb
             if (module != null)
             {
                 Session.EventHistory.Add(new CordbNativeModuleUnloadEventHistoryItem(module));
-                HandleUIEvent(ModuleUnload, new EngineModuleUnloadEventArgs(module));
+                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
             }
         }
 
@@ -230,7 +244,7 @@ namespace ChaosDbg.Cordb
 
                 var thread = Process.Threads.Add(e.Thread);
 
-                HandleUIEvent(ThreadCreate, new EngineThreadCreateEventArgs(thread));
+                RaiseThreadCreate(new EngineThreadCreateEventArgs(thread));
             }
         }
 
@@ -244,7 +258,7 @@ namespace ChaosDbg.Cordb
                 var thread = Process.Threads.Remove(e.Thread.Id);
 
                 if (thread != null)
-                    HandleUIEvent(ThreadExit, new EngineThreadExitEventArgs(thread));
+                    RaiseThreadExit(new EngineThreadExitEventArgs(thread));
             }
         }
 
@@ -278,7 +292,7 @@ namespace ChaosDbg.Cordb
 
             var thread = Process.Threads.Add(Session.CallbackContext.UnmanagedEventThreadId, e.hThread);
 
-            HandleUIEvent(ThreadCreate, new EngineThreadCreateEventArgs(thread));
+            RaiseThreadCreate(new EngineThreadCreateEventArgs(thread));
         }
 
         private void UnmanagedExitThread(object sender, EXIT_THREAD_DEBUG_INFO e)
@@ -288,7 +302,7 @@ namespace ChaosDbg.Cordb
             var thread = Process.Threads.Remove(Session.CallbackContext.UnmanagedEventThreadId);
 
             if (thread != null)
-                HandleUIEvent(ThreadExit, new EngineThreadExitEventArgs(thread));
+                RaiseThreadExit(new EngineThreadExitEventArgs(thread));
         }
 
         #endregion
@@ -383,7 +397,7 @@ namespace ChaosDbg.Cordb
             {
                 Session.Status = newStatus;
 
-                HandleUIEvent(EngineStatusChanged, new EngineStatusChangedEventArgs(oldStatus, newStatus));
+                RaiseEngineStatusChanged(new EngineStatusChangedEventArgs(oldStatus, newStatus));
             }
         }
     }

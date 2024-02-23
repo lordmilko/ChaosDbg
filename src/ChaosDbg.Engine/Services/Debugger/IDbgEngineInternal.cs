@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System.ComponentModel;
+using System.Threading;
 
 namespace ChaosDbg
 {
@@ -7,5 +8,7 @@ namespace ChaosDbg
         void CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default);
 
         void Attach(AttachProcessOptions options, CancellationToken cancellationToken = default);
+
+        EventHandlerList EventHandlers { get; }
     }
 }

@@ -7,10 +7,10 @@ namespace ChaosDbg.ViewModel
     {
         public ObservableCollection<IDbgModule> Modules { get; } = new ObservableCollection<IDbgModule>();
 
-        public ModulesPaneViewModel(DbgEngEngine engine)
+        public ModulesPaneViewModel(DbgEngEngineProvider engineProvider)
         {
-            engine.ModuleLoad += (s, e) => Modules.Add(e.Module);
-            engine.ModuleUnload += (s, e) => Modules.Remove(e.Module);
+            engineProvider.ModuleLoad += (s, e) => Modules.Add(e.Module);
+            engineProvider.ModuleUnload += (s, e) => Modules.Remove(e.Module);
         }
     }
 }
