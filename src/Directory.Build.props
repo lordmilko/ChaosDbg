@@ -14,6 +14,11 @@
          the correct way to disable the app.config file in SDK style projects is to use the GenerateSupportedRuntime attribute -->
     <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
 
+    <IsRelease Condition="'$(Configuration)' == 'Release'">true</IsRelease>
+    <IsRelease Condition="'$(IsRelease)' == ''">false</IsRelease>
+
+    <SingleFile Condition="$(IsRelease)">true</SingleFile>
+    <SingleFile Condition="'$(SingleFile)' == ''">false</SingleFile>
   </PropertyGroup>
 
   <!-- Package Versions -->
@@ -29,7 +34,6 @@
     <TestSDKVersion>16.9.4</TestSDKVersion>
     <MSTestVersion>2.2.3</MSTestVersion>
     <CoverletVersion>3.0.2</CoverletVersion>
-
   </PropertyGroup>
 
   <Target Name="RemoveDbgShim" AfterTargets="Build">

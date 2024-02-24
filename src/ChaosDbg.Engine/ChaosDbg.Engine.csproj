@@ -24,7 +24,10 @@
     <PackageReference Include="Microsoft.Diagnostics.DbgShim" Version="$(DbgShimVersion)" />
 	</ItemGroup>
 
-  <ItemGroup>
+  <!-- We only want to copy native assemblies to the output directory when we're not building single file. During single file
+       builds, we'll directly copy these into our "lib" folder, as the list of files that will be copied to the output directory
+       doesn't seem to be known until after the build -->
+  <ItemGroup Condition="'$(SingleFile)' == 'false'">
     <!-- Copy DbgEng related assemblies to the output directory. This technique ensures that assemblies are
          copied to the output directories of any projects that depend on ChaosDbg.Engine as well (which
          a <Copy /> task wouldn't do) -->

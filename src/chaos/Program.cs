@@ -8,6 +8,15 @@ namespace chaos
     {
         static void Main(string[] args)
         {
+            //In single file builds, a zip file is embedded in the exe containing all managed/unmanaged assemblies,
+            //making ChaosDbg easily portable as well as reducing the overall file size
+            SingleFileProvider.ExtractChaosDbg();
+
+            Run(args);
+        }
+
+        private static void Run(string[] args)
+        {
             var executableArgument = new Argument<string>("executable", "The command line of an executable process to launch and debug");
 
             var engineOption = new Option<DbgEngineKind?>(new[]{"-e", "--engine"}, "The debug engine to use");

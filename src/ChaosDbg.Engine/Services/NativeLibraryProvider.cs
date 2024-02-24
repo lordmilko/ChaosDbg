@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using ChaosLib;
 
@@ -27,12 +25,47 @@ namespace ChaosDbg
 
         public NativeLibraryProvider()
         {
+            string baseDir;
+
+            if (!TryGetSingleFileBase(out baseDir))
+                baseDir = AppContext.BaseDirectory;
+
             root = Path.Combine(
-                AppContext.BaseDirectory,
+                baseDir,
                 IntPtr.Size == 4 ? "x86" : "x64"
             );
 
             Kernel32.SetDllDirectory(root);
+        }
+
+        private bool TryGetSingleFileBase(out string baseDir)
+        {
+            baseDir = null;
+
+            var assembly = Assembly.GetEntryAssembly();
+
+            var singleFileProviderType = assembly.GetType("ChaosDbg.SingleFileProvider");
+
+            if (singleFileProviderType == null)
+                return false;
+
+            var isSingleFileInfo = singleFileProviderType.GetProperty("IsSingleFile");
+
+            if (isSingleFileInfo == null)
+                throw new MissingMemberException(singleFileProviderType.Name, "IsSingleFile");
+
+            var isSingleFile = (bool) isSingleFileInfo.GetValue(null);
+
+            if (!isSingleFile)
+                return false;
+
+            var unpackDirInfo = singleFileProviderType.GetField("UnpackDir", BindingFlags.Static | BindingFlags.NonPublic);
+
+            if (unpackDirInfo == null)
+                throw new MissingMemberException(singleFileProviderType.Name, "UnpackDir");
+
+            baseDir = (string) unpackDirInfo.GetValue(null);
+            return true;
         }
 
         public IntPtr GetModuleHandle(string name)

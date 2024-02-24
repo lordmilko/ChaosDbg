@@ -1,0 +1,56 @@
+<Project>
+  <!-- We want to create a single file EXE containing all of our dependencies in Release builds. We do this by moving all of our
+       dependencies into a "lib" directory that we then zip up and include as an embedded resource in the EXE. This creates a bit
+       of a timing issue, as resources are generated prior to Build, but our dependencies are only copied to the output directory
+       after build.
+       
+       Fortunately, the managed assemblies that we depend on will be known prior to Build, so we can copy these to
+       our "lib" directory before the build. We don't know all the files we'll be copying to the output directory until after
+       the build (or at least, I couldn't find an obvious variable containing this information). So we manually copy all of
+       our native dependencies to the "lib" directory as well. With all of our dependencies acquired, we zip up the "lib"
+       directory and embed it in the EXE.
+       
+       After the build completes, any files that get "normally" copied are no longer needed, so we delete them. -->
+
+  <Target Name="CreateSingleFile" BeforeTargets="CoreResGen" Condition="'$(SingleFile)' == 'true'">
+    <ItemGroup>
+      <FilesToCopyx86 Include="
+        $(NuGetPackageRoot)Microsoft.Diagnostics.DbgShim.win-x86\$(DbgShimVersion)\runtimes\win-x86\native\dbgshim.dll;
+        $(MicrosoftDebuggingPlatformDbgEngContent)x86\dbgeng.dll;
+        $(MicrosoftDebuggingPlatformDbgEngContent)x86\dbghelp.dll;
+        $(MicrosoftDebuggingPlatformSymSrvContent)x86\symsrv.dll
+      " />
+
+      <FilesToCopyx64 Include="
+        $(NuGetPackageRoot)Microsoft.Diagnostics.DbgShim.win-x64\$(DbgShimVersion)\runtimes\win-x64\native\dbgshim.dll;
+        $(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbgeng.dll;
+        $(MicrosoftDebuggingPlatformDbgEngContent)amd64\dbghelp.dll;
+        $(MicrosoftDebuggingPlatformSymSrvContent)amd64\symsrv.dll
+      " />
+
+      <FilesToCopyCLR Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(FilesToCopyCLR)" DestinationFolder="$(OutDir)lib" />
+    <Copy SourceFiles="@(FilesToCopyx86)" DestinationFolder="$(OutDir)lib\x86" />
+    <Copy SourceFiles="@(FilesToCopyx64)" DestinationFolder="$(OutDir)lib\x64" />
+
+    <ZipDirectory SourceDirectory="$(OutDir)lib" Overwrite="true" DestinationFile="$(OutDir)lib.zip" />
+
+    <ItemGroup>
+      <EmbeddedResource Include="$(OutDir)lib.zip">
+        <Type>Non-Resx</Type>
+        <WithCulture>false</WithCulture>
+        <LogicalName>.\lib.zip</LogicalName>
+        <Link>lib.zip</Link>
+        <Visible>False</Visible>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CleanOutputFiles" AfterTargets="Build" Condition="'$(SingleFile)' == 'true'">
+    <Delete Files="@(ReferenceCopyLocalPaths->'$(OutDir)%(DestinationSubDirectory)%(Filename)%(Extension)')" Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll'"/>
+    <Delete Files="$(OutDir)lib.zip" />
+    <RemoveDir Directories="$(OutDir)lib;$(OutDir)x86;$(OutDir)x64" />
+  </Target>
+</Project>
