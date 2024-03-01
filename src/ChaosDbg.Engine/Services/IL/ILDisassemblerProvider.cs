@@ -1,5 +1,7 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using ChaosDbg.Cordb;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.IL
@@ -27,6 +29,19 @@ namespace ChaosDbg.IL
             var stream = new MemoryStream(bytes);
 
             return new ILDisassembler(stream, module.MetaDataProvider);
+        }
+
+        public ILDisassembler CreateDisassembler(byte[] ilBytes, MetaDataProvider provider)
+        {
+            if (ilBytes == null)
+                throw new ArgumentNullException(nameof(ilBytes));
+
+            if (provider == null)
+                throw new ArgumentNullException(nameof(provider));
+
+            var stream = new MemoryStream(ilBytes);
+
+            return new ILDisassembler(stream, provider);
         }
     }
 }

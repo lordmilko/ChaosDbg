@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
@@ -25,6 +26,9 @@ namespace ChaosDbg.IL
         private const byte Prefix2 = 0xFD;
         private const byte Prefix1 = 0xFE;
         private const byte PrefixRef = 0xFF;
+
+        internal static HashSet<OpCode> localOpCodes;
+        internal static HashSet<OpCode> parameterOpCodes;
 
         static ILDecoder()
         {
@@ -56,6 +60,38 @@ namespace ChaosDbg.IL
                     multiByteOpCodes[loByte] = opcode;
                 }
             }
+
+            localOpCodes = new[]
+            {
+                OpCodes.Ldloc,
+                OpCodes.Ldloc_0,
+                OpCodes.Ldloc_1,
+                OpCodes.Ldloc_2,
+                OpCodes.Ldloc_3,
+                OpCodes.Ldloc_S,
+                OpCodes.Ldloca,
+                OpCodes.Ldloca_S,
+                OpCodes.Stloc,
+                OpCodes.Stloc_0,
+                OpCodes.Stloc_1,
+                OpCodes.Stloc_2,
+                OpCodes.Stloc_3,
+                OpCodes.Stloc_S,
+            }.ToHashSet();
+
+            parameterOpCodes = new[]
+            {
+                OpCodes.Ldarg,
+                OpCodes.Ldarg_0,
+                OpCodes.Ldarg_1,
+                OpCodes.Ldarg_2,
+                OpCodes.Ldarg_3,
+                OpCodes.Ldarg_S,
+                OpCodes.Ldarga,
+                OpCodes.Ldarga_S,
+                OpCodes.Starg,
+                OpCodes.Starg_S
+            }.ToHashSet();
         }
 
         private BinaryReader reader;
@@ -123,25 +159,55 @@ namespace ChaosDbg.IL
                 case OperandType.InlineString:
                 case OperandType.InlineTok:
                 case OperandType.InlineType:
+                {
                     var token = reader.ReadInt32();
                     return provider.ResolveToken(token);
+                }    
 
                 case OperandType.InlineI:
-                case OperandType.InlineBrTarget:
                     return reader.ReadInt32();
+
+                case OperandType.InlineBrTarget:
+                    return reader.ReadInt32() + (int) reader.BaseStream.Position;
 
                 case OperandType.InlineI8:
                     return reader.ReadInt64();
 
+                case OperandType.ShortInlineR:
+                    return reader.ReadSingle();
+
                 case OperandType.InlineR:
                     return reader.ReadDouble();
 
+                case OperandType.InlineSwitch:
+                {
+                    var targets = new int[reader.ReadInt32()];
+                    var endOffset = (int) reader.BaseStream.Position + (4 * targets.Length);
+
+                    for (var i = 0; i < targets.Length; i++)
+                        targets[i] = reader.ReadInt32() + endOffset;
+
+                    return targets;
+                }
+
                 case OperandType.ShortInlineBrTarget:
-                    return reader.ReadSByte() + reader.BaseStream.Position;
+                    return reader.ReadSByte() + (int) reader.BaseStream.Position;
 
                 case OperandType.ShortInlineI:
+                    return reader.ReadByte();
+
+                //Whether a variable refers to a parameter or a local depends on its OpCode (ldloc vs ldarg, etc)
+                case OperandType.InlineVar:
+                    return reader.ReadInt16();
+
                 case OperandType.ShortInlineVar:
                     return reader.ReadByte();
+
+                case OperandType.InlineSig:
+                {
+                    var token = reader.ReadInt32();
+                    return provider.ResolveToken(token);
+                }
 
                 default:
                     throw new NotImplementedException($"Don't know how to handle {nameof(OperandType)} '{opcode.OperandType}'.");

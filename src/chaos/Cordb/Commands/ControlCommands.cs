@@ -3,13 +3,10 @@ using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
-    class ControlCommands
+    class ControlCommands : CommandBase
     {
-        private CordbEngine engine;
-
-        public ControlCommands(CordbEngine engine)
+        public ControlCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
         {
-            this.engine = engine;
         }
 
         [Command("g")]

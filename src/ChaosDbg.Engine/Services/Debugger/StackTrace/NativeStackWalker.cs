@@ -5,6 +5,7 @@ using ChaosLib;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
 using ClrDebug;
+using ClrDebug.DbgEng;
 
 namespace ChaosDbg
 {
@@ -17,13 +18,13 @@ namespace ChaosDbg
         private DbgHelpSession dbgHelpSession;
         private DynamicFunctionTableProvider dynamicFunctionTableProvider;
         private IntPtr dynamicFunctionTableResult;
-        private Func<long, (IDisplacedSymbol symbol, ISymbolModule module)> getSymbol;
+        private Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol symbol, ISymbolModule module)> getSymbol;
 
         public NativeStackWalker(
             ICLRDataTarget dataTarget,
             DbgHelpSession dbgHelpSession,
             DynamicFunctionTableCache dynamicFunctionTableCache,
-            Func<long, (IDisplacedSymbol, ISymbolModule)> getSymbol)
+            Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol, ISymbolModule)> getSymbol)
         {
             if (dataTarget == null)
                 throw new ArgumentNullException(nameof(dataTarget));
@@ -81,9 +82,18 @@ namespace ChaosDbg
             CrossPlatformContext context,
             Func<NativeFrame, bool> predicate = null)
         {
+            /* It's very important that the address mode be set to AddrModeFlat. While you _can_ get valid stack traces without
+             * specifying this, an ADDRESS_MODE of 0 signifies "AddrMode1616", which relates to translating 16-bit stacks.
+             * AddrModeFlat is also listed as being the only mode supported by the library. If you don't specify AddrModeFlat,
+             * you can run into issues wherein when trying to do a stack trace after ntdll has loaded but before the process has
+             * fully initialized, you won't get proper stack trace results. We don't need to specify the segment, that only applies
+             * to 16-bit code. */
             var stackFrame = new STACKFRAME_EX
             {
-                StackFrameSize = Marshal.SizeOf<STACKFRAME_EX>()
+                StackFrameSize = Marshal.SizeOf<STACKFRAME_EX>(),
+                AddrPC    = { Offset = context.IP, Mode = ADDRESS_MODE.AddrModeFlat },
+                AddrFrame = { Offset = context.BP, Mode = ADDRESS_MODE.AddrModeFlat },
+                AddrStack = { Offset = context.SP, Mode = ADDRESS_MODE.AddrModeFlat }
             };
 
             var machineType = dataTarget.MachineType;
@@ -118,7 +128,7 @@ namespace ChaosDbg
                 if (!result)
                     break;
 
-                var symbolResult = getSymbol(stackFrame.AddrPC.Offset);
+                var symbolResult = getSymbol(stackFrame.AddrPC.Offset, stackFrame.InlineFrameContext);
 
                 var newFrame = new NativeFrame(stackFrame, symbolResult.symbol, symbolResult.module, new CrossPlatformContext(context.Flags, raw));
 

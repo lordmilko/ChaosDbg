@@ -111,6 +111,8 @@ namespace ChaosDbg.Disasm
         //be a static/standalone type
         public string Format(INativeInstruction instruction, DisasmFormatOptions format = null) => formatter.Format(instruction, format);
 
+        public void Format(INativeInstruction instruction, FormatterOutput formatWriter, DisasmFormatOptions format = null) => formatter.Format(instruction, formatWriter, format);
+
         public void Dispose()
         {
             disasmStream.Dispose();

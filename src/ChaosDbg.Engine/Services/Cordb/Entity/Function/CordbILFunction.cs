@@ -11,11 +11,38 @@ namespace ChaosDbg.Cordb
 {
     public class CordbILFunction
     {
+        #region Address
+
+        private CLRDATA_ADDRESS? clrAddress;
+
+        public CLRDATA_ADDRESS ClrAddress
+        {
+            get
+            {
+                if (clrAddress == null)
+                {
+                    var sos = Module.Process.DAC.SOS;
+
+                    var rawAddress = sos.GetMethodDescFromToken(Module.ClrAddress, CorDebugFunction.Token);
+
+                    //If we get an address of 0 I think this may mean that the function isn't jitted yet
+                    if (rawAddress != 0)
+                        clrAddress = rawAddress;
+                    else
+                        return 0;
+                }
+
+                return clrAddress.Value;
+            }
+        }
+
+        #endregion
+
         public CorDebugFunction CorDebugFunction { get; }
 
         public MdiMethodDef MetaData { get; }
 
-        public CordbILFrame Frame { get; }
+        public CordbManagedModule Module { get; }
 
         private INativeInstruction[] disassembly;
 
@@ -28,7 +55,7 @@ namespace ChaosDbg.Cordb
             {
                 if (disassembly == null)
                 {
-                    var process = Frame.Module.Process;
+                    var process = Module.Process;
                     var nativeDisasmProvider = process.Session.Services.NativeDisasmProvider;
 
                     var nativeCode = CorDebugFunction.NativeCode;
@@ -39,7 +66,7 @@ namespace ChaosDbg.Cordb
                     var codeChunks = nativeCode.CodeChunks;
 
                     if (codeChunks.Length > 1)
-                        throw new NotImplementedException("Disassembling native code split across multiple code chunks is not implemented. A custom stream is needed so that the code in each chunk has its IP set correctly during disassembly.");
+                        throw new NotImplementedException("Disassembling native code split across multiple code chunks is not implemented. A custom stream is needed so that the code in each chunk has its IP set correctly during disassembly. Or, maybe we can just loop over the chunks and update the IP of the disassembler prior to the start of each one? Need to verify whatever we do actually works");
 
                     var codeChunk = codeChunks.Single();
 
@@ -65,10 +92,10 @@ namespace ChaosDbg.Cordb
             {
                 if (il == null)
                 {
-                    var process = Frame.Module.Process;
+                    var process = Module.Process;
                     var ilDisasmProvider = process.Session.Services.ILDisasmProvider;
 
-                    var ilDisassembler = ilDisasmProvider.CreateDisassembler(CorDebugFunction, Frame.Module);
+                    var ilDisassembler = ilDisasmProvider.CreateDisassembler(CorDebugFunction, Module);
 
                     il = ilDisassembler.EnumerateInstructions().ToArray();
                 }
@@ -107,39 +134,40 @@ namespace ChaosDbg.Cordb
 
                     var results = new ILToNativeInstruction[ilToNativeMappingILSort.Length];
 
+                    var ilIndex = 0;
+
                     for (var i = 0; i < ilToNativeMappingNativeSort.Length; i++)
                     {
-                        var item = ilToNativeMappingNativeSort[i];
-
+                        var item = ilToNativeMappingILSort[i];
+                        var ilInstrs = GetILInRange(ilInstructions, ilToNativeMappingILSort, i, ref ilIndex);
                         var instrs = GetNativeInstructionsInRange(nativeInstructions, item.nativeStartOffset, item.nativeEndOffset);
 
                         //Certain items represent special code regions, and have negative numbers instead of proper offsets
                         switch ((CorDebugIlToNativeMappingTypes) item.ilOffset)
                         {
                             case CorDebugIlToNativeMappingTypes.NO_MAPPING:
-                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Unknown, null, instrs, item);
+                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.NoMapping, ilInstrs, instrs, item);
                                 break;
 
                             case CorDebugIlToNativeMappingTypes.PROLOG:
-                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Prolog, null, instrs, item);
+                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Prolog, ilInstrs, instrs, item);
                                 break;
 
                             case CorDebugIlToNativeMappingTypes.EPILOG:
-                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Epilog, null, instrs, item);
+                                results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Epilog, ilInstrs, instrs, item);
                                 break;
 
                             default:
                                 //It's a normal code region
-
-                                var ilInstrs = GetILInRange(ilInstructions, ilToNativeMappingILSort, item);
-
                                 results[i] = new ILToNativeInstruction(ILToNativeInstructionKind.Code, ilInstrs, instrs, item);
                                 break;
                         }
                     }
 
 #if DEBUG
-                    var missingIL = ilInstructions.Except(results.SelectMany(r => r.IL ?? Array.Empty<ILInstruction>())).ToArray();
+                    //Assert that all native/IL instructions were matched against
+
+                    var missingIL = ilInstructions.Except(results.SelectMany(r => r.IL)).ToArray();
                     var missingNative = nativeInstructions.Except(results.SelectMany(r => r.NativeInstructions)).ToArray();
 
                     Debug.Assert(missingIL.Length == 0, "Had extra IL instructions that were not assigned to a mapping");
@@ -193,88 +221,125 @@ namespace ChaosDbg.Cordb
         private static ILInstruction[] GetILInRange(
             ILInstruction[] ilInstructions,
             COR_DEBUG_IL_TO_NATIVE_MAP[] ilToNativeMappingILSort,
-            COR_DEBUG_IL_TO_NATIVE_MAP item)
+            int mappingIndex,
+            ref int ilIndex)
         {
-            var i = 0;
-
-            var currentOffset = 0;
-
-            //Skip ahead to find the first instruction to start from
-
-            for (; i < ilInstructions.Length; i++)
+            if (mappingIndex < ilToNativeMappingILSort.Length - 1)
             {
-                if (currentOffset == item.ilOffset)
-                    break;
+                /* We can sometimes have a prolog mapping (IL Offset -2) followed by a code mapping with an offset above 0 (e.g. 8).
+                 * In this instance, the native bytes covered by the prolog region also consumed some of our IL instructions. We know
+                 * this is true, because I saw a prolog section that covered 30 native bytes, containing a call that was made in the first
+                 * 3 IL instructions. The first code region at IL Offset 8, thereby proving that you can have IL as part of the prolog region */
+                var startOffset = Math.Max(0, ilToNativeMappingILSort[mappingIndex].ilOffset);
+                var endOffset = ilToNativeMappingILSort[mappingIndex + 1].ilOffset;
 
-                if (currentOffset > item.ilOffset)
-                    throw new NotImplementedException($"{nameof(currentOffset)} ({currentOffset}) was greater than starting offset {item.ilOffset}. This should be impossible");
-
-                currentOffset += ilInstructions[i].Length;
-            }
-
-            //While we aren't told how large we are, I suppose we can say that we run up until the next IL item
-
-            var currentIndex = Array.IndexOf(ilToNativeMappingILSort, item);
-
-            var results = new List<ILInstruction>();
-
-            if (currentIndex == ilToNativeMappingILSort.Length - 1)
-            {
-                //We're the last one. This shouldn't be possible (since we expect to have epilog after us)
-
-                for (; i < ilInstructions.Length; i++)
-                    results.Add(ilInstructions[i]);
-            }
-            else
-            {
-                var nextItem = ilToNativeMappingILSort[currentIndex + 1];
-
-                if (nextItem.ilOffset < 0)
+                if (endOffset < 0)
                 {
-                    for (var j = currentIndex + 2; j < ilToNativeMappingILSort.Length; j++)
-                    {
-                        //We've got a big problem. Our entire logic of knowing how big a given string of IL instructions is is predicated
-                        //on knowing the offset of the next instruction. But if theres a special instruction up next, followed by more normal instructions,
-                        //our logic breaks down
-                        if (ilToNativeMappingILSort[j].ilOffset > 0)
-                            throw new NotImplementedException("Encountered an IL to native mapping with a normal offset after we expected that there should be no more normal mappings");
-                    }
-                }
+                    //Either there are multiple prolog regions, or we're at the epilog. If there's another code region after us, do nothing
+                    if (ilToNativeMappingILSort.Skip(mappingIndex).Any(v => v.ilOffset >= 0))
+                        return Array.Empty<ILInstruction>();
 
-                //Eat instructions until we come to the next item
+                    //There's an epilog after us. Consume all remaining instructions
+                    var remaining = ilInstructions.Length - ilIndex;
 
-                if (item.ilOffset == nextItem.ilOffset)
-                {
-                    //A single ilOffset can sometimes result in two separate batches of native code being generated
-                    results.Add(ilInstructions[i]);
+                    var result = new ILInstruction[remaining];
+
+                    for (var i = 0; ilIndex < ilInstructions.Length; i++, ilIndex++)
+                        result[i] = ilInstructions[ilIndex];
+
+                    return result;
                 }
                 else
                 {
-                    for (; i < ilInstructions.Length; i++)
+                    var currentOffset = startOffset;
+
+                    var results = new List<ILInstruction>();
+
+                    while (currentOffset < endOffset && ilIndex < ilInstructions.Length)
                     {
-                        //This logic is predicated on there never being more normal instructions after special instructions after us
-                        if (nextItem.ilOffset > 0 && currentOffset >= nextItem.ilOffset)
-                            break;
-
-                        var currentInstr = ilInstructions[i];
-
-                        results.Add(currentInstr);
-
-                        currentOffset += currentInstr.Length;
+                        var instr = ilInstructions[ilIndex];
+                        results.Add(instr);
+                        ilIndex++;
+                        currentOffset += instr.Length;
                     }
+
+                    return results.ToArray();
                 }
             }
+            else
+            {
+                if (ilIndex == ilInstructions.Length)
+                    return Array.Empty<ILInstruction>();
 
-            return results.ToArray();
+                throw new NotImplementedException($"IL index {ilIndex} should not be greater than the number of instructions available ({ilInstructions.Length})");
+            }
         }
 
         #endregion
 
-        internal CordbILFunction(CordbILFrame frame)
+        /// <summary>
+        /// Gets the JIT status of this function.
+        /// </summary>
+        public JITTypes JITStatus
         {
-            Frame = frame;
-            CorDebugFunction = frame.CorDebugFrame.Function;
-            MetaData = frame.Module.MetaDataProvider.ResolveMethodDef(CorDebugFunction.Token);
+            get
+            {
+                var address = ClrAddress;
+
+                if (address == 0)
+                {
+                    //We can't ask SOS because I think the method isnt jitted yet
+
+                    //CordbFunction::GetNativeCode says that CORDBG_E_CODE_NOT_AVAILABLE means the method
+                    //isn't jitted
+                    if (CorDebugFunction.TryGetNativeCode(out _) == HRESULT.CORDBG_E_CODE_NOT_AVAILABLE)
+                        return JITTypes.TYPE_UNKNOWN;
+                }
+
+                var sos = Module.Process.DAC.SOS;
+
+                if (sos.TryGetCodeHeaderData(address, out var data) == HRESULT.S_OK)
+                {
+                    if (data.JITType == JITTypes.TYPE_UNKNOWN)
+                    {
+                        //Try get more accurate information using the native code
+                        DacpMethodDescData methodDescData = new DacpMethodDescData();
+
+                        if (methodDescData.Request(sos.Raw, address) == HRESULT.S_OK)
+                        {
+                            if (sos.TryGetCodeHeaderData(methodDescData.NativeCodeAddr, out data) == HRESULT.S_OK)
+                                return data.JITType;
+                        }
+
+                        return JITTypes.TYPE_UNKNOWN;
+                    }
+
+                    return data.JITType;
+                }
+                else
+                {
+                    //Try get more accurate information using the native code
+                    DacpMethodDescData methodDescData = new DacpMethodDescData();
+
+                    if (methodDescData.Request(sos.Raw, address) == HRESULT.S_OK)
+                    {
+                        if (sos.TryGetCodeHeaderData(methodDescData.NativeCodeAddr, out data) == HRESULT.S_OK)
+                            return data.JITType;
+                    }
+                }
+
+                if (CorDebugFunction.TryGetNativeCode(out _) == HRESULT.CORDBG_E_CODE_NOT_AVAILABLE)
+                    return JITTypes.TYPE_UNKNOWN;
+
+                throw new NotImplementedException("Don't know how to figure out what the JIT status is");
+            }
+        }
+
+        internal CordbILFunction(CorDebugFunction corDebugFunction, CordbManagedModule module)
+        {
+            CorDebugFunction = corDebugFunction;
+            Module = module;
+            MetaData = module.MetaDataProvider.ResolveMethodDef(CorDebugFunction.Token);
         }
 
         public override string ToString() => MetaData.ToString();

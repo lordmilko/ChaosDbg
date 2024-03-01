@@ -95,6 +95,8 @@ namespace ChaosDbg.Cordb
 
         public TaskCompletionSource<object> WaitExitProcess { get; } = new TaskCompletionSource<object>();
 
+        public bool IsCLRLoaded => EventHistory.ManagedEventCount > 0;
+
         public CordbEngineServices Services { get; }
 
         private bool disposed;

@@ -4,6 +4,7 @@ using System.Linq;
 using ChaosLib;
 using ChaosLib.Metadata;
 using ClrDebug;
+using ClrDebug.DbgEng;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Cordb
@@ -16,7 +17,7 @@ namespace ChaosDbg.Cordb
         //The mimimum we need for stack walking is IP, SP and BP. There is a big gotcha in AMD64: you also need to include CONTEXT_INTEGER if you want to get Rbp!
         private static ContextFlags GetContextFlags(IMAGE_FILE_MACHINE machineType) => machineType == IMAGE_FILE_MACHINE.I386 ? ContextFlags.X86ContextControl : ContextFlags.AMD64ContextControl | ContextFlags.AMD64ContextInteger;
 
-        private static (IDisplacedSymbol symbol, ISymbolModule module) GetModuleSymbol(long addr, CordbProcess process)
+        private static (IDisplacedSymbol symbol, ISymbolModule module) GetModuleSymbol(long addr, INLINE_FRAME_CONTEXT inlineFrameContext, CordbProcess process)
         {
             /* In order to use fancy ISymbol objects, we need an ISymbolModule (which ISymbol objects depend on).
              * We already have ISymbolModule objects saved on the modules maintained by our debugger, so retrieve
@@ -26,17 +27,29 @@ namespace ChaosDbg.Cordb
             {
                 if (module is CordbNativeModule m)
                 {
+                    IDisplacedSymbol symbol;
+
                     //I suppose it's possible to have an assembly with absolutely no symbols in it?
-                    var result = m.SymbolModule.GetSymbolFromAddress(addr);
 
-                    return (result, m.SymbolModule);
+                    if (inlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
+                        symbol = m.SymbolModule.GetInlineSymbolFromAddress(addr, inlineFrameContext.ContextValue);
+                    else
+                        symbol = m.SymbolModule.GetSymbolFromAddress(addr);
+
+                    return (symbol, m.SymbolModule);
                 }
+
+                if (process.DbgHelp.TrySymFromAddr(addr, out var symbolResult) == HRESULT.S_OK)
+                    throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.SymbolInfo.ModuleBase:X} which ChaosDbg wasn't able to detect as having symbols.");
+
+                return default;
             }
-
-            if (process.DbgHelp.TrySymFromAddr(addr, out var symbolResult) == HRESULT.S_OK)
-                throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.SymbolInfo.ModuleBase:X} which ChaosDbg wasn't able to detect as having symbols.");
-
-            return default;
+            else
+            {
+                //Odds are it's a module that we haven't received a native load event for yet (or even a module that was loaded, but then suddenly unloaded after we stopped the debugger?)
+                //Either way, we don't have a module to show for it
+                return default;
+            }
         }
 
         /// <summary>
@@ -162,7 +175,7 @@ namespace ChaosDbg.Cordb
                     dataTarget,
                     dbgHelpSession,
                     process.Session.PauseContext.DynamicFunctionTableCache,
-                    addr => GetModuleSymbol(addr, process)
+                    (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );
 
                 //First, let's get all native frames starting from the top of the stack
@@ -193,7 +206,7 @@ namespace ChaosDbg.Cordb
                         if (i < allFrames.Length - 1 && allFrames[i + 1].Value is CordbFrame c2 && !(c2 is CordbNativeTransitionFrame) && c2.Context.SP == item.SP)
                             continue;
 
-                        var module = process.Modules.GetModuleForAddress(native.IP);
+                        process.Modules.TryGetModuleForAddress(native.IP, out var module);
 
                         //It's a normal NativeFrame then
                         newFrames.Add(new CordbNativeFrame(native, module));

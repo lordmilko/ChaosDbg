@@ -93,6 +93,10 @@ namespace ChaosDbg.DbgEng
 
             //We must start the debugger thread AFTER the Session variable has been assigned to
             Session.Start();
+
+            //Once the target has been created, all the core values will exist
+            //in our Session that are required to interact with the target
+            Session.TargetCreated.Wait(cancellationToken);
         }
 
         private DebugClient CreateDebugClient()

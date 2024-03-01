@@ -15,10 +15,19 @@ namespace ChaosDbg.Cordb
 
             cb.OnCreateProcess += CreateProcess;
             cb.OnExitProcess += ExitProcess;
+
+            cb.OnCreateAppDomain += CreateAppDomain;
+            cb.OnExitAppDomain += ExitAppDomain;
+
+            cb.OnLoadAssembly += LoadAssembly;
+            cb.OnUnloadAssembly += UnloadAssembly;
+
             cb.OnLoadModule += LoadModule;
             cb.OnUnloadModule += UnloadModule;
+
             cb.OnCreateThread += CreateThread;
             cb.OnExitThread += ExitThread;
+
             cb.OnNameChange += NameChange;
 
             cb.OnAnyEvent += AnyManagedEvent;
@@ -79,6 +88,7 @@ namespace ChaosDbg.Cordb
             //Store some information about who the event pertains to
             Session.CallbackContext.UnmanagedEventProcessId = e.DebugEvent.dwProcessId;
             Session.CallbackContext.UnmanagedEventThreadId = e.DebugEvent.dwThreadId;
+            Session.CallbackContext.UnmanagedOutOfBand = e.OutOfBand;
         }
 
         private void PreEventCommon()
@@ -101,7 +111,6 @@ namespace ChaosDbg.Cordb
              * analytics against a partially managed process module, we need to be interop debugging. This is the
              * behavior of dnSpy, mdbg and Visual Studio. No, there isn't a CorDebugModule hanging off the
              * CorDebugProcess for us to extract either. */
-
             //Called the "Runtime Controller" thread in ICorDebug
             Thread.CurrentThread.Name = "Managed Callback Thread";
 
@@ -113,10 +122,19 @@ namespace ChaosDbg.Cordb
             //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process.
             //This will fail when attempting to attach
             e.Process.TrySetDesiredNGENCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
+
+            var module = Process.Modules.Add(e.Process);
+
+            RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
         }
 
         private void ExitProcess(object sender, ExitProcessCorDebugManagedCallbackEventArgs e)
         {
+            var module = Process.Modules.Remove(e.Process);
+
+            if (module != null)
+                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
+
             //On Windows, a process has not truly exited until we receive the EXIT_PROCESS_DEBUG_EVENT. My observation has been that, when interop debugging,
             //we always receive EXIT_PROCESS_DEBUG_EVENT prior to receiving the managed ExitProcess event. While I don't know whether a process handle being signalled
             //because it exited necessarily proves that EXIT_PROCESS_DEBUG_EVENT has also been fired. at this stage I don't see any reason why this would even matter
@@ -159,6 +177,35 @@ namespace ChaosDbg.Cordb
         }
 
         #endregion
+        #region AppDomain
+
+        private void CreateAppDomain(object sender, CreateAppDomainCorDebugManagedCallbackEventArgs e)
+        {
+            Process.AppDomains.Add(e.AppDomain);
+        }
+
+        private void ExitAppDomain(object sender, ExitAppDomainCorDebugManagedCallbackEventArgs e)
+        {
+            //Will automatically unlink itself from any assemblies as well
+            Process.AppDomains.Remove(e.AppDomain);
+        }
+
+        #endregion
+        #region Assembly
+
+        private void LoadAssembly(object sender, LoadAssemblyCorDebugManagedCallbackEventArgs e)
+        {
+            //Will automatically link itself to its AppDomain as well
+            Process.Assemblies.Add(e.Assembly);
+        }
+
+        private void UnloadAssembly(object sender, UnloadAssemblyCorDebugManagedCallbackEventArgs e)
+        {
+            //Will automatically unlink itself from any AppDomains/modules as well
+            Process.Assemblies.Remove(e.Assembly);
+        }
+
+        #endregion
         #region Module
 
         private void LoadModule(object sender, LoadModuleCorDebugManagedCallbackEventArgs e)
@@ -168,6 +215,7 @@ namespace ChaosDbg.Cordb
             //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process
             e.Module.TrySetJITCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
 
+            //Will automatically link itself to its Assembly as well
             var module = Process.Modules.Add(e.Module);
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
@@ -187,7 +235,7 @@ namespace ChaosDbg.Cordb
             var module = Process.Modules.Add(e);
 
             Session.EventHistory.Add(new CordbNativeModuleLoadEventHistoryItem(module));
-            RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
+            RaiseModuleLoad(new EngineModuleLoadEventArgs(module, Session.CallbackContext.UnmanagedOutOfBand));
         }
 
         private void UnmanagedUnloadModule(object sender, UNLOAD_DLL_DEBUG_INFO e)
@@ -197,7 +245,7 @@ namespace ChaosDbg.Cordb
             if (module != null)
             {
                 Session.EventHistory.Add(new CordbNativeModuleUnloadEventHistoryItem(module));
-                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
+                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module, Session.CallbackContext.UnmanagedOutOfBand));
             }
         }
 
@@ -292,7 +340,7 @@ namespace ChaosDbg.Cordb
 
             var thread = Process.Threads.Add(Session.CallbackContext.UnmanagedEventThreadId, e.hThread);
 
-            RaiseThreadCreate(new EngineThreadCreateEventArgs(thread));
+            RaiseThreadCreate(new EngineThreadCreateEventArgs(thread, Session.CallbackContext.UnmanagedOutOfBand));
         }
 
         private void UnmanagedExitThread(object sender, EXIT_THREAD_DEBUG_INFO e)
@@ -302,7 +350,7 @@ namespace ChaosDbg.Cordb
             var thread = Process.Threads.Remove(Session.CallbackContext.UnmanagedEventThreadId);
 
             if (thread != null)
-                RaiseThreadExit(new EngineThreadExitEventArgs(thread));
+                RaiseThreadExit(new EngineThreadExitEventArgs(thread, Session.CallbackContext.UnmanagedOutOfBand));
         }
 
         #endregion
@@ -379,7 +427,7 @@ namespace ChaosDbg.Cordb
         {
             //We're not continuing. Update debugger state
 
-            if (Session.EventHistory.ManagedEventCount > 0)
+            if (Session.IsCLRLoaded)
             {
                 //If we haven't had a single managed event yet, we can't refresh the DAC as attempting to
                 //create an SOSDacInterface will involve looking up the location of the clr loaded in the

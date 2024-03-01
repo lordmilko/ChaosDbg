@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
@@ -41,5 +42,7 @@ namespace ChaosDbg.Disasm
         /// <param name="format">A set of options that allow customizing how the instruction is formatted.</param>
         /// <returns>The formatted instruction.</returns>
         string Format(INativeInstruction instruction, DisasmFormatOptions format = null);
+
+        void Format(INativeInstruction instruction, FormatterOutput formatWriter, DisasmFormatOptions format = null);
     }
 }

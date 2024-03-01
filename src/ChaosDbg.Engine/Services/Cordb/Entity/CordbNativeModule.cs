@@ -7,6 +7,8 @@ using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
 using ClrDebug;
 
+#nullable enable
+
 namespace ChaosDbg.Cordb
 {
     /// <summary>
@@ -14,6 +16,8 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbNativeModule : CordbModule
     {
+        public static bool IsCLRName(string fileName) => StringComparer.OrdinalIgnoreCase.Equals(fileName, "coreclr.dll") || StringComparer.OrdinalIgnoreCase.Equals(fileName, "clr.dll");
+
         /// <summary>
         /// Gets whether this is the module representing the CLR.
         /// </summary>
@@ -24,7 +28,12 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public ISymbolModule SymbolModule { get; }
 
-        public CordbManagedModule ManagedModule { get; set; }
+        /// <summary>
+        /// Gets the managed counterpart of this native module. This value may be null if this module has no managed counterpart,
+        /// or the debugger has not yet received the managed load event for this module yet.<para/>
+        /// If this module is the native counterpart of a <see cref="CordbProcessModule"/>, there will be no reference back to the managed counterpart.
+        /// </summary>
+        public CordbManagedModule? ManagedModule { get; set; }
 
         public CordbNativeModule(
             string name,
@@ -37,7 +46,7 @@ namespace ChaosDbg.Cordb
 
             var fileName = Path.GetFileName(name);
 
-            IsCLR = StringComparer.OrdinalIgnoreCase.Equals(fileName, "coreclr.dll") || StringComparer.OrdinalIgnoreCase.Equals(fileName, "clr.dll");
+            IsCLR = IsCLRName(fileName);
         }
 
         #region GetNativeModuleName
@@ -91,7 +100,7 @@ namespace ChaosDbg.Cordb
             return name;
         }
 
-        private static unsafe string GetNativeModuleNameFromPtr(MemoryReader memoryReader, IntPtr lpImageName, bool isUnicode)
+        private static unsafe string? GetNativeModuleNameFromPtr(MemoryReader memoryReader, IntPtr lpImageName, bool isUnicode)
         {
             //The lpImageName apparently points to TEB.NT_TIB.ArbitraryUserPointer and is a giant hack that
             //Windows uses to relay the module name to debuggers.
@@ -131,7 +140,7 @@ namespace ChaosDbg.Cordb
             if (hr != HRESULT.S_OK || read != maxPathSize)
                 return null;
 
-            string str;
+            string? str;
 
             if (isUnicode)
                 str = Marshal.PtrToStringUni(strBuffer);
@@ -141,7 +150,7 @@ namespace ChaosDbg.Cordb
             return str;
         }
 
-        private static string GetNativeModuleNameFromPE(IPEFile peFile, IntPtr hFile)
+        private static string? GetNativeModuleNameFromPE(IPEFile peFile, IntPtr hFile)
         {
             //ntdll can hit this code path
 
@@ -180,10 +189,5 @@ namespace ChaosDbg.Cordb
         }
 
         #endregion
-
-        public override string ToString()
-        {
-            return Name;
-        }
     }
 }

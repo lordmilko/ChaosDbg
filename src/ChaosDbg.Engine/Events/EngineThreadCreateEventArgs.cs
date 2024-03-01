@@ -6,9 +6,12 @@ namespace ChaosDbg
     {
         public  IDbgThread Thread { get; }
 
-        public EngineThreadCreateEventArgs(IDbgThread thread)
+        public object UserContext { get; }
+
+        public EngineThreadCreateEventArgs(IDbgThread thread, object userContext = null)
         {
             Thread = thread;
+            UserContext = userContext;
         }
     }
 }

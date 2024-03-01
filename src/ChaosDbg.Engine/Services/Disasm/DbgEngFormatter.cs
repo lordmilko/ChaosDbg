@@ -6,7 +6,7 @@ namespace ChaosDbg.Disasm
     /// <summary>
     /// Represents a formatter capable of displaying disassembly in the DbgEng style.
     /// </summary>
-    class DbgEngFormatter : IFormatterOptionsProvider
+    public class DbgEngFormatter : IFormatterOptionsProvider
     {
         public static readonly DbgEngFormatter Default = new DbgEngFormatter();
 
@@ -14,8 +14,13 @@ namespace ChaosDbg.Disasm
 
         public NumberFormattingOptions ImmediateOptions { get; }
 
+        private ISymbolResolver symbolResolver;
+        private FormattedDisasmSymbolResolver formattedSymbolResolver;
+
         public DbgEngFormatter(ISymbolResolver symbolResolver = null)
         {
+            this.symbolResolver = symbolResolver;
+            formattedSymbolResolver = symbolResolver == null ? null : new FormattedDisasmSymbolResolver(symbolResolver);
             Formatter = CreateFormatter(symbolResolver);
             ImmediateOptions = CreateImmediateOptions();
         }
@@ -31,11 +36,20 @@ namespace ChaosDbg.Disasm
             if (instruction == null)
                 throw new ArgumentNullException(nameof(instruction));
 
-            format ??= DisasmFormatOptions.DbgEng;
+            var formatWriter = new StringOutput();
 
+            Format(instruction, formatWriter, format);
+
+            var str = formatWriter.ToStringAndReset();
+
+            return str;
+        }
+
+        public void Format(INativeInstruction instruction, FormatterOutput formatWriter, DisasmFormatOptions format = null)
+        {
             //Format the instruction in the same style as DbgEng. 
 
-            var formatWriter = new StringOutput();
+            format ??= DisasmFormatOptions.DbgEng;
 
             if (format.IP)
             {
@@ -66,9 +80,54 @@ namespace ChaosDbg.Disasm
 
             //Now that we've processed the bytes, display the actual instruction
             Formatter.Format(instruction.Instruction, formatWriter);
-            var str = formatWriter.ToStringAndReset();
 
-            return str;
+            if (symbolResolver is IIndirectSymbolResolver r)
+            {
+                //If it's an indirect call, try and list a symbol for the address the address points to
+                if (instruction.Instruction.MemoryBase is Register.EIP or Register.RIP)
+                    TryFormatIndirect(instruction.Instruction, formatWriter);
+            }
+        }
+
+        private void TryFormatIndirect(in Instruction instr, FormatterOutput formatWriter)
+        {
+            ulong target;
+
+            switch (instr.Op0Kind)
+            {
+                case OpKind.Memory:
+                    target = instr.MemoryDisplacement64;
+                    break;
+
+                default:
+                    throw new NotImplementedException($"Don't know how to handle operand of type {instr.Op0Kind}");
+            }
+
+#pragma warning disable CS8509
+            var ptrSize = instr.MemoryBase switch
+            {
+                Register.EIP => 4,
+                Register.RIP => 8
+            };
+#pragma warning restore CS8509
+
+            //Format the symbol like
+            ////00007ffc`1c7b9a79 ff1591ff4900    call    qword ptr [dbgeng!_guard_xfg_dispatch_icall_fptr (00007ffc`1cc59a10)] ds:00007ffc`1cc59a10={ntdll!LdrpDispatchUserCallTarget (00007ffc`e985ed40)}
+            if (formattedSymbolResolver.TryGetIndirectSymbol(instr, target, ptrSize, out _, out var symbol))
+            {
+                formatWriter.Write(" ");
+                formatWriter.Write(instr.MemorySegment.ToString().ToLower());
+                formatWriter.Write(":");
+                formatWriter.Write(
+                    instr.CodeSize == CodeSize.Code32 ?
+                        Formatter.FormatInt32((int) target, ImmediateOptions) :
+                        Formatter.FormatInt64((long) target, ImmediateOptions)
+                );
+                formatWriter.Write("=");
+                formatWriter.Write("{");
+                formatWriter.WriteSymbol(instr, 0, 0, target, symbol);
+                formatWriter.Write("}");
+            }
         }
 
         private Formatter CreateFormatter(ISymbolResolver symbolResolver)
@@ -104,7 +163,7 @@ namespace ChaosDbg.Disasm
             //hack this in FormattedDisasmSymbolResolver
             opts.ShowSymbolAddress = false;
 
-            var masmFormatter = new MasmFormatter(opts, symbolResolver == null ? null : new FormattedDisasmSymbolResolver(symbolResolver), this);
+            var masmFormatter = new MasmFormatter(opts, formattedSymbolResolver, this);
 
             return masmFormatter;
         }

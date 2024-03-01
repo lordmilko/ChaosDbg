@@ -1,4 +1,6 @@
-﻿using System.Reflection.Emit;
+﻿using System.Collections;
+using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 
 namespace ChaosDbg.IL
@@ -36,6 +38,15 @@ namespace ChaosDbg.IL
 
                 if (Operand is ILInstruction i)
                     builder.Append($"IL_{i.Offset:X4}");
+                else if (Operand != null && Operand.GetType().IsArray)
+                {
+                    var elmType = Operand.GetType().GetElementType();
+
+                    if (elmType == typeof(ILInstruction))
+                        builder.Append($"({string.Join(", ", ((ILInstruction[]) Operand).Select(v => $"IL_{v.Offset:X4}"))}");
+                    else
+                        builder.Append($"({string.Join(", ", ((IEnumerable) Operand).Cast<object>())})");
+                }
                 else
                     builder.Append(Operand);
             }

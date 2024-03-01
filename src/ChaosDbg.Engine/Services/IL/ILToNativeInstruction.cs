@@ -1,10 +1,39 @@
-﻿using ChaosDbg.Disasm;
+﻿using System.Diagnostics;
+using System.Text;
+using ChaosDbg.Disasm;
 using ClrDebug;
 
 namespace ChaosDbg.IL
 {
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public class ILToNativeInstruction
     {
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        private string DebuggerDisplay
+        {
+            get
+            {
+                var builder = new StringBuilder();
+
+                builder.Append($"[{Kind}] ");
+
+                if (IL.Length > 0)
+                {
+                    builder.Append(IL[0]);
+
+                    if (NativeInstructions.Length > 0)
+                        builder.Append(" / ");
+                }
+
+                if (NativeInstructions.Length > 0)
+                {
+                    builder.Append(NativeInstructions[0].Instruction);
+                }
+
+                return builder.ToString();
+            }
+        }
+        
         public ILToNativeInstructionKind Kind { get; }
 
         public ILInstruction[] IL { get; }

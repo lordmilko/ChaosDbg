@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ChaosDbg.Engine\ChaosDbg.Engine.csproj" />
     <ProjectReference Include="..\ChaosDbg\ChaosDbg.csproj" />
+    <ProjectReference Include="..\chaos\chaos.csproj" />
   </ItemGroup>
 
   <ItemGroup>

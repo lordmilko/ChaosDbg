@@ -6,9 +6,12 @@ namespace ChaosDbg
     {
         public IDbgModule Module { get; }
 
-        public EngineModuleUnloadEventArgs(IDbgModule module)
+        public object UserContext { get; }
+
+        public EngineModuleUnloadEventArgs(IDbgModule module, object userContext = null)
         {
             Module = module;
+            UserContext = userContext;
         }
     }
 }

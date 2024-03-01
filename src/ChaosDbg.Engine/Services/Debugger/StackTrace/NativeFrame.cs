@@ -29,7 +29,7 @@ namespace ChaosDbg
         public long BP { get; }
         public long Return { get; }
 
-        public string FunctionName => Symbol.ToString();
+        public string FunctionName => Symbol?.ToString();
 
         public ISymbolModule Module { get; }
 
@@ -37,12 +37,15 @@ namespace ChaosDbg
 
         public CrossPlatformContext Context { get; }
 
+        public bool IsInline { get; }
+
         public NativeFrame(in STACKFRAME_EX stackFrame, IDisplacedSymbol symbol, ISymbolModule module, CrossPlatformContext context)
         {
             IP = stackFrame.AddrPC.Offset;
             SP = stackFrame.AddrStack.Offset;
             BP = stackFrame.AddrFrame.Offset;
             Return = stackFrame.AddrReturn.Offset;
+            IsInline = stackFrame.InlineFrameContext.FrameType.HasFlag(ClrDebug.DbgEng.STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE);
 
             Symbol = symbol;
             Module = module;
@@ -54,7 +57,9 @@ namespace ChaosDbg
             //overwrite these values so that the CONTEXT we store in the CordbFrame is correct
             Context.IP = IP;
             Context.SP = SP;
-            Context.BP = BP;
+
+            //I don't think we're meant to modify BP. When I do a .frame /r 0 vs .frame /r 1 in WinDbg, rbp is the same between both frames
+            //Context.BP = BP;
         }
     }
 }

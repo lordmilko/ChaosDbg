@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 
 namespace chaos
 {
@@ -27,6 +28,32 @@ namespace chaos
             }
         }
 
+        public string Eat(int count = -1)
+        {
+            if (count == -1)
+            {
+                //Consume all remaining chars
+                if (current >= chars.Length)
+                    throw new InvalidProgramException("There are no more characters left to eat");
+
+                var result = new StringBuilder();
+
+                while (true)
+                {
+                    var ch = Next();
+
+                    if (ch == '\0')
+                        break;
+                    else
+                        result.Append(ch);
+                }
+
+                return result.ToString();
+            }
+            else
+                throw new NotImplementedException("Eating a specific number of characters is not implemented");
+        }
+
         public ArgParser(string args)
         {
             if (args == null)
@@ -37,16 +64,19 @@ namespace chaos
 
         public char Next()
         {
-            if (current > chars.Length)
-                return '\0';
+            while (true)
+            {
+                if (current >= chars.Length)
+                    return '\0';
 
-            var ch = chars[current];
-            current++;
+                var ch = chars[current];
+                current++;
 
-            if (ch == ' ')
-                return Next();
+                if (ch == ' ')
+                    continue;
 
-            return ch;
+                return ch;
+            }
         }
     }
 }

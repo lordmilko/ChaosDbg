@@ -47,6 +47,9 @@ namespace ChaosDbg.DAC
 
         public void Flush()
         {
+            if (!cdbProcess.Session.IsCLRLoaded)
+                return;
+
             //GetWorkRequestData is not actually implemented in .NET Core. ISOSDacInterface13 is supported in .NET 8+.
             //Unless we find another method to get a DAC_ENTER with, we have a gap where most .NET Core versions won't
             //get locked when we do DataTarget.Flush(). This is what ClrMD does however

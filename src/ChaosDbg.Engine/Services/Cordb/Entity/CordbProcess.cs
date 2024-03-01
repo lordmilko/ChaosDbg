@@ -108,6 +108,10 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbThreadStore Threads { get; }
 
+        public CordbAppDomainStore AppDomains { get; }
+
+        public CordbAssemblyStore Assemblies { get; }
+
         /// <summary>
         /// Gets the container containing the modules that have been loaded into the current process.
         /// </summary>
@@ -163,6 +167,8 @@ namespace ChaosDbg.Cordb
             CommandLine = commandLine;
 
             Threads = new CordbThreadStore(this);
+            AppDomains = new CordbAppDomainStore(this);
+            Assemblies = new CordbAssemblyStore(this);
             Modules = new CordbModuleStore(this);
 
             DAC = new DacProvider(this);

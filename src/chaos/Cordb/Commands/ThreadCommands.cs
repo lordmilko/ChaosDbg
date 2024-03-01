@@ -5,17 +5,16 @@ using ChaosDbg.Cordb;
 namespace chaos.Cordb.Commands
 {
     [Command("~")]
-    class ThreadCommands : ICustomCommandParser
+    class ThreadCommands : CommandBase, ICustomCommandParser
     {
-        private readonly CordbEngineProvider engineProvider;
-        private CordbEngine engine => engineProvider.ActiveEngine;
-
         private StackTraceCommands StackTraceCommand { get; }
 
-        public ThreadCommands(CordbEngineProvider engineProvider)
+        public ThreadCommands(
+            IConsole console,
+            CordbEngineProvider engineProvider,
+            StackTraceCommands stackTraceCommand) : base(console, engineProvider)
         {
-            this.engineProvider = engineProvider;
-            StackTraceCommand = new StackTraceCommands(engineProvider);
+            StackTraceCommand = stackTraceCommand;
         }
 
         // ~[<id>]
@@ -24,12 +23,18 @@ namespace chaos.Cordb.Commands
             threadArg.Execute(
                 none: () =>
                 {
-                    throw new NotImplementedException();
+                    foreach (var thread in engine.Process.Threads)
+                    {
+                        if (engine.Process.Threads.ActiveThread == thread)
+                            Console.Write("* ");
+
+                        Console.WriteLine(thread);
+                    }
                 },
 
                 current: () =>
                 {
-                    throw new NotImplementedException();
+                    Console.WriteLine(engine.Process.Threads.ActiveThread);
                 },
 
                 number: id =>

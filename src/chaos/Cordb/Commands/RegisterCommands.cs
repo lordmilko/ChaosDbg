@@ -5,13 +5,10 @@ using ClrDebug;
 
 namespace chaos.Cordb.Commands
 {
-    class RegisterCommands
+    class RegisterCommands : CommandBase
     {
-        private CordbEngine engine;
-
-        public RegisterCommands(CordbEngine engine)
+        public RegisterCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
         {
-            this.engine = engine;
         }
 
         [Command("r")]

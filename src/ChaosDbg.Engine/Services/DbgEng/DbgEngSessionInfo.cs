@@ -147,6 +147,8 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         internal DispatcherThread EngineThread { get; }
 
+        public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
+
         public ManualResetEventSlim BreakEvent { get; } = new ManualResetEventSlim(false);
 
         private bool disposed;
@@ -229,6 +231,8 @@ namespace ChaosDbg.DbgEng
                 return;
 
             disposed = true;
+
+            TargetCreated.Dispose();
 
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();

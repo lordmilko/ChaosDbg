@@ -51,10 +51,10 @@ namespace ChaosDbg.Engine
             Add(serviceType, newImplementationType);
         }
 
-        public void Replace<T>(Type serviceType, Func<IServiceProvider, T> newFactory) where T : class
+        public void Replace<T>(Func<IServiceProvider, T> newFactory) where T : class
         {
-            services.Remove(serviceType);
-            Add(serviceType, newFactory);
+            services.Remove(typeof(T));
+            Add(newFactory);
         }
 
         public void Replace(Type serviceType, object newImplementation)

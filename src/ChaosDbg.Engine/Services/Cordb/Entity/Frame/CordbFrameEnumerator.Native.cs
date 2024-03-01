@@ -24,7 +24,7 @@ namespace ChaosDbg.Cordb
                     dataTarget,
                     process.DbgHelp,
                     process.Session.PauseContext.DynamicFunctionTableCache,
-                    addr => GetModuleSymbol(addr, process)
+                    (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );
 
                 var contextFlags = GetContextFlags(process.MachineType);
@@ -32,7 +32,11 @@ namespace ChaosDbg.Cordb
 
                 var frames = walker.Walk(process.Handle, accessor.Handle, context).ToArray();
 
-                return frames.Select(f => (CordbFrame) new CordbNativeFrame(f, process.Modules.GetModuleForAddress(f.IP))).ToArray();
+                return frames.Select(f =>
+                {
+                    process.Modules.TryGetModuleForAddress(f.IP, out var module);
+                    return (CordbFrame) new CordbNativeFrame(f, module);
+                }).ToArray();
             }
         }
     }

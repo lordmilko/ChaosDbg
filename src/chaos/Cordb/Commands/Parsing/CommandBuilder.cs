@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.CommandLine.Binding;
 using System.CommandLine.Builder;
 using System.CommandLine.IO;
 using System.Linq;
@@ -12,6 +13,10 @@ namespace chaos.Cordb.Commands
     class CommandBuilder
     {
         private IServiceProvider serviceProvider;
+
+        //If one command takes another command through dependency injection, we need to be able to resolve these
+        private Dictionary<Type, Lazy<object>> commandToInstanceMap = new Dictionary<Type, Lazy<object>>();
+        private Stack<Type> resolveCommandStack = new Stack<Type>();
 
         public CommandBuilder(IServiceProvider serviceProvider)
         {
@@ -31,25 +36,47 @@ namespace chaos.Cordb.Commands
                 if (type.IsInterface)
                     continue;
 
+                //We don't know if we'll end up needing this instance
                 var instance = new Lazy<object>(() =>
                 {
                     var ctor = type.GetConstructors().Single();
-                    var ctorParameters = ctor.GetParameters().Select(p => serviceProvider.GetService(p.ParameterType)).ToArray();
+                    var ctorParameters = ctor.GetParameters().Select(p =>
+                    {
+                        //Command A uses Command B. Command A was added to the stack.
+                        //If Command B also uses Command A, there's a recursive reference
+                        if (resolveCommandStack.Contains(p.ParameterType))
+                        {
+                            var str = string.Join(" -> ", resolveCommandStack.Reverse().Select(r => r.Name));
+
+                            throw new InvalidOperationException($"Cannot resolve service '{p.ParameterType.Name}': a recursive reference was found in hierarchy {str} -> {type.Name} -> {p.ParameterType.Name}.");
+                        }
+
+                        if (commandToInstanceMap.TryGetValue(p.ParameterType, out var commandInstance))
+                            return ResolveCommandInstance(type, commandInstance);
+
+                        return serviceProvider.GetService(p.ParameterType);
+                    }).ToArray();
                     return Activator.CreateInstance(type, ctorParameters);
                 });
 
                 if (typeof(ICustomCommandParser).IsAssignableFrom(type))
                 {
+                    commandToInstanceMap[type] = instance;
                     customCommands.Add(ParseCustomCommand(type, instance, rootCommand));
                     continue;
                 }
 
                 var methods = type.GetMethods();
 
+                var hadCommands = false;
+
                 foreach (var method in methods)
                 {
-                    ProcessMethod(method, type, instance, rootCommand);
+                    hadCommands |= ProcessMethod(method, type, instance, rootCommand);
                 }
+
+                if (hadCommands)
+                    commandToInstanceMap[type] = instance;
             }
 
             var commandLineBuilder = new CommandLineBuilder(rootCommand);
@@ -80,6 +107,23 @@ namespace chaos.Cordb.Commands
             return new RelayParser(parser, customCommands.ToArray());
         }
 
+        private object ResolveCommandInstance(Type parentType, Lazy<object> instance)
+        {
+            //Command A takes Command B as a parameter. It's possible that there could be
+            //a recursive reference between A -> B -> A, so we need to protect against that
+
+            resolveCommandStack.Push(parentType);
+
+            try
+            {
+                return instance.Value;
+            }
+            finally
+            {
+                resolveCommandStack.Pop();
+            }
+        }
+
         private string ParseCustomCommand(Type type, Lazy<object> instance, RootCommand rootCommand)
         {
             var commandAttrib = type.GetCustomAttribute<CommandAttribute>();
@@ -89,7 +133,10 @@ namespace chaos.Cordb.Commands
 
             var cliCommand = new Command(commandAttrib.Name);
 
-            var remainder = new Argument<string>(() => string.Empty);
+            var remainder = new Argument<string[]>(Array.Empty<string>)
+            {
+                Arity = new ArgumentArity(0, 100000) //Maximum arity. Ensures that we can type ? 1 + 1 with spaces between the args and everything we type will get passed to the ? command
+            };
 
             cliCommand.AddArgument(remainder);
 
@@ -99,7 +146,7 @@ namespace chaos.Cordb.Commands
                 {
                     var args = ctx.ParseResult.GetValueForArgument(remainder);
 
-                    var argParser = new ArgParser(args);
+                    var argParser = new ArgParser(string.Join(" ", args));
 
                     ((ICustomCommandParser) instance.Value).Parse(argParser).Invoke();
                 }
@@ -113,7 +160,7 @@ namespace chaos.Cordb.Commands
             {
                 var args = result.GetValueForArgument(remainder);
 
-                var argParser = new ArgParser(args);
+                var argParser = new ArgParser(string.Join(" ", args));
 
                 var validationResult = ((ICustomCommandParser) instance.Value).Parse(argParser);
 
@@ -130,52 +177,100 @@ namespace chaos.Cordb.Commands
             return commandAttrib.Name;
         }
 
-        private void ProcessMethod(MethodInfo method, Type type, Lazy<object> instance, RootCommand rootCommand)
+        private bool ProcessMethod(MethodInfo method, Type type, Lazy<object> instance, RootCommand rootCommand)
         {
             var commandAttrib = method.GetCustomAttribute<CommandAttribute>();
 
-            if (commandAttrib != null)
+            if (commandAttrib == null)
+                return false;
+
+            var cliCommand = new Command(commandAttrib.Name);
+
+            var parameters = method.GetParameters();
+
+            foreach (var parameter in parameters)
             {
-                var cliCommand = new Command(commandAttrib.Name);
+                var optionAttrib = parameter.GetCustomAttribute<OptionAttribute>();
 
-                var parameters = method.GetParameters();
-
-                foreach (var parameter in parameters)
+                if (optionAttrib != null)
                 {
-                    var parameterAttrib = parameter.GetCustomAttribute<OptionAttribute>();
-
-                    if (parameterAttrib == null)
-                        throw new NotImplementedException($"Parameter {type.Name}.{method.Name} -> {parameter.Name} was missing a {nameof(OptionAttribute)}");
-
                     var cliOptType = typeof(Option<>).MakeGenericType(parameter.ParameterType);
 
                     var cliOpt = (Option) Activator.CreateInstance(
                         cliOptType,
                         new object[] {
-                            parameterAttrib.Name, //name
+                            optionAttrib.Name, //name
                             null //description
                         }
                     );
 
                     cliCommand.AddOption(cliOpt);
                 }
-
-                cliCommand.SetHandler(ctx =>
+                else
                 {
-                    var vals = cliCommand.Options.Select(v => ctx.ParseResult.GetValueForOption(v)).ToArray();
+                    var argAttrib = parameter.GetCustomAttribute<ArgumentAttribute>();
 
-                    try
-                    {
-                        method.Invoke(instance.Value, vals);
-                    }
-                    catch (TargetInvocationException ex)
-                    {
-                        ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
-                    }
-                });
+                    if (argAttrib == null)
+                        throw new NotImplementedException($"Parameter {type.Name}.{method.Name} -> {parameter.Name} must have either an {nameof(ArgumentAttribute)} or {nameof(OptionAttribute)}");
 
-                rootCommand.AddCommand(cliCommand);
+                    var cliArgType = typeof(Argument<>).MakeGenericType(parameter.ParameterType);
+
+                    Argument cliArg;
+
+                    if (parameter.HasDefaultValue)
+                    {
+                        var getDefaultValue = GetType()
+                            .GetMethod(nameof(GetDefaultValue), BindingFlags.Static | BindingFlags.NonPublic)
+                            .MakeGenericMethod(parameter.ParameterType)
+                            .CreateDelegate(typeof(Func<>).MakeGenericType(parameter.ParameterType));
+
+                        cliArg = (Argument) Activator.CreateInstance(
+                            cliArgType,
+                            new object[] {
+                                parameter.Name,  //name
+                                getDefaultValue, //getDefaultValue
+                                null             //description
+                            }
+                        );
+                    }
+                    else
+                    {
+                        cliArg = (Argument) Activator.CreateInstance(
+                            cliArgType,
+                            new object[] {
+                                parameter.Name,  //name
+                                null             //description
+                            }
+                        );
+                    }
+
+                    cliCommand.AddArgument(cliArg);
+                }
             }
+
+            cliCommand.SetHandler(ctx =>
+            {
+                var vals = 
+                    cliCommand.Arguments.Select(v => ctx.ParseResult.GetValueForArgument(v)).Concat(
+                        cliCommand.Options.Select(v => ctx.ParseResult.GetValueForOption(v))
+                    ).ToArray();
+
+                try
+                {
+                    method.Invoke(instance.Value, vals);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                }
+            });
+
+            rootCommand.AddCommand(cliCommand);
+
+            return true;
+
         }
+
+        private static T GetDefaultValue<T>() => default;
     }
 }

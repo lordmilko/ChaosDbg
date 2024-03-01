@@ -15,7 +15,7 @@ namespace ChaosDbg.Cordb
 
         internal CordbILFrame(CorDebugILFrame corDebugFrame, CordbManagedModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
         {
-            Function = new CordbILFunction(this);
+            Function = new CordbILFunction(corDebugFrame.Function, module);
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace ChaosDbg.Cordb
                     var home = homes[i];
 
                     if (home.TryGetArgumentIndex(out _) == HRESULT.S_OK)
-                        results[i] = new CordbArgumentVariable(home, Module);
+                        results[i] = new CordbParameterVariable(home, Module);
                     else
                         results[i] = new CordbLocalVariable(home, Module);
                 }

@@ -4,14 +4,10 @@ using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
-    class StackTraceCommands
+    class StackTraceCommands : CommandBase
     {
-        private readonly CordbEngineProvider engineProvider;
-        private CordbEngine engine => engineProvider.ActiveEngine;
-
-        public StackTraceCommands(CordbEngineProvider engineProvider)
+        public StackTraceCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
         {
-            this.engineProvider = engineProvider;
         }
         
         // [~<id>]k
@@ -23,32 +19,24 @@ namespace chaos.Cordb.Commands
             var sw = new Stopwatch();
             sw.Start();
 
-            foreach (var frame in thread.StackTrace)
-                WriteColor(frame.ToString(), frame is CordbILFrame ? ConsoleColor.Green : null);
+            Console.WriteLine(" # Child-SP          RetAddr               Call Site");
+
+            for (var i = 0; i < thread.StackTrace.Length; i++)
+            {
+                var current = thread.StackTrace[i];
+
+                var nextIP = i < thread.StackTrace.Length - 1 ? thread.StackTrace[i + 1].Context.IP : 0;
+
+                if (current is CordbNativeFrame n && n.IsInline)
+                    Console.Write($"{i:X2} (InlineFunction) ----------------     ");
+                else
+                    Console.Write($"{i:X2} {current.Context.SP:x16} {nextIP:x16}     ");
+
+                Console.WriteColorLine(current.ToString(), current is CordbILFrame ? ConsoleColor.Green : null);
+            }
 
             sw.Stop();
-            WriteColor(sw.Elapsed.ToString(), ConsoleColor.Yellow);
-        }
-
-        private void WriteColor(string text, ConsoleColor? color)
-        {
-            if (color == null)
-                Console.WriteLine(text);
-            else
-            {
-                var original = Console.ForegroundColor;
-
-                try
-                {
-                    Console.ForegroundColor = color.Value;
-
-                    Console.WriteLine(text);
-                }
-                finally
-                {
-                    Console.ForegroundColor = original;
-                }
-            }
+            Console.WriteColorLine(sw.Elapsed.ToString(), ConsoleColor.Yellow);
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.CommandLine.Parsing;
 using System.Threading;
 using chaos.Cordb.Commands;
 using ChaosDbg;
@@ -14,14 +15,19 @@ namespace chaos
         private CordbEngineProvider engineProvider;
         private DbgEngEngineProvider dbgEngEngineProvider;
         private RelayParser commandDispatcher;
+        private CancellationToken cancellationToken;
 
         private CordbEngine engine => engineProvider.ActiveEngine;
 
+        protected IConsole Console { get; }
+
         public CordbClient(
+            IConsole console,
             CordbEngineProvider engineProvider,
             DbgEngEngineProvider dbgEngEngine,
             CommandBuilder commandBuilder)
         {
+            Console = console;
             this.engineProvider = engineProvider;
             this.dbgEngEngineProvider = dbgEngEngine;
             commandDispatcher = commandBuilder.Build();
@@ -29,9 +35,11 @@ namespace chaos
             RegisterCallbacks();
         }
 
-        public void Execute(string executable, bool minimized, bool interop)
+        public void Execute(string executable, bool minimized, bool interop, CancellationToken token = default)
         {
-            Console.CancelKeyPress += Console_CancelKeyPress;
+            cancellationToken = token;
+
+            Console.RegisterInterruptHandler(Console_CancelKeyPress);
 
             engineProvider.CreateProcess(executable, minimized, interop);
 
@@ -40,9 +48,12 @@ namespace chaos
 
         private void EngineLoop()
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                wakeEvent.Wait();
+                WaitHandle.WaitAny(new[]{wakeEvent.WaitHandle, cancellationToken.WaitHandle});
+
+                if (cancellationToken.IsCancellationRequested)
+                    break;
 
                 InputLoop();
 
@@ -52,11 +63,26 @@ namespace chaos
 
         private void InputLoop()
         {
-            while (engine.Session.Status == EngineStatus.Break)
-            {
-                PrintPrompt();
+            Console.WriteLine("****************** BREAK ******************");
 
-                var command = Console.ReadLine();
+            while (engine.Session.Status == EngineStatus.Break && !cancellationToken.IsCancellationRequested)
+            {
+                //If we get any out of band events, we want them to be shown above our prompt
+
+                string command;
+
+                try
+                {
+                    PrintPrompt();
+
+                    //There doesn't seem to be a super great way of interrupting the console,
+                    //but in the case of our unit tests, our ReadLine is fake anyway so it doesn't matter
+                    command = Console.ReadLine();
+                }
+                finally
+                {
+                    Console.ExitWriteProtection();
+                }
 
                 if (!string.IsNullOrEmpty(command))
                     ExecuteCommand(command);
@@ -65,7 +91,7 @@ namespace chaos
 
         private void PrintPrompt()
         {
-            Console.Write("chaos> ");
+            Console.WriteAndProtect("chaos> ");
         }
 
         private void ExecuteCommand(string command)
@@ -76,7 +102,7 @@ namespace chaos
                 Console.WriteLine($"Invalid command '{command}'");
             else
             {
-                commandDispatcher.Invoke(command);
+                parseResult.Invoke();
             }
         }
 
@@ -96,11 +122,43 @@ namespace chaos
                     wakeEvent.Set();
             };
 
-            engineProvider.ModuleLoad += (s, e) => Console.WriteLine($"ModLoad: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
-            engineProvider.ModuleUnload += (s, e) => Console.WriteLine($"ModUnload: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}"); ;
+            engineProvider.ModuleLoad += (s, e) =>
+            {
+                string extra = null;
 
-            engineProvider.ThreadCreate += (s, e) => Console.WriteLine($"ThreadCreate {e.Thread}");
-            engineProvider.ThreadExit += (s, e) => Console.WriteLine($"ThreadExit {e.Thread}");
+                if (e.UserContext is true)
+                    extra = "[OutOfBand] ";
+
+                Console.WriteLine($"{extra}ModLoad: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}");
+            };
+            engineProvider.ModuleUnload += (s, e) =>
+            {
+                string extra = null;
+
+                if (e.UserContext is true)
+                    extra = "[OutOfBand] ";
+
+                Console.WriteLine($"{extra}ModUnload: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}");
+            };
+
+            engineProvider.ThreadCreate += (s, e) =>
+            {
+                string extra = null;
+
+                if (e.UserContext is true)
+                    extra = "[OutOfBand] ";
+
+                Console.WriteLine($"{extra}ThreadCreate {e.Thread}");
+            };
+            engineProvider.ThreadExit += (s, e) =>
+            {
+                string extra = null;
+
+                if (e.UserContext is true)
+                    extra = "[OutOfBand] ";
+
+                Console.WriteLine($"{extra}ThreadExit {e.Thread}");
+            };
         }
 
         private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)

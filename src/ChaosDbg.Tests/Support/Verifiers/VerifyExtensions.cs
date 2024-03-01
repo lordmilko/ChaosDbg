@@ -6,6 +6,7 @@ using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Text;
+using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -72,6 +73,13 @@ namespace ChaosDbg.Tests
 
             for (var i = 0; i < graph.Vertices.Count; i++)
                 Assert.AreEqual(expected[i], graph.Vertices[i].ToString());
+        }
+
+        public static void Verify(this COR_DEBUG_IL_TO_NATIVE_MAP map, int ilOffset, int nativeStartOffset, int nativeEndOffset)
+        {
+            Assert.AreEqual(ilOffset, map.ilOffset);
+            Assert.AreEqual(nativeStartOffset, map.nativeStartOffset);
+            Assert.AreEqual(nativeEndOffset, map.nativeEndOffset);
         }
     }
 }

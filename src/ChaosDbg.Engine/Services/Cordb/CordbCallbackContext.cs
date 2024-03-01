@@ -26,7 +26,7 @@ namespace ChaosDbg.Cordb
 
         #region Interop
 
-        private int unmanagedEventProcessId;
+        private int unmanagedEventProcessId = -1;
 
         public int UnmanagedEventProcessId
         {
@@ -40,7 +40,7 @@ namespace ChaosDbg.Cordb
             set => unmanagedEventProcessId = value;
         }
 
-        private int unmanagedEventThreadId;
+        private int unmanagedEventThreadId = -1;
 
         public int UnmanagedEventThreadId
         {
@@ -54,6 +54,20 @@ namespace ChaosDbg.Cordb
             set => unmanagedEventThreadId = value;
         }
 
+        private bool? unmanagedOutOfBand;
+
+        public bool UnmanagedOutOfBand
+        {
+            get
+            {
+                if (unmanagedOutOfBand == null)
+                    throw new InvalidOperationException($"{nameof(UnmanagedOutOfBand)} has not been set");
+
+                return unmanagedOutOfBand.Value;
+            }
+            set => unmanagedOutOfBand = value;
+        }
+
         #endregion
 
         public void Clear()
@@ -61,7 +75,9 @@ namespace ChaosDbg.Cordb
             initialHistoryCount = session.EventHistory.Count;
 
             //Interop
-            UnmanagedEventProcessId = unmanagedEventProcessId;
+            unmanagedEventProcessId = -1;
+            unmanagedEventThreadId = -1;
+            unmanagedOutOfBand = null;
         }
     }
 }

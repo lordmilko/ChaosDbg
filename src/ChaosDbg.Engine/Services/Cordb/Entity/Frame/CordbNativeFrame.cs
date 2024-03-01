@@ -21,6 +21,8 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public IDisplacedSymbol Symbol { get; }
 
+        public bool IsInline { get; }
+
         internal CordbNativeFrame(NativeFrame nativeFrame, CordbModule module) : base(null, module, nativeFrame.Context)
         {
             string name;
@@ -34,6 +36,7 @@ namespace ChaosDbg.Cordb
 
             Name = name;
             Symbol = nativeFrame.Symbol;
+            IsInline = nativeFrame.IsInline;
         }
     }
 }

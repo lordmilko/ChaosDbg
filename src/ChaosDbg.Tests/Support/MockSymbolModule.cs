@@ -45,6 +45,11 @@ namespace ChaosDbg.Tests
             return null;
         }
 
+        public IDisplacedSymbol GetInlineSymbolFromAddress(long address, int inlineFrameContext)
+        {
+            throw new NotImplementedException();
+        }
+
         private bool IsSymbolAllowed(ISymbol symbol)
         {
             if (allowed.Any(a =>

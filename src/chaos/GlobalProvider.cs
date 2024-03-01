@@ -61,7 +61,11 @@ namespace chaos
                 typeof(CordbEngineServices),
                 typeof(DbgEngEngineServices),
 
+                typeof(CordbMasmEvaluatorContext),
                 typeof(ILDisassemblerProvider),
+
+                typeof(ConsoleDisasmWriter),
+                { typeof(IConsole), typeof(PhysicalConsole) },
 
                 { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },

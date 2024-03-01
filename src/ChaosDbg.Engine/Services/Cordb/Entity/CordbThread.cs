@@ -28,9 +28,10 @@ namespace ChaosDbg.Cordb
                 var type = SpecialType;
 
                 var typeStr = type == null ? null : SpecialType + " ";
+                var activeStr = Process.Threads.ActiveThread == this ? " *" : null;
 
                 if (!IsManaged)
-                    builder.Append($"[Native] {typeStr}{Id}");
+                    builder.Append($"[Native] {typeStr}{Id}{activeStr}");
                 else
                 {
                     builder.Append("[Managed] ");
@@ -42,6 +43,8 @@ namespace ChaosDbg.Cordb
                         builder.Append(accessor.Id);
                     else
                         builder.Append($"Runtime Id = {accessor.Id}, VolatileOSThreadID = {accessor.VolatileOSThreadID}");
+
+                    builder.Append(activeStr);
                 }
 
                 return builder.ToString();
@@ -104,6 +107,9 @@ namespace ChaosDbg.Cordb
         {
             get
             {
+                if (!Process.Session.IsCLRLoaded)
+                    return false;
+
                 if (!Process.DAC.Threads.TryGetValue(Id, true, out var dacThread))
                     return false;
 

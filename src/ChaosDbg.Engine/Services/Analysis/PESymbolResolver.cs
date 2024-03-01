@@ -30,6 +30,9 @@ namespace ChaosDbg.Analysis
 
         public PESymbolResolver(ISymbolModule module)
         {
+            if (module == null)
+                throw new ArgumentNullException(nameof(module));
+
             this.module = module;
         }
 

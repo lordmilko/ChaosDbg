@@ -2,8 +2,8 @@
 using System.IO;
 using System.Linq;
 using ChaosDbg.Analysis;
+using ChaosDbg.Cordb;
 using ChaosLib.Memory;
-using ChaosLib.Metadata;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm
@@ -65,6 +65,16 @@ namespace ChaosDbg.Disasm
             long baseAddress,
             bool is32Bit,
             ISymbolResolver symbolResolver = null) => nativeDisassemblerProvider.CreateDisassembler(new AbsoluteToRelativeStream(new MemoryStream(bytes), baseAddress), is32Bit, symbolResolver);
+
+        public static INativeDisassembler CreateDisassembler(
+            this INativeDisassemblerProvider nativeDisassemblerProvider,
+            CordbProcess process,
+            ISymbolResolver symbolResolver = null)
+        {
+            var stream = new CordbMemoryStream(process.DAC.DataTarget);
+
+            return nativeDisassemblerProvider.CreateDisassembler(stream, process.Is32Bit, symbolResolver);
+        }
 
         #endregion
     }

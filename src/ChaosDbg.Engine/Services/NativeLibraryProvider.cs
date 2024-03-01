@@ -44,7 +44,7 @@ namespace ChaosDbg
 
             var assembly = Assembly.GetEntryAssembly();
 
-            var singleFileProviderType = assembly.GetType("ChaosDbg.SingleFileProvider");
+            var singleFileProviderType = assembly?.GetType("ChaosDbg.SingleFileProvider");
 
             if (singleFileProviderType == null)
                 return false;
