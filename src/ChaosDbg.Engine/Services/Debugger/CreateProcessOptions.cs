@@ -10,7 +10,7 @@ namespace ChaosDbg
 
         public bool UseInterop { get; set; }
 
-        public ExeKind? ExeKind { get; set; }
+        public FrameworkKind? FrameworkKind { get; set; }
 
         public CreateProcessOptions(string commandLine)
         {

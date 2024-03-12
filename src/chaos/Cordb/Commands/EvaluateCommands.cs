@@ -1,26 +1,22 @@
 ﻿using System;
+using ChaosDbg;
 using ChaosDbg.Cordb;
-using ChaosDbg.Evaluator.Masm;
 
 namespace chaos.Cordb.Commands
 {
     [Command("?")]
     class EvaluateCommands : CommandBase, ICustomCommandParser
     {
-        private CordbMasmEvaluatorContext masmEvaluatorContext;
-
         public EvaluateCommands(
             IConsole console,
-            CordbEngineProvider engineProvider,
-            CordbMasmEvaluatorContext masmEvaluatorContext) : base(console, engineProvider)
+            CordbEngineProvider engineProvider) : base(console, engineProvider)
         {
-            this.masmEvaluatorContext = masmEvaluatorContext;
         }
 
         public void Evaluate(
             [Argument] string expr)
         {
-            var result = MasmEvaluator.Evaluate(expr, masmEvaluatorContext);
+            var result = engine.Process.Evaluator.Evaluate(expr);
 
             Console.WriteLine($"Evaluate expression: {result} = {result:x16}");
         }

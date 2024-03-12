@@ -37,7 +37,7 @@ namespace ChaosDbg.Analysis
             var virtualPEFile = module.PEFile;
             var physicalPEFile = GetPhysicalPEFile(modulePath);
 
-            var processStream = new CordbMemoryStream(module.Process.DAC.DataTarget);
+            var processStream = new CordbMemoryStream(module.Process.DataTarget);
 
             INativeDisassembler createDisassembler(Stream stream) =>
                 nativeDisassemblerProvider.CreateDisassembler(stream ?? processStream, module.Process.Is32Bit, new CordbDisasmSymbolResolver(module.Process));
@@ -59,7 +59,7 @@ namespace ChaosDbg.Analysis
 
         public PEMetadataPhysicalModule GetPhysicalMetadata(
             string modulePath,
-            ISymbolModule symbolModule,
+            IUnmanagedSymbolModule symbolModule,
             ISymbolResolver disasmSymbolResolver,
             PEMetadataSearchOptions options)
         {
@@ -89,7 +89,7 @@ namespace ChaosDbg.Analysis
         public unsafe PEMetadataVirtualModule GetVirtualMetadata(
             IntPtr hProcess,
             IntPtr hModule,
-            ISymbolModule symbolModule,
+            IUnmanagedSymbolModule symbolModule,
             RemoteMemoryStream processStream,
             ISymbolResolver disasmSymbolResolver,
             PEMetadataSearchOptions options)

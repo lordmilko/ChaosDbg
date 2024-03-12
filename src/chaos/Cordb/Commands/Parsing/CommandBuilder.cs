@@ -4,9 +4,13 @@ using System.CommandLine;
 using System.CommandLine.Binding;
 using System.CommandLine.Builder;
 using System.CommandLine.IO;
+using System.CommandLine.Parsing;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using ChaosDbg;
+using ChaosDbg.Commands;
+using IConsole = ChaosDbg.IConsole;
 
 namespace chaos.Cordb.Commands
 {
@@ -17,10 +21,12 @@ namespace chaos.Cordb.Commands
         //If one command takes another command through dependency injection, we need to be able to resolve these
         private Dictionary<Type, Lazy<object>> commandToInstanceMap = new Dictionary<Type, Lazy<object>>();
         private Stack<Type> resolveCommandStack = new Stack<Type>();
+        private IConsole console;
 
-        public CommandBuilder(IServiceProvider serviceProvider)
+        public CommandBuilder(IServiceProvider serviceProvider, IConsole console)
         {
             this.serviceProvider = serviceProvider;
+            this.console = console;
         }
 
         public RelayParser Build()
@@ -93,7 +99,7 @@ namespace chaos.Cordb.Commands
                         Console.ResetColor();
                         Console.ForegroundColor = ConsoleColor.Red;
 
-                        if (ex is InvalidCommandException)
+                        if (ex is InvalidCommandException or InvalidExpressionException)
                             context.Console.Error.WriteLine(ex.Message);
                         else
                             context.Console.Error.WriteLine(ex.ToString());
@@ -190,6 +196,24 @@ namespace chaos.Cordb.Commands
 
             foreach (var parameter in parameters)
             {
+                ICommandParser commandParser = null;
+                var commandParserAttrib = parameter.ParameterType.GetCustomAttribute<CommandParserAttribute>();
+
+                if (commandParserAttrib != null)
+                {
+                    var parserType = commandParserAttrib.Type;
+
+                    if (parserType.IsGenericType)
+                        parserType = parserType.MakeGenericType(parameter.ParameterType);
+
+                    var instanceFieldInfo = parserType.GetField("Instance", BindingFlags.Public | BindingFlags.Static);
+
+                    if (instanceFieldInfo == null)
+                        throw new MissingMemberException(parserType.Name, "Instance");
+
+                    commandParser = (ICommandParser) instanceFieldInfo.GetValue(null);
+                }
+
                 var optionAttrib = parameter.GetCustomAttribute<OptionAttribute>();
 
                 if (optionAttrib != null)
@@ -200,7 +224,7 @@ namespace chaos.Cordb.Commands
                         cliOptType,
                         new object[] {
                             optionAttrib.Name, //name
-                            null //description
+                            null               //description
                         }
                     );
 
@@ -217,7 +241,46 @@ namespace chaos.Cordb.Commands
 
                     Argument cliArg;
 
-                    if (parameter.HasDefaultValue)
+                    /* Possible ctors:
+                     * - string name, string description
+                     * - string name, Func<T> getDefaultValue, string description
+                     * - Func<T> getDefaultValue
+                     * - string name, ParseArgument<T> parse, bool isDefault, string description
+                     * - ParseArgument<T> parse, bool isDefault */
+
+                    if (commandParser != null)
+                    {
+                        //We need to create a closure so we can have our ICommandParser create the result.
+                        //We do this by creating a func with a closure that returns an object, and then passing that
+                        //into a method we can create a generic instance out of in order to wrap it in another delegate
+                        //that returns a value of type T
+                        Func<ArgumentResult, object> inner = r =>
+                        {
+                            var raw = r.Tokens.Single().Value;
+                            var result = commandParser.Parse(raw);
+
+                            if (result == null)
+                                throw new InvalidOperationException($"Could not convert '{raw}' to a value of type '{parameter.ParameterType}'");
+
+                            return result;
+                        };
+
+                        var outer = GetType()
+                            .GetMethod(nameof(ConvertParseArgument), BindingFlags.Static | BindingFlags.NonPublic)
+                            .MakeGenericMethod(parameter.ParameterType)
+                            .Invoke(null, new object[] {inner});
+
+                        cliArg = (Argument) Activator.CreateInstance(
+                            cliArgType,
+                            new object[] {
+                                parameter.Name,
+                                outer,
+                                parameter.HasDefaultValue,
+                                null
+                            }
+                        );
+                    }
+                    else if (parameter.HasDefaultValue)
                     {
                         var getDefaultValue = GetType()
                             .GetMethod(nameof(GetDefaultValue), BindingFlags.Static | BindingFlags.NonPublic)
@@ -268,9 +331,13 @@ namespace chaos.Cordb.Commands
             rootCommand.AddCommand(cliCommand);
 
             return true;
-
         }
 
         private static T GetDefaultValue<T>() => default;
+
+        private static ParseArgument<T> ConvertParseArgument<T>(Func<ArgumentResult, object> func)
+        {
+            return r => (T) func(r);
+        }
     }
 }

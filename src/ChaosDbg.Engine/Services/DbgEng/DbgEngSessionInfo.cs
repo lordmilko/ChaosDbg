@@ -203,22 +203,9 @@ namespace ChaosDbg.DbgEng
         /// <returns>The output that was emitted to the output callbacks of the <see cref="BufferClient"/>.</returns>
         public string[] ExecuteBufferedCommand(Action<DebugClient> action)
         {
-            BufferOutput.Lines.Clear();
-            BufferOutput.Capturing = true;
-
-            try
-            {
-                action(BufferClient);
-
-                var output = string.Join(string.Empty, BufferOutput.Lines);
-
-                return output.Split(new[]{'\n'}, StringSplitOptions.RemoveEmptyEntries);
-            }
-            finally
-            {
-                BufferOutput.Capturing = false;
-                BufferOutput.Lines.Clear();
-            }
+            return BufferOutput.Capture(
+                () => action(BufferClient)
+            );
         }
 
         /// <summary>

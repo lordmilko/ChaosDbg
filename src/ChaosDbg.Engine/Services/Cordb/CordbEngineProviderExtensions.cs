@@ -10,7 +10,7 @@ namespace ChaosDbg.Cordb
             string commandLine,
             bool startMinimized = false,
             bool useInterop = false,
-            ExeKind? exeKind = null,
+            FrameworkKind? frameworkKind = null,
             Action<ICordbEngine> initCallback = null)
         {
             return engineProvider.CreateProcess(
@@ -18,7 +18,7 @@ namespace ChaosDbg.Cordb
                 {
                     StartMinimized = startMinimized,
                     UseInterop = useInterop,
-                    ExeKind = exeKind
+                    FrameworkKind = frameworkKind
                 },
                 initCallback: initCallback
             );

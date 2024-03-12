@@ -105,9 +105,9 @@ namespace ChaosDbg.Evaluator.Masm
             }
         }
 
-        public long VisitSymbolFunctionExpression(SymbolFunctionExpressionSyntax syntax)
+        public long VisitSymbolModuleQualifiedExpression(SymbolModuleQualifiedExpressionSyntax syntax)
         {
-            if (context.TryGetSymbolValue(syntax.ToString(), out var address))
+            if (context.TryGetModuleQualifiedSymbolValue(syntax.Module.ToString(), syntax.Expression.ToString(), out var address))
                 return address;
 
             throw new InvalidExpressionException($"Couldn't resolve error at '{syntax}'");
@@ -117,7 +117,7 @@ namespace ChaosDbg.Evaluator.Masm
         {
             var str = syntax.ToString();
 
-            if (context.TryGetSymbolValue(str, out var address))
+            if (context.TryGetSimpleSymbolValue(str, out var address))
                 return address;
 
             //Maybe it's actually a hexadecimal value (e.g. 'a' or 'ah')

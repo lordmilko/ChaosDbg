@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using ChaosDbg.DAC;
+using ChaosDbg.Disasm;
+using ChaosDbg.Evaluator.Masm;
+using ChaosDbg.Symbol;
 using ChaosLib;
 using ClrDebug;
 
@@ -66,10 +68,9 @@ namespace ChaosDbg.Cordb
         //High level information about the target process
 
         /// <summary>
-        /// Gets the ID of this process.<para/>
-        /// This property is always safe to access, regardless of the state of the underlying process.
+        /// Gets the ID of this process.
         /// </summary>
-        public int Id => CorDebugProcess.Id;
+        public int Id { get; }
 
         /// <summary>
         /// Gets the handle of the process.
@@ -89,7 +90,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the command line that was used to launch the process.
         /// </summary>
-        public string CommandLine { get; }
+        public string[] CommandLine { get; }
 
         #endregion
         #region Related Entities
@@ -117,6 +118,8 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbModuleStore Modules { get; }
 
+        public CordbBreakpointStore Breakpoints { get; }
+
         #endregion
         #region Services
 
@@ -127,7 +130,26 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public DacProvider DAC { get; }
 
-        public DbgHelpSession DbgHelp { get; }
+        /// <summary>
+        /// Gets a data target that is used to communicate with the process.<para/>
+        /// The advantage of using CorDebugProcess.ReadMemory is that any breakpoints that have been set on the right side
+        /// will be made transparent to the caller. The downside is that this can fail when executed on the Win32 Event Thread.
+        /// Using a custom data target bypasses issues you may encounter on the Win32 Event Thread, but any patches defined won't
+        /// be hidden from you.
+        /// </summary>
+        public ICLRDataTarget DataTarget => DAC.DataTarget;
+
+        public MasmEvaluator Evaluator { get; }
+
+        /// <summary>
+        /// Provides access to the symbols contained within this process.
+        /// </summary>
+        public DebuggerSymbolProvider Symbols { get; }
+
+        /// <summary>
+        /// Gets a disassembler capable of disassembling any instruction in this process.
+        /// </summary>
+        public INativeDisassembler ProcessDisassembler { get; }
 
         #endregion
         #region Debugger State
@@ -161,21 +183,49 @@ namespace ChaosDbg.Cordb
                 throw new ArgumentNullException(nameof(session));
 
             CorDebugProcess = corDebugProcess;
+            Id = CorDebugProcess.Id; //When interop debugging, you often can't request this from the Win32EventThread (most likely due to marshalling issues)
             Win32Process = Process.GetProcessById(corDebugProcess.Id);
             Session = session;
             Is32Bit = is32Bit;
-            CommandLine = commandLine;
+            CommandLine = Shell32.CommandLineToArgvW(commandLine);
 
             Threads = new CordbThreadStore(this);
             AppDomains = new CordbAppDomainStore(this);
             Assemblies = new CordbAssemblyStore(this);
             Modules = new CordbModuleStore(this);
+            Breakpoints = new CordbBreakpointStore(this);
 
             DAC = new DacProvider(this);
+            Evaluator = new MasmEvaluator(new CordbMasmEvaluatorContext(this));
 
             //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
-            DbgHelp = new DbgHelpSession(corDebugProcess.Handle, invadeProcess: false);
+            Symbols = new DebuggerSymbolProvider(corDebugProcess.Handle, new CordbDebuggerSymbolProviderExtension(this));
+
+            var resolver = new CordbDisasmSymbolResolver(this);
+            ProcessDisassembler = session.Services.NativeDisasmProvider.CreateDisassembler(this, resolver);
+            resolver.ProcessDisassembler = ProcessDisassembler;
         }
+
+        #region ReadManagedMemory
+
+        //Prefer CorDebugProcess.ReadMemory so that any internal breakpoints are hidden, falling back to an ICLRDataTarget as required
+        //(i.e. we're on the Win32 Event Thread and CorDebugProcess.ReadMemory won't work)
+
+        public byte[] ReadManagedMemory(CORDB_ADDRESS address, int size)
+        {
+            var hr = CorDebugProcess.TryReadMemory(address, size, out var result);
+
+            if (hr == HRESULT.S_OK)
+                return result;
+
+            //If we're stopped at an unsafe point, try fallback to using our data target instead
+            if (hr == HRESULT.CORDBG_E_PROCESS_NOT_SYNCHRONIZED)
+                return DataTarget.ReadVirtual(address, size);
+
+            throw new DebugException(hr);
+        }
+
+        #endregion
 
         /// <summary>
         /// Initiates a request that the target process be terminated, and waits for the <see cref="CorDebugManagedCallbackKind.ExitProcess"/> event to be emitted.
@@ -198,7 +248,13 @@ namespace ChaosDbg.Cordb
                     break;
             }
 
-            Session.WaitExitProcess.Task.Wait();
+            //We need to ensure the debugger is running in order to receive the exit process event.
+            if (Session.EventHistory.LastStopReason is CordbNativeEventPauseReason { OutOfBand: true })
+                CorDebugProcess.TryContinue(true);
+            else
+                CorDebugProcess.TryContinue(false);
+
+            Session.WaitExitProcess.Wait();
         }
 
         public void Dispose()
@@ -206,7 +262,7 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
-            DbgHelp.Dispose();
+            Symbols.Dispose();
 
             disposed = true;
         }

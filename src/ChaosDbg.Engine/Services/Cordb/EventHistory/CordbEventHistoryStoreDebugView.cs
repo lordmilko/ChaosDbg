@@ -23,6 +23,8 @@ namespace ChaosDbg.Cordb
             CorDebugManagedCallbackKind.UnloadModule
         );
 
+        public CordbPauseReason[] PauseEvents => store.OfType<CordbPauseReason>().ToArray();
+
         private CordbEventHistoryStore store;
 
         public CordbEventHistoryStoreDebugView(CordbEventHistoryStore store)

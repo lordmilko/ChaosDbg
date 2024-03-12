@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
+using ChaosDbg;
 
 namespace chaos
 {
@@ -11,10 +11,22 @@ namespace chaos
         private object objLock = new object();
 
         public void Write(object value, params object[] arg) =>
-            WriteProtect(() => Console.Write(value?.ToString() ?? string.Empty, arg));
+            WriteProtect(() =>
+            {
+                if (arg.Length == 0)
+                    Console.Write(value);
+                else
+                    Console.Write(value?.ToString() ?? string.Empty, arg);
+            });
 
         public void WriteLine(object value, params object[] arg) =>
-            WriteProtect(() => Console.WriteLine(value?.ToString() ?? string.Empty, arg));
+            WriteProtect(() =>
+            {
+                if (arg.Length == 0)
+                    Console.WriteLine(value);
+                else
+                    Console.WriteLine(value?.ToString() ?? string.Empty, arg);
+            });
 
         public void WriteColorLine(object value, ConsoleColor? color)
         {

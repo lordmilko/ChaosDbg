@@ -85,7 +85,7 @@ namespace ChaosDbg.DbgEng
 
             Session = new DbgEngSessionInfo(
                 () => ThreadProc(options),
-                CreateDebugClient(),
+                services.SafeDebugCreate(true),
                 cancellationToken
             );
 
@@ -97,17 +97,6 @@ namespace ChaosDbg.DbgEng
             //Once the target has been created, all the core values will exist
             //in our Session that are required to interact with the target
             Session.TargetCreated.Wait(cancellationToken);
-        }
-
-        private DebugClient CreateDebugClient()
-        {
-            var debugCreate = services.NativeLibraryProvider.GetExport<DebugCreateDelegate>(WellKnownNativeLibrary.DbgEng, "DebugCreate");
-
-            debugCreate(DebugClient.IID_IDebugClient, out var pDebugClient).ThrowOnNotOK();
-
-            var debugClient = new DebugClient(pDebugClient);
-
-            return debugClient;
         }
 
         public void Dispose()

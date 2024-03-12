@@ -70,7 +70,7 @@ namespace ChaosDbg.Cordb
 
                     var codeChunk = codeChunks.Single();
 
-                    var nativeBytes = process.CorDebugProcess.ReadMemory(codeChunk.startAddr, codeChunk.length);
+                    var nativeBytes = process.ReadManagedMemory(codeChunk.startAddr, codeChunk.length);
 
                     //Note that when we implement support for having multiple chunks, we'll likely need some kind of intelligent stream
                     //that updates the current Position to be the start of the next chunk when the bytes of the current chunk have been exhausted
@@ -236,7 +236,7 @@ namespace ChaosDbg.Cordb
                 if (endOffset < 0)
                 {
                     //Either there are multiple prolog regions, or we're at the epilog. If there's another code region after us, do nothing
-                    if (ilToNativeMappingILSort.Skip(mappingIndex).Any(v => v.ilOffset >= 0))
+                    if (ilToNativeMappingILSort.Skip(mappingIndex + 1).Any(v => v.ilOffset >= 0))
                         return Array.Empty<ILInstruction>();
 
                     //There's an epilog after us. Consume all remaining instructions
@@ -270,6 +270,13 @@ namespace ChaosDbg.Cordb
             {
                 if (ilIndex == ilInstructions.Length)
                     return Array.Empty<ILInstruction>();
+
+                //It's the last mapping. We're expecting that this should be an epilog region or something. We wouldn't expect that this would be a code region.
+                //Therefore if we have IL instructions that haven't been claimed yet, this would likely indicate a bug with our logic above for the regions
+                //that came before us
+
+                if (ilIndex < ilInstructions.Length)
+                    throw new NotImplementedException($"Don't know how to handle having instructions owned by the last code region");
 
                 throw new NotImplementedException($"IL index {ilIndex} should not be greater than the number of instructions available ({ilInstructions.Length})");
             }

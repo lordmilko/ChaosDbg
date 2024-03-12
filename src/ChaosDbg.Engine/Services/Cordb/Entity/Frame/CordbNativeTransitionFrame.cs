@@ -9,7 +9,9 @@
     {
         public override string Name => "Transition Frame";
 
-        internal CordbNativeTransitionFrame(CrossPlatformContext context) : base(null, null, context)
+        public override CordbVariable[] Variables => throw new System.NotImplementedException();
+
+        internal CordbNativeTransitionFrame(CordbThread thread, CrossPlatformContext context) : base(null, thread, null, context)
         {
         }
     }

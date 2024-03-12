@@ -15,7 +15,7 @@ namespace ChaosDbg.Analysis
         /// <summary>
         /// Provides access to any symbol information that is available for this module.
         /// </summary>
-        public ISymbolModule SymbolModule { get; }
+        public IUnmanagedSymbolModule SymbolModule { get; }
 
         /// <summary>
         /// Gets a disassembler that reads instructions directly from the memory of a remote process (when
@@ -26,7 +26,7 @@ namespace ChaosDbg.Analysis
 
         protected PEMetadataModule(
             string fileName,
-            ISymbolModule symbolModule,
+            IUnmanagedSymbolModule symbolModule,
             Func<Stream, INativeDisassembler> createDisassembler)
         {
             FileName = fileName;

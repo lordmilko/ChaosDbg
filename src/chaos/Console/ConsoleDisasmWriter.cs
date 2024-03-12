@@ -1,4 +1,5 @@
 ﻿using System;
+using ChaosDbg;
 using Iced.Intel;
 
 namespace chaos

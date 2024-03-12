@@ -14,7 +14,10 @@ namespace ChaosDbg
     public class RemotePeb
     {
         public PebLdrData Ldr =>
-            new PebLdrData(memoryReader.ReadPointer(Address + (memoryReader.PointerSize * 3)), memoryReader, Address); //temp passing peb addr
+            new PebLdrData(memoryReader.ReadPointer(Address + (memoryReader.PointerSize * 3)), memoryReader);
+
+        public PebUserProcessParameters ProcessParameters =>
+            new PebUserProcessParameters(memoryReader.ReadPointer(Address + (memoryReader.PointerSize * 4)), memoryReader);
 
         public long Address { get; }
 
@@ -46,10 +49,24 @@ namespace ChaosDbg
             this.memoryReader = memoryReader;
         }
 
+        public RemotePeb(Process process) : this(GetPebAddress(process), new MemoryReader(process.Handle))
+        {
+        }
+
+        private static CLRDATA_ADDRESS GetPebAddress(Process process)
+        {
+            var info = Ntdll.NtQueryInformationProcess<PROCESS_BASIC_INFORMATION>(process.Handle, PROCESSINFOCLASS.ProcessBasicInformation);
+
+            return info.PebBaseAddress;
+        }
+
         #region Types
+        #region Ldr
 
         public class PebLdrData
         {
+            #region Field Offsets
+
             [DebuggerBrowsable(DebuggerBrowsableState.Never)]
             private int InLoadOrderModuleListFieldOffset => memoryReader.Is32Bit ? 0x0C : 0x10;
             [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -65,6 +82,8 @@ namespace ChaosDbg
             [DebuggerBrowsable(DebuggerBrowsableState.Never)]
             private int InInitializationOrderLinksFieldOffset => memoryReader.Is32Bit ? 0x10 : 0x20;
 
+            #endregion
+
             //The head item on the PEB_LDR_DATA has the suffix "ModuleList", and then each LDR_DATA_TABLE_ENTRY links
             //to each to its peers with the suffix "Links"
             public LdrDataTableEntry[] InLoadOrderModuleList =>
@@ -76,15 +95,12 @@ namespace ChaosDbg
 
             public long Address { get; }
 
-            private long TEMPPEB; //temp
-
             private MemoryReader memoryReader;
 
-            public PebLdrData(long address, MemoryReader memoryReader, long TEMPPEBADDR)
+            public PebLdrData(long address, MemoryReader memoryReader)
             {
                 Address = address;
                 this.memoryReader = memoryReader;
-                this.TEMPPEB = TEMPPEBADDR;
             }
 
             private LdrDataTableEntry[] ReadLinkedList(int listHeadOffset, int listEntryOffset)
@@ -110,8 +126,8 @@ namespace ChaosDbg
                     var dllBase = memoryReader.ReadPointer(objectStart + dllBaseFieldOffset);
                     var entryPoint = memoryReader.ReadPointer(objectStart + entryPointFieldOffset);
                     var sizeOfImage = memoryReader.ReadVirtual<int>(objectStart + sizeOfImageFieldOffset);
-                    var fullDllName = ReadUnicodeString(objectStart + fullDllNameFieldOffset);
-                    var baseDllName = ReadUnicodeString(objectStart + baseDllNameFieldOffset);
+                    var fullDllName = memoryReader.ReadUnicodeString(objectStart + fullDllNameFieldOffset);
+                    var baseDllName = memoryReader.ReadUnicodeString(objectStart + baseDllNameFieldOffset);
 
                     results.Add(new LdrDataTableEntry(dllBase, entryPoint, sizeOfImage, fullDllName, baseDllName));
 
@@ -119,20 +135,6 @@ namespace ChaosDbg
                 } while (currentFlink != headAddr);
 
                 return results.ToArray();
-            }
-
-            private string ReadUnicodeString(long address)
-            {
-                var length = memoryReader.ReadVirtual<short>(address);
-                var bufferPtr = memoryReader.ReadPointer(address + (memoryReader.Is32Bit ? 4 : 8)); //skip length, max length and also any padding on x64
-
-                using var buffer = new MemoryBuffer(length);
-
-                memoryReader.ReadVirtual(bufferPtr, buffer, length, out _).ThrowOnNotOK();
-
-                var str = Marshal.PtrToStringUni(buffer, length / 2);
-
-                return str;
             }
         }
 
@@ -163,6 +165,33 @@ namespace ChaosDbg
             }
         }
 
+        #endregion
+        #region ProcessParameters
+
+        public class PebUserProcessParameters
+        {
+            #region Field Offsets
+
+            [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+            private int CommandLineFieldOffset => memoryReader.Is32Bit ? 0x40 : 0x70;
+
+            #endregion
+
+            public string CommandLine =>
+                memoryReader.ReadUnicodeString(Address + CommandLineFieldOffset);
+
+            public long Address { get; }
+
+            private MemoryReader memoryReader;
+
+            public PebUserProcessParameters(long address, MemoryReader memoryReader)
+            {
+                Address = address;
+                this.memoryReader = memoryReader;
+            }
+        }
+
+        #endregion
         #endregion
     }
 }

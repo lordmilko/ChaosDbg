@@ -15,6 +15,8 @@ namespace ChaosDbg.DAC
     /// </summary>
     public class DacProvider
     {
+        private object objLock = new object();
+
         public DacThreadStore Threads { get; }
 
         private SOSDacInterface sos;
@@ -23,11 +25,18 @@ namespace ChaosDbg.DAC
             get
             {
                 if (sos == null)
-                    sos = GetSOSDacInterface(cdbProcess.Id, DataTarget);
+                {
+                    lock (objLock)
+                    {
+                        sos ??= GetSOSDacInterface(cdbProcess.Id, DataTarget);
+                    }
+                }
 
                 return sos;
             }
         }
+
+        public ProcessModule CLR { get; private set; }
 
         /// <summary>
         /// Gets the data target that is used to communicate with the DAC.
@@ -62,7 +71,7 @@ namespace ChaosDbg.DAC
 
         #region Init
 
-        public static SOSDacInterface GetSOSDacInterface(int pid, ICLRDataTarget dataTarget)
+        public SOSDacInterface GetSOSDacInterface(int pid, ICLRDataTarget dataTarget)
         {
             //Get a new Process so we get the latest list of modules. Modules won't refresh on a Process object after they've been
             //retrieved the first time
@@ -73,7 +82,10 @@ namespace ChaosDbg.DAC
             var clr = modules.FirstOrDefault(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase));
 
             if (clr != null)
+            {
+                CLR = clr;
                 return CLRDataCreateInstance(dataTarget).SOSDacInterface;
+            }
 
             var coreclr = modules.FirstOrDefault(m => m.ModuleName.Equals("coreclr.dll", StringComparison.OrdinalIgnoreCase));
 
@@ -82,6 +94,7 @@ namespace ChaosDbg.DAC
             if (coreclr == null)
                 throw new InvalidOperationException($"Could not find module clr.dll or coreclr.dll on process {pid}.");
 
+            CLR = coreclr;
             return CoreCLRDataCreateInstance(coreclr, dataTarget).SOSDacInterface;
         }
 

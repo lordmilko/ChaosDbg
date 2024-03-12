@@ -213,10 +213,11 @@ https://github.com/NationalSecurityAgency/ghidra
 
 -------------------------------------------------------------------
 License notice for
-    dotnet/diagnostics (License notice for dotnet/diagnostics)
+    dotnet/diagnostics (https://github.com/dotnet/diagnostics)
     dotnet/roslyn      (https://github.com/dotnet/roslyn)
     dotnet/runtime     (https://github.com/dotnet/runtime)
-    dotnet/symstore    (License notice for dotnet/symstore)
+    dotnet/symstore    (https://github.com/dotnet/symstore)
+    microsoft/perfview (https://github.com/microsoft/perfview)
 -------------------------------------------------------------------
 
 The MIT License (MIT)

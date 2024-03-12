@@ -13,7 +13,9 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbILTransitionFrame : CordbFrame<CorDebugNativeFrame>
     {
-        internal CordbILTransitionFrame(CorDebugNativeFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        public override CordbVariable[] Variables => throw new System.NotImplementedException();
+
+        internal CordbILTransitionFrame(CorDebugNativeFrame corDebugFrame, CordbThread thread, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, thread, module, context)
         {
         }
     }

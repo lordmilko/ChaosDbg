@@ -17,7 +17,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Thread_Managed_StackTrace_ManagedFrames_Create()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -59,7 +59,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Thread_Managed_StackTrace_InternalFrames()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
                 ctx =>
                 {
@@ -86,11 +86,11 @@ namespace ChaosDbg.Tests
         {
             //Look at a thread that was always managed and is now executing inside of native code
 
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_InternalFrames,
                 ctx =>
                 {
-                    CompareDbgEngFrames(ctx.CordbEngine.Process.Threads.Single(t => t.IsManaged), ctx.DbgEngEngine.Value);
+                    CompareDbgEngFrames(ctx.CordbEngine.Process.Threads.Single(t => t.IsManaged), ctx.InProcDbgEng.Value);
                 },
                 useInterop: true
             );
@@ -101,7 +101,7 @@ namespace ChaosDbg.Tests
         {
             //When we launch a native thread and call managed code on it, do we get a managed CreateThread notification?
 
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 NativeTestType.Com,
                 ctx =>
                 {
@@ -109,12 +109,12 @@ namespace ChaosDbg.Tests
 
                     foreach (var thread in threads)
                     {
-                        CompareDbgEngFrames(thread, ctx.DbgEngEngine.Value);
+                        CompareDbgEngFrames(thread, ctx.InProcDbgEng.Value);
                     }
                 },
                 useInterop: true,
-                native: true,
-                exeKind: ExeKind.NetFramework
+                nativeTestApp: true,
+                frameworkKind: FrameworkKind.NetFramework
             );
         }
 
@@ -132,7 +132,7 @@ namespace ChaosDbg.Tests
 
                     foreach (var thread in threads)
                     {
-                        CompareDbgEngFrames(thread, ctx.DbgEngEngine.Value);
+                        CompareDbgEngFrames(thread, ctx.InProcDbgEng.Value);
                     }
                 },
                 useInterop: true,
@@ -145,7 +145,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Managed_Detach()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -159,7 +159,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Managed_Terminate()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -173,7 +173,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Interop_Detach()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -189,7 +189,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Interop_Terminate()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -207,7 +207,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Managed_Detach_AlreadyTerminated()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -223,7 +223,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Managed_Terminate_AlreadyTerminated()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -241,7 +241,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Interop_Terminate_AlreadyTerminated()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -332,7 +332,7 @@ namespace ChaosDbg.Tests
         [TestRuntimeMethod]
         public void CordbEngine_Thread_Managed_Type(bool netCore)
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_Type,
                 ctx =>
                 {
@@ -351,7 +351,7 @@ namespace ChaosDbg.Tests
         [TestRuntimeMethod]
         public void CordbEngine_Thread_Native_Type(bool netCore)
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_Type,
                 ctx =>
                 {

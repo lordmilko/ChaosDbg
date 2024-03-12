@@ -2,6 +2,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
+using ChaosLib;
 using ClrDebug;
 using static ChaosDbg.EventExtensions;
 
@@ -28,6 +30,10 @@ namespace ChaosDbg.Cordb
             cb.OnCreateThread += CreateThread;
             cb.OnExitThread += ExitThread;
 
+            cb.OnBreakpoint += Breakpoint;
+            cb.OnDataBreakpoint += DataBreakpoint;
+            cb.OnBreakpointSetError += BreakpointSetError;
+
             cb.OnNameChange += NameChange;
 
             cb.OnAnyEvent += AnyManagedEvent;
@@ -42,10 +48,12 @@ namespace ChaosDbg.Cordb
 
             ucb.OnAnyEvent += AnyUnmanagedEvent;
             ucb.OnCreateProcess += UnmanagedCreateProcess;
+            ucb.OnExitProcess += UnmanagedExitProcess;
             ucb.OnLoadDll += UnmanagedLoadModule;
             ucb.OnUnloadDll += UnmanagedUnloadModule;
             ucb.OnCreateThread += UnmanagedCreateThread;
             ucb.OnExitThread += UnmanagedExitThread;
+            ucb.OnException += UnmanagedException;
         }
 
         #region ChaosDbg Event Handlers
@@ -72,12 +80,17 @@ namespace ChaosDbg.Cordb
         private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
             HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadExit)], args);
 
+        private void RaiseBreakpointHit(EngineBreakpointHitEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.BreakpointHit)], args);
+
         #endregion
         #region PreEvent
 
         private void PreManagedEvent(object sender, CorDebugManagedCallbackEventArgs e)
         {
             PreEventCommon();
+
+            Session.CallbackContext.ClearManaged();
         }
 
         private void PreUnmanagedEvent(object sender, DebugEventCorDebugUnmanagedCallbackEventArgs e)
@@ -85,19 +98,21 @@ namespace ChaosDbg.Cordb
             //Always do this first so that the callback context is overwritten
             PreEventCommon();
 
+            Session.CallbackContext.ClearUnmanaged();
+
             //Store some information about who the event pertains to
             Session.CallbackContext.UnmanagedEventProcessId = e.DebugEvent.dwProcessId;
             Session.CallbackContext.UnmanagedEventThreadId = e.DebugEvent.dwThreadId;
             Session.CallbackContext.UnmanagedOutOfBand = e.OutOfBand;
+            Session.CallbackContext.UnmanagedContinue = true;
+            Session.CallbackContext.UnmanagedEventType = e.DebugEvent.dwDebugEventCode;
         }
 
         private void PreEventCommon()
         {
             Debug.Assert(Session.Process != null, "Didn't have a process!");
 
-            Session.CurrentStopCount++;
-            Session.CallbackContext.Clear();
-            Session.PauseContext.Clear();
+            Session.CallbackStopCount++;
         }
 
         #endregion
@@ -125,6 +140,15 @@ namespace ChaosDbg.Cordb
 
             var module = Process.Modules.Add(e.Process);
 
+            if (!Session.IsInterop)
+            {
+                //Add the history so that we can see that we've had a managed event and will know that the CLR has been loaded
+                Session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
+
+                //Let's kick off a load for CLR symbols now so that they're ready for when we need them
+                Task.Run(() => Process.Symbols.TryRegisterCLR());
+            }
+
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
         }
 
@@ -135,12 +159,15 @@ namespace ChaosDbg.Cordb
             if (module != null)
                 RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
 
-            //On Windows, a process has not truly exited until we receive the EXIT_PROCESS_DEBUG_EVENT. My observation has been that, when interop debugging,
-            //we always receive EXIT_PROCESS_DEBUG_EVENT prior to receiving the managed ExitProcess event. While I don't know whether a process handle being signalled
-            //because it exited necessarily proves that EXIT_PROCESS_DEBUG_EVENT has also been fired. at this stage I don't see any reason why this would even matter
+            /* On Windows, a process has not truly exited until we receive the EXIT_PROCESS_DEBUG_EVENT. My observation has been that, when interop debugging,
+             * we always receive EXIT_PROCESS_DEBUG_EVENT prior to receiving the managed ExitProcess event. While I don't know whether a process handle
+             * being signalled because it exited necessarily proves that EXIT_PROCESS_DEBUG_EVENT has also been fired. At this stage I don't see any
+             * reason why this would even matter.
+             *
+             * Even if the CLR hasn't been loaded, and we never received a managed CreateProcess event, we'll still receive a managed ExitProcess event */
 
             //Signal the wait as completed
-            Session.WaitExitProcess.SetResult(null);
+            Session.WaitExitProcess.Set();
         }
 
         private void UnmanagedCreateProcess(object sender, CREATE_PROCESS_DEBUG_INFO e)
@@ -154,6 +181,15 @@ namespace ChaosDbg.Cordb
             /* When attaching, NtDebugActiveProcess will call DbgkpPostFakeProcessCreateMessages to send us a bunch of fake
              * CREATE_PROCESS_DEBUG_EVENT, CREATE_THREAD_DEBUG_EVENT and LOAD_DLL_DEBUG_EVENT messages, immediately bringing
              * us up to speed */
+
+            /* CordbWin32EventThread::ThreadProc() very annoyingly calls DebugSetProcessKillOnExit(FALSE)
+             * which prevents the debuggee from terminating when the parent debugger terminates. This is very annoying when
+             * interop debugging, where you'll likely have stopped at a breakpoint. If you terminate the process before
+             * continuing, even though you may have removed the breakpoint, the breakpoint _event_ was not marked as handled
+             * (via ContinueDebugEvent) and so the process then crashes saying there was an unhandled exception. mscordbi doesn't
+             * even support _detaching_ from a target process, so it makes no sense that we shouldn't kill the debuggee when the
+             * debugger terminates */
+            Kernel32.DebugSetProcessKillOnExit(true);
 
             /* Register the thread for the main thread. There won't be a separate CREATE_THREAD_DEBUG_EVENT event for this.
              * When interop debugging, due to the fact you have to let the process start running before you can actually attach
@@ -174,6 +210,15 @@ namespace ChaosDbg.Cordb
                 lpImageName = e.lpImageName,
                 fUnicode = e.fUnicode
             });
+
+            //Flag this module as being the primary module of a process, so we know what module to remove
+            //when we hit our UnmanagedExitProcess event
+            Process.Modules.SetAsProcess(e.lpBaseOfImage, Session.CallbackContext.UnmanagedEventProcessId);
+        }
+
+        private void UnmanagedExitProcess(object sender, EXIT_PROCESS_DEBUG_INFO e)
+        {
+            Process.Modules.RemoveProcessModule(Session.CallbackContext.UnmanagedEventProcessId);
         }
 
         #endregion
@@ -354,6 +399,168 @@ namespace ChaosDbg.Cordb
         }
 
         #endregion
+        #region Breakpoint / Exception
+
+        private void Breakpoint(object sender, BreakpointCorDebugManagedCallbackEventArgs e)
+        {
+            //Change the active thread to whoever encountered this exception
+            Process.Threads.SetActiveThread(e.Thread);
+
+            //Ensure that we don't automatically continue, and add a reason why not
+            AddManagedPause(e, new CordbManagedBreakpointEventPauseReason());
+
+            var breakpoint = Process.Breakpoints.GetBreakpoint(e.Breakpoint);
+
+            RaiseBreakpointHit(new EngineBreakpointHitEventArgs(breakpoint));
+        }
+
+        private void DataBreakpoint(object sender, DataBreakpointCorDebugManagedCallbackEventArgs e)
+        {
+            //Change the active thread to whoever encountered this exception
+            Process.Threads.SetActiveThread(e.Thread);
+
+            throw new NotImplementedException();
+        }
+
+        private void BreakpointSetError(object sender, BreakpointSetErrorCorDebugManagedCallbackEventArgs e)
+        {
+            throw new NotImplementedException();
+        }
+
+        private unsafe void UnmanagedException(object sender, EXCEPTION_DEBUG_INFO e)
+        {
+            //Change the active thread to whoever encountered this exception
+            Process.Threads.SetActiveThread(Session.CallbackContext.UnmanagedEventThreadId);
+
+            /* Whenever we hit an unmanaged breakpoint, we need to clear the 0xcc byte so that we can execute the normal
+             * instruction. But this then creates a problem: we need to re-add that breakpoint so that we hit it next time!
+             * We solve this by "deferring" the reinsertion of the breakpoint until we hit the _next_ instruction, meaning
+             * we'll need to insert a sneaky step on that instruction so that we can reinsert the breakpoint. If it just so
+             * happens that there's already a "normal" breakpoint on the next instruction, even better: we'll just rely on that
+             * instead. This logic will also catch the user doing a single step - a step is just a regular breakpoint (just temporary) */
+            Process.Breakpoints.ProcessDeferredBreakpoint();
+
+            //See the comments in CordbBreakpoint.cs for information on how code breakpoints work in the CLR
+
+            /* How does DbgEng handle exceptions?
+             * LiveUserTargetInfo::ProcessDebugEvent
+             * LiveUserTargetInfo::ProcessEventException
+             * ProcessBreakpointOrStepException
+             *     if its STATUS_BREAKPOINT its a breakpoint
+             * CheckBreakpointOrStepTrace
+             * CheckBreakpointHit
+             * RemoveBreakpoints
+             *
+             * CodeBreakpoint::Remove
+             * LiveUserTargetInfo::RemoveCodeBreakpoint
+             *
+             * Amd64MachineInfo::InsertThreadDataBreakpoints ?
+             */
+
+            //You MUST call CorDebugProcess.ClearCurrentException() for any breakpoints you handle. Otherwise, any subsequent actions you try and perform (such as stepping)
+            //will be ignored
+            switch (e.ExceptionRecord.ExceptionCode)
+            {
+                case NTSTATUS.STATUS_BREAKPOINT:
+                    ProcessStatusBreakpoint(e.ExceptionRecord.ExceptionAddress);
+                    break;
+
+                case NTSTATUS.STATUS_SINGLE_STEP:
+                    ProcessSingleStep();
+                    break;
+
+                default:
+                    throw new NotImplementedException($"Don't know how to handle an exception with code {e.ExceptionRecord.ExceptionCode}");
+            }
+        }
+
+        private unsafe void ProcessStatusBreakpoint(IntPtr exceptionAddress)
+        {
+            /* When debugging .NET Framework, the first breakpoint we receive will be the loader breakpoint, because
+             * we call ICorDebug.CreateProcess() using DEBUG_ONLY_THIS_PROCESS. However, when debugging .NET Core,
+             * we first create the process standalone, hook the CLR startup event, and then call ICorDebug.DebugActiveProcess,
+             * which also appears to result in a breakpoint being triggered (https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocess)
+             */
+
+            /* First thing's first, if we just hit a 0xcc, then the IP is now pointing to the instruction after it.
+             * If this breakpoint belongs to us, we need to rewind so that we can display (and then execute) the original instruction
+             * upon resuming. If this breakpoint doesn't belong to us, we need to display the fact that the int3, and not the instruction
+             * after it, is the current instruction. Either way, we need to rewind our IP by 1.
+             *
+             * When the debuggee is resumed, if the breakpoint did belong to us, we'll have replaced it with the original instruction, which
+             * we will now execute. If the breakpoint did not belong to us, we need to reverse the decrement we did on the IP (which, remember,
+             * we only did for display purposes) so that we resume execution from the instruction after the breakpoint*/
+            var thread = Session.CallbackContext.UnmanagedEventThread;
+            thread.RegisterContext.IP--;
+
+            if (Session.DidCreateProcess)
+            {
+                if (!Session.HaveLoaderBreakpoint)
+                {
+                    //On attach, the "loader breakpoint" will be the "attach breakpoint" described under https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocess
+
+                    Session.HaveLoaderBreakpoint = true;
+
+                    //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE to ContinueDebugEvent()
+                    Process.CorDebugProcess.ClearCurrentException(thread.Id);
+
+                    RaiseBreakpointHit(new EngineBreakpointHitEventArgs(new CordbSpecialBreakpoint(CordbSpecialBreakpointKind.Loader)));
+                    AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+                    return;
+                }
+            }
+
+            if (Process.Breakpoints.TryGetBreakpoint(exceptionAddress, out var breakpoint))
+            {
+                if (breakpoint.IsOneShot)
+                {
+                    Process.Breakpoints.Remove(breakpoint);
+                }
+                else
+                {
+                    //Temporarily suspend this breakpoint so that we can execute its normal CPU instruction
+                    breakpoint.SetSuspended(true);
+                }
+
+                /* DbgEng seems to play funny games with globally storing its context, reusing it any time anyone asks a context related question (e.g. as part of a stack trace
+                 * or showing register values), only commiting its changes when the debugger resumes execution. We don't want to have messy global state. As such, we're forced
+                /* to commit our changes we've made immediately */
+                thread.TrySaveRegisterContext();
+
+                //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE (DBG_FORCE_CONTINUE in Longhorn) to ContinueDebugEvent()
+                Process.CorDebugProcess.ClearCurrentException(thread.Id);
+
+                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(breakpoint));
+                AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+
+                //It's important that we do this _after_ we record the pause state above. We'll now lie and say that
+                //the event wasn't an OOB event so that we don't automatically continue. When the user resumes, we'll
+                //use the fact that we paused during an OOB event (as recorded in the pause reason) to do an OOB continue
+                if (breakpoint is CordbRawCodeBreakpoint)
+                    Session.CallbackContext.UnmanagedOutOfBand = false;
+            }
+            else
+            {
+                //It's an unhandled exception then!
+
+                Process.Symbols.TrySymFromAddr((long) (void*) exceptionAddress, Symbol.SymFromAddrOption.Safe, out var unhandledTarget);
+
+                throw new NotImplementedException("Processing unhandled exceptions is not implemented");
+            }
+        }
+
+        private void ProcessSingleStep()
+        {
+            var tid = Session.CallbackContext.UnmanagedEventThreadId;
+
+            //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE (DBG_FORCE_CONTINUE in Longhorn) to ContinueDebugEvent()
+            Process.CorDebugProcess.ClearCurrentException(tid);
+
+            RaiseBreakpointHit(new EngineBreakpointHitEventArgs(null)); //temp
+            AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+        }
+
+        #endregion
 
         private void AnyManagedEvent(object sender, CorDebugManagedCallbackEventArgs e)
         {
@@ -395,8 +602,10 @@ namespace ChaosDbg.Cordb
             }
             else
             {
+                //At this point, if we're attaching, there are no more queued callbacks remaining, and we can now say that we're ready to go
                 if (Session.IsAttaching)
                 {
+                    //Now that we're no longer in the process of attaching, let's finally identify all of our special threads
                     Process.Threads.IdentifySpecialThreads(null);
                     Session.IsAttaching = false;
                 }
@@ -410,7 +619,7 @@ namespace ChaosDbg.Cordb
             }
             else
             {
-                OnStopping();
+                OnStopping(false);
             }
         }
 
@@ -420,10 +629,31 @@ namespace ChaosDbg.Cordb
             if (Session.CallbackContext.NeedHistory)
                 Session.EventHistory.Add(CordbNativeEventHistoryItem.New(e));
 
-            DoContinue(Process.CorDebugProcess, e.OutOfBand, isUnmanaged: true);
+            //If we're trying to do evil things like step through the CLR, we'll have modified the OOB status
+            var outOfBand = Session.CallbackContext.UnmanagedOutOfBand;
+
+            if (Session.CallbackContext.UnmanagedContinue)
+            {
+                DoContinue(Process.CorDebugProcess, outOfBand, isUnmanaged: true);
+            }
+            else
+            {
+                //We want to stop. If this is an out of band event however, we can't stop, else the CLR will lock up. So instead, we'll increment our desired stop count.
+                //As soon as we stop processing unmanaged events, we'll actually stop
+                if (outOfBand)
+                {
+                    Session.CallbackStopCount++;
+                    DoContinue(Process.CorDebugProcess, outOfBand: true, isUnmanaged: true);
+                }
+                else
+                {
+                    //Not out of band. We successfully stopped!
+                    OnStopping(true);
+                }
+            }
         }
 
-        private void OnStopping()
+        private void OnStopping(bool unmanaged)
         {
             //We're not continuing. Update debugger state
 
@@ -435,18 +665,49 @@ namespace ChaosDbg.Cordb
                 //to the DAC.
                 Process.DAC.Threads.Refresh();
             }
+
+            //Regardless of how we try and stop the engine, we need to assert that we've added a reason that we're stopping
+            Session.CallbackContext.EnsureHasStopReason(unmanaged);
+
+            Session.UserPauseCount++;
+
+            NotifyEngineStatus();
         }
 
-        private void SetEngineStatus(EngineStatus newStatus)
+        private void NotifyEngineStatus()
         {
-            var oldStatus = Session.Status;
+            var currentStatus = Session.Status;
 
-            if (oldStatus != newStatus)
+            var oldlastStatus = Session.LastStatus;
+
+            if (oldlastStatus != currentStatus)
             {
-                Session.Status = newStatus;
+                Debug.WriteLine($"{oldlastStatus} -> {currentStatus}");
 
-                RaiseEngineStatusChanged(new EngineStatusChangedEventArgs(oldStatus, newStatus));
+                Session.LastStatus = currentStatus;
+
+                RaiseEngineStatusChanged(new EngineStatusChangedEventArgs(oldlastStatus, currentStatus));
             }
+        }
+
+        private void AddManagedPause(CorDebugManagedCallbackEventArgs e, CordbManagedEventPauseReason reason)
+        {
+            if (e == null)
+                throw new ArgumentNullException(nameof(e));
+
+            if (reason == null)
+                throw new ArgumentNullException(nameof(reason));
+
+            e.Continue = false;
+
+            Session.EventHistory.Add(reason);
+        }
+
+        private void AddUnmanagedPause(CordbNativeEventPauseReason reason)
+        {
+            Session.CallbackContext.UnmanagedContinue = false;
+
+            Session.EventHistory.Add(reason);
         }
     }
 }

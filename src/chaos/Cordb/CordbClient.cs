@@ -1,10 +1,14 @@
 ﻿using System;
 using System.CommandLine.Parsing;
+using System.Diagnostics;
 using System.Threading;
 using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
+using ChaosDbg.Disasm;
+using ChaosDbg.Metadata;
+using ChaosDbg.Symbol;
 
 namespace chaos
 {
@@ -21,6 +25,8 @@ namespace chaos
 
         protected IConsole Console { get; }
 
+        private string lastCommand;
+
         public CordbClient(
             IConsole console,
             CordbEngineProvider engineProvider,
@@ -35,13 +41,13 @@ namespace chaos
             RegisterCallbacks();
         }
 
-        public void Execute(string executable, bool minimized, bool interop, CancellationToken token = default)
+        public void Execute(string executable, bool minimized, bool interop, FrameworkKind? frameworkKind = null, CancellationToken token = default)
         {
             cancellationToken = token;
 
             Console.RegisterInterruptHandler(Console_CancelKeyPress);
 
-            engineProvider.CreateProcess(executable, minimized, interop);
+            engineProvider.CreateProcess(executable, minimized, interop, frameworkKind);
 
             EngineLoop();
         }
@@ -65,6 +71,8 @@ namespace chaos
         {
             Console.WriteLine("****************** BREAK ******************");
 
+            OutputCurrentInfo();
+
             while (engine.Session.Status == EngineStatus.Break && !cancellationToken.IsCancellationRequested)
             {
                 //If we get any out of band events, we want them to be shown above our prompt
@@ -78,15 +86,34 @@ namespace chaos
                     //There doesn't seem to be a super great way of interrupting the console,
                     //but in the case of our unit tests, our ReadLine is fake anyway so it doesn't matter
                     command = Console.ReadLine();
+
+                    if (string.IsNullOrEmpty(command) && !string.IsNullOrEmpty(lastCommand))
+                        command = lastCommand;
                 }
                 finally
                 {
                     Console.ExitWriteProtection();
                 }
 
-                if (!string.IsNullOrEmpty(command))
+                if (string.IsNullOrEmpty(command))
+                    Console.WriteLine();
+                else
+                {
                     ExecuteCommand(command);
+                }
             }
+        }
+
+        private void OutputCurrentInfo()
+        {
+            var ip = engine.Process.Threads.ActiveThread.RegisterContext.IP;
+
+            engine.Process.Symbols.TrySymFromAddr(ip, SymFromAddrOption.Safe, out var symbol);
+
+            Console.WriteLine($"{symbol?.ToString() ?? ip.ToString("X")}:");
+
+            var instr = engine.Process.ProcessDisassembler.Disassemble(ip);
+            Console.WriteLine(instr);
         }
 
         private void PrintPrompt()
@@ -103,14 +130,7 @@ namespace chaos
             else
             {
                 parseResult.Invoke();
-            }
-        }
-
-        private void PrintModules()
-        {
-            foreach (var module in engine.Process.Modules)
-            {
-                Console.WriteLine(module);
+                lastCommand = command;
             }
         }
 
@@ -158,6 +178,10 @@ namespace chaos
                     extra = "[OutOfBand] ";
 
                 Console.WriteLine($"{extra}ThreadExit {e.Thread}");
+            };
+            engineProvider.BreakpointHit += (s, e) =>
+            {
+                Console.WriteLine($"Hit {e.Breakpoint}");
             };
         }
 

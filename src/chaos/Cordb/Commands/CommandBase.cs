@@ -1,4 +1,5 @@
-﻿using ChaosDbg.Cordb;
+﻿using ChaosDbg;
+using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
@@ -13,6 +14,14 @@ namespace chaos.Cordb.Commands
         {
             Console = console;
             this.engineProvider = engineProvider;
+        }
+
+        protected string FormatAddr(long address)
+        {
+            if (engine.Process.Is32Bit)
+                return address.ToString("x8");
+
+            return $"{(address >> 32):x8}`{((int) address):x8}";
         }
 
         protected void Error(string message) => Console.WriteColorLine(message, System.ConsoleColor.Red);

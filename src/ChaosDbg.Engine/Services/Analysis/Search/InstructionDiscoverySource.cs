@@ -38,7 +38,7 @@ namespace ChaosDbg.Analysis
 
         #region Sources
 
-        public ISymbol? Symbol { get; set; }
+        public IUnmanagedSymbol? Symbol { get; set; }
 
         public IImageRuntimeFunctionInfo? RuntimeFunction { get; set; }
 

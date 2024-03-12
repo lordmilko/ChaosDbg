@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
-using ChaosLib;
+using ChaosDbg.Symbol;
+using ChaosLib.Metadata;
 using ClrDebug;
 using Iced.Intel;
 using static ClrDebug.HRESULT;
@@ -17,51 +17,51 @@ namespace ChaosDbg.Cordb
     public class CordbDisasmSymbolResolver : IIndirectSymbolResolver
     {
         private CordbProcess process;
-        private SOSDacInterface sos;
-        private DacpUsefulGlobalsData usefulGlobals;
 
         //If all we got was "this value exists inside some module", this is very hard to read through when we get a spew of disassembly. Thus, we apply a different text kind to things that actually represent "real" symbols
         private readonly FormatterTextKind FullSymbolKind = FormatterTextKind.Label;
         private readonly FormatterTextKind NoisySymbolKind = FormatterTextKind.LabelAddress;
 
+        /// <summary>
+        /// Gets or sets the disassembler to use for resolving indirect symbol addresses.
+        /// </summary>
         public INativeDisassembler ProcessDisassembler { get; set; }
-
-        //We can't use Lazy<T> here, because asking for the value will call Debugger.NotifyOfCrossThreadDependency()
-        //which can cause a ThreadAbortException to cancel the debugger display.
-        private ProcessModule[] processModules;
-        private ProcessModule[] ProcessModules
-        {
-            get
-            {
-                if (processModules == null)
-                {
-                    //Always get a fresh Process object to ensure our Modules list is up to date
-                    processModules = Process.GetProcessById(process.Id).Modules.Cast<ProcessModule>().ToArray();
-                }
-
-                return processModules;
-            }
-        }
 
         public CordbDisasmSymbolResolver(CordbProcess process)
         {
             this.process = process;
-            this.sos = process.DAC.SOS;
-            usefulGlobals = sos.UsefulGlobals;
         }
 
         public bool TryGetSymbol(in Instruction instruction, int operand, int instructionOperand, ulong address, int addressSize, out SymbolResult symbol)
         {
             //Partially based on dnSpy ClrDacImpl.cs!TryGetSymbolCore and SOS disasmX86.cpp!HandleValue
 
-            //Fast path out tiny addresses
-            if (address < 0x1000)
+            //Fast path out tiny addresses, or addresses so big they're clearly negative numbers
+            if (address < 0x10_000 || ((long) address) < 0)
             {
                 symbol = default;
                 return false;
             }
 
-            bool isFallback = false;
+            symbol = default;
+
+            if (instructionOperand != -1)
+            {
+                switch (instruction.GetOpKind(operand))
+                {
+                    case OpKind.Immediate8to32:
+                        if (((int) address) == -1)
+                            return false;
+
+                        break;
+
+                    case OpKind.Immediate32:
+                        if ((int) address == int.MaxValue) //0x7fffffff
+                            return false;
+
+                        break;
+                }
+            }
 
             if (instruction.MemoryBase is Register.EIP or Register.RIP)
             {
@@ -72,29 +72,54 @@ namespace ChaosDbg.Cordb
                  *
                  * If you attempt to resolve the address that the indirect call is being made against, you'll tend to resolve a symbol with a large displacement belonging
                  * to the _calling_ function. But the whole point of this operation is that we want to resolve a symbol belonging to a callee! Thus, we say that when we're
-                 * trying to resolve an indirect call, we ONLY allow processing managed symbols. While we would ideally like to show the symbols belonging to the indirection
+                 * trying to resolve an indirect call, we ONLY allow processing native symbols. While we would ideally like to show the symbols belonging to the indirection
                  * address as well, it results in such a big spew of symbols (that may have a '+' sign in them themselves) that it's quite hard to see that this symbol being
                  * listed ISN'T actually the target of the call, but just the base of a very large displacement. */
 
-                if (TryGetNativeSymbol(address, out var symbolName, out var displacement, out isFallback))
+                if (process.Symbols.TrySymFromAddr((long) address, SymFromAddrOption.Fallback | SymFromAddrOption.CLR, out var displacedSymbol))
                 {
-                    symbol = MakeSymbol(address, displacement, symbolName, isFallback);
+                    symbol = MakeSymbol(displacedSymbol);
                     return true;
                 }
             }
             else
             {
                 //No indirection. Allow asking for managed symbols
-                if (TryGetManagedSymbol(address, out var symbolName, out var displacement) || TryGetNativeSymbol(address, out symbolName, out displacement, out isFallback))
+
+                var isValidAddress = TestIsValidAddress(address);
+
+                /* Most SOS introspection methods have a tendancy to just blast ahead assuming the address we passed is valid, and then throwing an exception when it turns out
+                 * the passed address isn't valid after all. This really slows down the performance of trying to resolve symbols for every single random operand that may be a pointer
+                 * to something. To mitigate this, we split our symbol resolution logic up into tiers, so that methods that are guaranteed not to throw can be tried before the more
+                 * spray and pray ones.
+                 *
+                 * Note that if we can immediately see that the address isn't even valid, don't even bother trying to execute lookups that may throw. It's just
+                 * a waste of time (and performance) */
+
+                //Just do safe, non-indirecting lookups to start with
+                var options = SymFromAddrOption.Safe & ~SymFromAddrOption.Thunk;
+
+                //We'll risk doing dangerous checks if the address is at least valid
+                if (isValidAddress)
+                    options |= SymFromAddrOption.DangerousManaged;
+
+                if (process.Symbols.TrySymFromAddr((long) address, options, out var displacedSymbol))
                 {
                     //Don't use full symbol kind when it's just a conditional jump (indicating we're likely going somewhere else inside the current method). This makes the output easier to read
-                    symbol = MakeSymbol(address, displacement, symbolName, isFallback || instruction.FlowControl == FlowControl.ConditionalBranch);
+                    symbol = MakeSymbol(displacedSymbol, instruction.FlowControl == FlowControl.ConditionalBranch);
                     return true;
                 }
             }
 
-            symbol = default;
             return false;
+        }
+
+        private bool TestIsValidAddress(ulong address)
+        {
+            //Doesn't matter whether it's managed or not
+            var hr = process.DataTarget.TryReadVirtual<byte>(address, out _);
+
+            return hr == S_OK;
         }
 
         public bool TryGetIndirectSymbol(in Instruction instruction, ulong address, int addressSize, out ulong targetAddress, out SymbolResult symbol)
@@ -109,27 +134,39 @@ namespace ChaosDbg.Cordb
 
             if (TryReadPointer(address, addressSize, out targetAddress))
             {
-                if (TryGetManagedSymbol(targetAddress, out var symbolName, out var displacement))
+                var isValidAddress = TestIsValidAddress(targetAddress);
+
+                //If it's an unmanaged stub, don't try and resolve it. The CLR gives a super generic name for thunks, and obviously anything that throws is going to be a waste of time
+                var options = SymFromAddrOption.Safe & ~SymFromAddrOption.Thunk;
+
+                if (isValidAddress)
+                    options |= SymFromAddrOption.DangerousManaged;
+
+                if (process.Symbols.TrySymFromAddr((long) targetAddress, options, out var displacedSymbol))
                 {
-                    symbol = MakeSymbol(targetAddress, displacement, symbolName);
+                    symbol = MakeSymbol(displacedSymbol);
                     return true;
                 }
 
                 //Does the address point to a thunk that then calls into the CLR?
-                if (TryGetThunk(instruction, targetAddress, out targetAddress, out symbol))
+                if (TryGetThunk(instruction, targetAddress, out var thunkAddress, out symbol))
+                {
+                    targetAddress = thunkAddress;
                     return true;
+                }
 
                 //Try and resolve native symbols last. When an address does lie inside a module, we'll obviously get a fallback symbol, but we want to prefer
                 //retrieving thunk information first if it is available
-                if (TryGetNativeSymbol(targetAddress, out symbolName, out displacement, out var isFallback))
+                if (process.Symbols.TrySymFromAddr((long) targetAddress, SymFromAddrOption.Fallback, out displacedSymbol))
                 {
-                    symbol = MakeSymbol(targetAddress, displacement, symbolName, isFallback);
+                    symbol = MakeSymbol(displacedSymbol);
                     return true;
                 }
             }
 
             targetAddress = default;
             symbol = default;
+
             return false;
         }
 
@@ -147,7 +184,8 @@ namespace ChaosDbg.Cordb
             switch (addressSize)
             {
                 case 4:
-                    if (((ICLRDataTarget) process.DAC.DataTarget).TryReadVirtual<uint>(address, out var raw) == S_OK)
+                    //Doesn't need to be a managed read
+                    if (process.DataTarget.TryReadVirtual<uint>(address, out var raw) == S_OK)
                     {
                         result = raw;
                         return true;
@@ -156,138 +194,12 @@ namespace ChaosDbg.Cordb
                     return false;
 
                 case 8:
-                    return ((ICLRDataTarget) process.DAC.DataTarget).TryReadVirtual(address, out result) == S_OK;
+                    //Doesn't need to be a managed read
+                    return process.DataTarget.TryReadVirtual(address, out result) == S_OK;
 
                 default:
                     throw new NotImplementedException($"Don't know how to read pointer of size {address}");
             }
-        }
-
-        /// <summary>
-        /// Tries to resolve an address to a managed entity known to SOS.
-        /// </summary>
-        /// <param name="address">The address to resolve.</param>
-        /// <param name="name">The name of the retrieved symbol.</param>
-        /// <param name="displacement">The displacement of <see cref="name"/> relative to <see cref="address"/>.</param>
-        /// <returns></returns>
-        private bool TryGetManagedSymbol(ulong address, out string name, out ulong displacement)
-        {
-            var targetAddress = address;
-            displacement = 0;
-
-            //If the address is for a MethodDesc, the IP needs to be resolved to the MethodDesc it actually pertains to. If this is a jump instruction, the address
-            //could be part way into the method. It would seem that ultimately the IP is resolved to a MethodDesc via IJitManager::JitCodeToMethodInfo
-            if (sos.TryGetCodeHeaderData(targetAddress, out var codeHeader) == S_OK)
-                targetAddress = codeHeader.MethodDescPtr;
-
-            if (sos.TryGetJitHelperFunctionName(targetAddress, out name) == S_OK)
-                return true;
-
-            if (sos.TryGetMethodTableData(targetAddress, out _) == S_OK)
-                return sos.TryGetMethodTableName(targetAddress, out name) == S_OK;
-
-            if (new DacpMethodDescData().Request(sos.Raw, targetAddress) == S_OK)
-            {
-                if (sos.TryGetMethodDescName(targetAddress, out name) == S_OK)
-                {
-                    //When the JITType is TYPE_UNKNOWN, the MethodStart will be NULL
-                    if (codeHeader.MethodStart != 0)
-                        displacement = address - codeHeader.MethodStart;
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private unsafe bool TryGetNativeSymbol(ulong address, out string name, out ulong displacement, out bool isFallback)
-        {
-            isFallback = default;
-
-            if (process.Session.IsInterop)
-            {
-                //When we're interop debugging, DbgHelp will have all of our native modules in it
-
-                if (TryGetDbgHelpSymbol(address, out name, out displacement))
-                    return true;
-            }
-            else
-            {
-                //Fast path: it's a managed module that's known to us. There won't be any good symbols for it
-                if (process.Modules.TryGetModuleForAddress((long) address, out var module))
-                {
-                    name = Path.GetFileNameWithoutExtension(module.Name);
-
-                    displacement = address - module.BaseAddress;
-                    isFallback = true;
-                    return true;
-                }
-
-                /* Because we don't receive notification events for module unloads, it's not exactly safe to load every single module we try and find symbols for. Also, we expect most of our modules will be managed, so we don't want to waste
-                 * a bunch of time trying to locate symbols for modules that might not even have them. As such, we only try and load native symbols for the CLR. In non-interop mode, it's assumed that a process is purely managed, and when the CLR goes
-                 * away so does our debugging session */
-
-                //We've seen this module before and specially decided to load symbols for it. Fast path
-                if (process.DbgHelp.TrySymGetModuleBase64((long) address, out var moduleBase) == S_OK)
-                {
-                    if (TryGetDbgHelpSymbol(address, out name, out displacement))
-                        return true;
-
-                    //Failed to get a symbol from Dbghelp. We know which module it is at least, so emulate the logic we do below
-                    name = Path.GetFileNameWithoutExtension(Kernel32.GetModuleFileNameExW(process.Handle, (IntPtr) moduleBase));
-                    displacement = address - (ulong) moduleBase;
-                    isFallback = true;
-                    return true;
-                }
-
-                //Slow path: we don't know what module this address belongs to (or if its even within a module at all). Pull a list of (lazily loaded) modules in the target process,
-                //and enumerate through them to try and find a match
-
-                foreach (var processModule in ProcessModules)
-                {
-                    var baseAddress = (ulong) (void*) processModule.BaseAddress;
-                    var end = baseAddress + (uint) processModule.ModuleMemorySize;
-
-                    if (address >= baseAddress && address <= end)
-                    {
-                        //We found the module that this address should belong to. Load it into DbgHelp for next time
-
-                        name = Path.GetFileNameWithoutExtension(processModule.ModuleName);
-
-                        if (CordbNativeModule.IsCLRName(Path.GetFileName(processModule.ModuleName)))
-                        {
-                            process.DbgHelp.AddVirtualModule(processModule.FileName, (long) baseAddress, processModule.ModuleMemorySize);
-
-                            if (TryGetDbgHelpSymbol(address, out name, out displacement))
-                                return true;
-                        }
-
-                        displacement = address - baseAddress;
-                        isFallback = true;
-                        return true;
-                    }
-                }
-            }
-
-            name = default;
-            displacement = default;
-            isFallback = true;
-            return false;
-        }
-
-        private bool TryGetDbgHelpSymbol(ulong address, out string name, out ulong displacement)
-        {
-            if (process.DbgHelp.TrySymFromAddr((long) address, out var result) == S_OK)
-            {
-                name = result.SymbolInfo.ToString();
-                displacement = (ulong) result.Displacement;
-                return true;
-            }
-
-            name = default;
-            displacement = default;
-            return false;
         }
 
         #region Thunk
@@ -344,10 +256,10 @@ namespace ChaosDbg.Cordb
 
             ulong displacement = 0;
 
-            if (sos.TryGetJitHelperFunctionName(address, out var name) == S_OK || TryGetNativeSymbol(address, out name, out displacement, out _))
+            if (process.Symbols.TrySymFromAddr((long) address, SymFromAddrOption.Managed | SymFromAddrOption.Native, out var symbol))
             {
                 targetAddress = address;
-                result = MakeSymbol(targetAddress, displacement, $"Thunk -> {name}");
+                result = MakeSymbol(targetAddress, displacement, $"Thunk -> {symbol.Symbol}");
                 return true;
             }
 
@@ -541,13 +453,17 @@ namespace ChaosDbg.Cordb
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SymbolResult MakeSymbol(ulong address, ulong displacement, string name, bool isNoisy)
+        private SymbolResult MakeSymbol(IDisplacedSymbol displacedSymbol, bool? shouldReduceAttention = null)
         {
             //A "noisy" symbol is something that is like foo.exe+0x1000 (not very helpful) or in some cases other types of instructions such as conditional jumps (we don't need to draw attention to them)
 
             //If the symbol is foo+0x100, the symbol foo is -0x100 from the symbol we resolved. Iced will see that the output address
             //is different from the input address and add +0x100 to the resulting output
-            return new SymbolResult(address - displacement, name, isNoisy ? NoisySymbolKind : FullSymbolKind);
+            return new SymbolResult(
+                (ulong) displacedSymbol.Address - (ulong) displacedSymbol.Displacement,
+                displacedSymbol.Symbol.ToString(),
+                displacedSymbol is DisplacedMissingSymbol || shouldReduceAttention == true ? NoisySymbolKind : FullSymbolKind
+            );
         }
     }
 }

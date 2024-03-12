@@ -1,6 +1,7 @@
 ﻿using ChaosDbg.WinMD;
 using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Unit = Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
 {
@@ -10,7 +11,7 @@ namespace ChaosDbg.Tests
         private static WindowsMetadataProvider provider;
 
         [ClassInitialize]
-        public static void ClassInitialize(TestContext context)
+        public static void ClassInitialize(Unit.TestContext context)
         {
             var sig = new SigReader();
             provider = new WindowsMetadataProvider(sig);

@@ -4,9 +4,11 @@ using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
-    class DbgHelpDisasmSymbolResolver : ISymbolResolver
+    class DbgHelpDisasmSymbolResolver : IIndirectSymbolResolver
     {
         private readonly DbgHelpSession dbgHelpSession;
+
+        public INativeDisassembler ProcessDisassembler { get; set; }
 
         public DbgHelpDisasmSymbolResolver(DbgHelpSession dbgHelpSession)
         {
@@ -27,6 +29,13 @@ namespace ChaosDbg.Disasm
             symbol = new SymbolResult(address - (ulong) result.Displacement, result.SymbolInfo.Name);
 
             return true;
+        }
+
+        public bool TryGetIndirectSymbol(in Instruction instruction, ulong address, int addressSize, out ulong targetAddress, out SymbolResult symbol)
+        {
+            targetAddress = default;
+            symbol = default;
+            return false;
         }
     }
 }

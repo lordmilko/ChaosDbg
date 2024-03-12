@@ -161,10 +161,32 @@ namespace ChaosDbg.Evaluator.Masm
             {
                 var exclamationMark = EatToken();
 
-                //Can'tt have ntdll!1, it must be an identifier. So if the next token is a number, it'll be a NumericLiteralToken
-                var function = EatToken(MasmSyntaxKind.IdentifierToken, $"Couldn't resolve error at '{moduleOrIdentifier}!{CurrentToken}'");
+                MasmSyntaxToken GetSymbolExpression()
+                {
+                    switch (CurrentToken.Kind)
+                    {
+                        case MasmSyntaxKind.IdentifierToken:
+                        case MasmSyntaxKind.AsteriskToken: //foo!*
+                            return EatToken();
 
-                return new SymbolFunctionExpressionSyntax(moduleOrIdentifier, exclamationMark, function);
+                        default:
+                            //Can't have ntdll!1, it must be an identifier. So if the next token is a number, it'll be a NumericLiteralToken
+                            return EatToken(MasmSyntaxKind.IdentifierToken, $"Couldn't resolve error at '{moduleOrIdentifier}!{CurrentToken}'");
+                    }
+                }
+
+                ExpressionSyntax identifier = new IdentifierNameSyntax(GetSymbolExpression());
+
+                while (CurrentToken.Kind == MasmSyntaxKind.ColonColonToken)
+                {
+                    var colon = EatToken();
+
+                    var right = new IdentifierNameSyntax(GetSymbolExpression());
+
+                    identifier = new QualifiedNameSyntax(identifier, colon, right);
+                }
+
+                return new SymbolModuleQualifiedExpressionSyntax(moduleOrIdentifier, exclamationMark, identifier);
             }
 
             return new SymbolIdentifierExpressionSyntax(moduleOrIdentifier);
@@ -284,7 +306,7 @@ namespace ChaosDbg.Evaluator.Masm
                 case MasmSyntaxKind.NumericLiteralExpression:
                 case MasmSyntaxKind.RegisterLiteralExpression:
                 case MasmSyntaxKind.ParenthesizedExpression:
-                case MasmSyntaxKind.SymbolFunctionExpression:
+                case MasmSyntaxKind.SymbolModuleExpression:
                 case MasmSyntaxKind.SymbolIdentifierExpression:
                     return Precedence.Primary;
                 default:

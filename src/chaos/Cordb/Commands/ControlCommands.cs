@@ -1,4 +1,5 @@
 ﻿using System;
+using ChaosDbg;
 using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
@@ -13,6 +14,18 @@ namespace chaos.Cordb.Commands
         public void Go()
         {
             engine.Continue();
+        }
+
+        [Command("p")]
+        public void StepOver()
+        {
+            engine.StepOverNative();
+        }
+
+        [Command("t")]
+        public void StepInto()
+        {
+            engine.StepIntoNative();
         }
 
         [Command("exit")]

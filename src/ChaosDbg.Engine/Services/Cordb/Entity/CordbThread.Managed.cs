@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Linq;
+using System.Collections.Generic;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -37,9 +37,9 @@ namespace ChaosDbg.Cordb
             public int VolatileOSThreadID => CorDebugThread.VolatileOSThreadID;
 
             /// <inheritdoc cref="CordbThread.Handle" />
-            public IntPtr Handle => CorDebugThread.Handle;
+            public IntPtr Handle { get; }
 
-            public CordbFrame[] StackTrace => CordbFrameEnumerator.V3.Enumerate(this).ToArray();
+            public IEnumerable<CordbFrame> EnumerateFrames() => CordbFrameEnumerator.V3.Enumerate(this);
 
             public ManagedAccessor(CorDebugThread corDebugThread)
             {
@@ -49,6 +49,10 @@ namespace ChaosDbg.Cordb
                 //however in rare scenarios the object will already be neutered and
                 //asking for it from the CorDebugThread will fail
                 Id = CorDebugThread.Id;
+
+                //If we've stopped at an unmanaged event, we won't be able to receive our thread handle as we won't
+                //be synchronized
+                Handle = CorDebugThread.Handle;
             }
         }
     }

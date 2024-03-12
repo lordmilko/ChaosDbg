@@ -5,41 +5,22 @@ using System.Threading;
 using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
+using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
 
 namespace ChaosDbg.Tests
 {
-    public class CallbackContext : IDisposable
-    {
-        public CordbEngine CordbEngine { get; }
-
-        public Lazy<DbgEngEngine> DbgEngEngine { get; }
-
-        public CallbackContext(CordbEngine cordbEngine, Lazy<DbgEngEngine> dbgEngEngine)
-        {
-            CordbEngine = cordbEngine;
-            DbgEngEngine = dbgEngEngine;
-        }
-
-        public void Dispose()
-        {
-            CordbEngine?.Dispose();
-
-            if (DbgEngEngine.IsValueCreated)
-                DbgEngEngine.Value.Dispose();
-        }
-    }
-
     public abstract class BaseTest
     {
-        public TestContext TestContext { get; set; }
+        public Microsoft.VisualStudio.TestTools.UnitTesting.TestContext TestContext { get; set; }
 
         [ThreadStatic]
         private IServiceProvider serviceProvider;
@@ -62,7 +43,9 @@ namespace ChaosDbg.Tests
 
                         typeof(ILDisassemblerProvider),
 
-                        { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
+                        typeof(DbgEngRemoteClientProvider),
+
+                        { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
                         { typeof(IPEFileProvider), typeof(MockPEFileProvider) },
                         { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                         { typeof(ISigReader), typeof(SigReader) }
@@ -128,28 +111,46 @@ namespace ChaosDbg.Tests
             }
         }
 
-        protected void TestDebugCreate(
+        //Launch a process via CordbEngine.CreateProcess, and have it signal an event to inform us it ran all the way to a point
+        //where it can signal an event
+        protected void TestSignalledDebugCreate(
             Either<TestType, NativeTestType> testType,
-            Action<CallbackContext> action,
+            Action<TestContext> action,
             bool matchCurrentProcess = true,
             bool netCore = false,
             bool useInterop = false,
-            bool native = false,
-            ExeKind? exeKind = null)
+            bool nativeTestApp = false,
+            FrameworkKind? frameworkKind = null,
+            bool waitForSignal = true,
+            string customExe = null)
         {
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
                 throw new InvalidOperationException("ICorDebug can only be interacted with from an MTA thread. Attempting to interact with ICorDebug (such as calling Stop()) will cause E_NOINTERFACE errors.");
 
             var cordbEngineProvider = GetService<CordbEngineProvider>();
 
-            var path = GetTestAppPath(matchCurrentProcess, netCore, native);
+            string path;
+            string commandLine;
 
-            Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
+            if (customExe == null)
+            {
+                path = GetTestAppPath(matchCurrentProcess, netCore, nativeTestApp);
+                commandLine = $"\"{path}\" {(testType.IsLeft ? testType.Left.ToString() : ((int) testType.Right).ToString())} {EventName}";
+
+                Environment.SetEnvironmentVariable("CHAOSDBG_TEST_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
+            }
+            else
+            {
+                path = customExe;
+                commandLine = path;
+            }
+
+            using var ctx = new TestContext(cordbEngineProvider, path);
 
             using var cordbEngine = (CordbEngine) cordbEngineProvider.CreateProcess(
-                $"\"{path}\" {(testType.IsLeft ? testType.Left.ToString() : ((int) testType.Right).ToString())} {EventName}",
+                commandLine,
                 useInterop: useInterop,
-                exeKind: exeKind);
+                frameworkKind: frameworkKind);
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
@@ -157,14 +158,17 @@ namespace ChaosDbg.Tests
 
             try
             {
-                eventHandle.WaitOne();
+                if (waitForSignal)
+                {
+                    eventHandle.WaitOne();
 
-                //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
-                Thread.Sleep(100);
+                    //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
+                    Thread.Sleep(100);
 
-                cordbEngine.Break();
+                    cordbEngine.Break();
+                }
 
-                using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+                ctx.InProcDbgEng = new Lazy<DbgEngEngine>(() =>
                 {
                     //Note: creating a DebugClient will cause DbgHelp's global options to be modified
 
@@ -175,7 +179,7 @@ namespace ChaosDbg.Tests
                     dbgEngEngine.Execute(".loadby sos clr");
 
                     return dbgEngEngine;
-                }));
+                });
 
                 action(ctx);
             }
@@ -192,9 +196,57 @@ namespace ChaosDbg.Tests
             }
         }
 
+        protected void TestNativeMain(Action<TestContext> action)
+        {
+            TestSignalledDebugCreate(
+                NativeTestType.Com,
+                ctx =>
+                {
+                    ctx.OutOfProcDbgEng = new Lazy<DbgEngRemoteClient>(() =>
+                    {
+                        var clientProvider = GetService<DbgEngRemoteClientProvider>();
+
+                        var remoteClient = clientProvider.CreateDebuggerServer(ctx.Process.Id);
+
+                        return remoteClient;
+                    });
+
+                    //Wait for loader BP. We should hit an int 3
+                    ctx.WaitForBreakpoint();
+                    Assert.IsTrue(ctx.CurrentInstruction.Instruction.Code == Code.Int3);
+
+                    ctx.MoveTo("wmain");
+
+                    action(ctx);
+                },
+                useInterop: true,
+                nativeTestApp: true,
+                frameworkKind: FrameworkKind.NetFramework,
+                waitForSignal: false
+            );
+        }
+
+        protected void TestCLR(Action<TestContext> action)
+        {
+            TestSignalledDebugCreate(
+                default,
+                ctx =>
+                {
+                    ctx.WaitForBreakpoint();
+
+                    _ = ctx.ActiveThread.StackTrace;
+
+                    action(ctx);
+                },
+                useInterop: true,
+                waitForSignal: false,
+                customExe: "pwsh.exe"
+            );
+        }
+
         protected void TestDebugAttach(
             Either<TestType, NativeTestType> testType,
-            Action<CallbackContext> action,
+            Action<TestContext> action,
             bool netCore = false,
             bool useInterop = false,
             bool native = false)
@@ -222,7 +274,9 @@ namespace ChaosDbg.Tests
 
                     cordbEngine.Break();
 
-                    using var ctx = new CallbackContext(cordbEngine, new Lazy<DbgEngEngine>(() =>
+                    using var ctx = new TestContext(cordbEngineProvider, Process.GetProcessById(cordbEngine.Process.Id).ProcessName);
+
+                    ctx.InProcDbgEng = new Lazy<DbgEngEngine>(() =>
                     {
                         //Note: creating a DebugClient will cause DbgHelp's global options to be modified
 
@@ -236,7 +290,7 @@ namespace ChaosDbg.Tests
                         Debug.WriteLine("!!! Got break!");
 
                         return dbgEngEngine;
-                    }));
+                    });
 
                     action(ctx);
                 },

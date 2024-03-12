@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using ChaosDbg.Cordb;
 using ChaosLib;
+using IConsole = ChaosDbg.IConsole;
 
 namespace chaos.Cordb.Commands
 {

@@ -10,7 +10,7 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbEngineServices
     {
-        public IExeTypeDetector ExeTypeDetector { get; }
+        public IFrameworkTypeDetector FrameworkTypeDetector { get; }
 
         public NativeLibraryProvider NativeLibraryProvider { get; }
 
@@ -21,13 +21,13 @@ namespace ChaosDbg.Cordb
         public IPEFileProvider PEFileProvider { get; }
 
         public CordbEngineServices(
-            IExeTypeDetector exeTypeDetector,
+            IFrameworkTypeDetector frameworkTypeDetector,
             NativeLibraryProvider nativeLibraryProvider,
             INativeDisassemblerProvider nativeDisasmProvider,
             ILDisassemblerProvider ilDisasmProvider,
             IPEFileProvider peFileProvider)
         {
-            ExeTypeDetector = exeTypeDetector;
+            FrameworkTypeDetector = frameworkTypeDetector;
             NativeLibraryProvider = nativeLibraryProvider;
             NativeDisasmProvider = nativeDisasmProvider;
             ILDisasmProvider = ilDisasmProvider;

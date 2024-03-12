@@ -8,7 +8,9 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbInternalFrame : CordbFrame<CorDebugInternalFrame>
     {
-        internal CordbInternalFrame(CorDebugInternalFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        public override CordbVariable[] Variables => throw new System.NotImplementedException();
+
+        internal CordbInternalFrame(CorDebugInternalFrame corDebugFrame, CordbThread thread, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, thread, module, context)
         {
         }
     }

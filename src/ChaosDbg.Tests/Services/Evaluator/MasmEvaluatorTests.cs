@@ -12,6 +12,10 @@ namespace ChaosDbg.Tests.Evaluator
             Test("ntdll", 0x77a60000);
 
         [TestMethod]
+        public void MasmEvaluator_ModuleName_WithDot() =>
+            Test("foo.bar", 20);
+
+        [TestMethod]
         public void MasmEvaluator_ModuleAndFunction() =>
             Test("ntdll!LdrInitializeThunk", 0x77abdc60);
 
@@ -139,6 +143,10 @@ namespace ChaosDbg.Tests.Evaluator
             Test(".", 0x77b18087); //Should get the current IP value
 
         [TestMethod]
+        public void MasmEvaluator_Scope() =>
+            Test("foo!bar::baz", 40);
+
+        [TestMethod]
         public void MasmEvaluator_InvalidSymbol() =>
             TestError("foo", "Couldn't resolve error at 'foo'");
 
@@ -194,7 +202,7 @@ namespace ChaosDbg.Tests.Evaluator
 
         private void Test(string expr, long expected)
         {
-            var actual = MasmEvaluator.Evaluate(expr, new TestEvaluatorContext());
+            var actual = new MasmEvaluator(new TestEvaluatorContext()).Evaluate(expr);
 
             Assert.AreEqual(expected, actual);
         }
@@ -202,7 +210,7 @@ namespace ChaosDbg.Tests.Evaluator
         private void TestError(string expr, string message)
         {
             AssertEx.Throws<InvalidExpressionException>(
-                () => MasmEvaluator.Evaluate(expr, new TestEvaluatorContext()),
+                () => new MasmEvaluator(new TestEvaluatorContext()).Evaluate(expr),
                 message
             );
         }

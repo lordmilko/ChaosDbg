@@ -30,6 +30,7 @@
         OpenBracketToken, //[
         CloseBracketToken, //]
         ColonToken, //:
+        ColonColonToken, //::
         SemicolonToken,
         AmpersandToken, //&
         CaretToken, //^
@@ -59,9 +60,12 @@
 
         EndOfFileToken,
 
+        IdentifierName,
+        QualifiedName,
+
         PseudoFunctionExpression,
         SymbolIdentifierExpression,
-        SymbolFunctionExpression,
+        SymbolModuleExpression,
 
         ParenthesizedExpression,
 

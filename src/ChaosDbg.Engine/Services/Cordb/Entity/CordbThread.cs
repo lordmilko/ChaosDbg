@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -338,7 +339,57 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool IsManaged => Accessor is ManagedAccessor;
 
-        public CordbFrame[] StackTrace => Accessor.StackTrace;
+        public IEnumerable<CordbFrame> EnumerateFrames() => Accessor.EnumerateFrames();
+
+        public CordbFrame[] StackTrace => EnumerateFrames().ToArray();
+
+        private CrossPlatformContext registerContext;
+
+        /// <summary>
+        /// Gets the current register context of this thread.<para/>
+        /// The returned context is a full context with all registers populated.
+        /// </summary>
+        public CrossPlatformContext RegisterContext
+        {
+            get
+            {
+                if (registerContext == null)
+                {
+                    //If you look at the registers requested in dbgeng!Amd64MachineInfo::InitializeContextFlags, it's basically just AMD64ContextAll/
+                    //after factoring in that we're in user mode
+                    var flags = Process.Is32Bit ? ContextFlags.X86ContextAll : ContextFlags.AMD64ContextAll;
+
+                    //Don't think we can query CordbProcess::GetThreadContext on the Win32 Event Thread
+                    var raw = Process.DataTarget.GetThreadContext<CROSS_PLATFORM_CONTEXT>(
+                        Id,
+                        flags
+                    );
+
+                    registerContext = new CrossPlatformContext(flags, raw);
+                }
+
+                return registerContext;
+            }
+        }
+
+        /// <summary>
+        /// Commits any changes that were made to this thread's <see cref="RegisterContext"/>.
+        /// </summary>
+        /// <param name="clear">Whether to clear the cached context from this thread after saving.</param>
+        public void TrySaveRegisterContext(bool clear = false)
+        {
+            if (registerContext == null)
+                return;
+
+            //I don't think we can call CordbProcess::SetThreadContext on the Win32 Event THread
+            if (registerContext.IsModified)
+                Process.DataTarget.SetThreadContext(Id, registerContext.Raw);
+
+            if (clear)
+                registerContext = null;
+            else
+                registerContext.IsModified = false;
+        }
 
         public CordbThread(int userId, ICordbThreadAccessor threadAccessor, CordbProcess process)
         {
@@ -404,7 +455,7 @@ namespace ChaosDbg.Cordb
             /// <inheritdoc cref="CordbThread.Handle" />
             IntPtr Handle { get; }
 
-            CordbFrame[] StackTrace { get; }
+            IEnumerable<CordbFrame> EnumerateFrames();
         }
 
         #endregion

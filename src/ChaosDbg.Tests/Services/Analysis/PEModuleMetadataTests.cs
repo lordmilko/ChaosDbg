@@ -923,7 +923,7 @@ namespace ChaosDbg.Tests
         private unsafe void TestMatchAllFunctions(
             SymbolStoreKey moduleKey,
             PEMetadataSearchOptions options,
-            Func<ISymbolModule, INativeDisassembler, ISymbolModule> mockSymbolModule,
+            Func<IUnmanagedSymbolModule, INativeDisassembler, IUnmanagedSymbolModule> mockSymbolModule,
             Action<PEMetadataPhysicalModule> validate,
             bool liveNtdll = false)
         {
@@ -960,7 +960,7 @@ namespace ChaosDbg.Tests
                 var is32Bit = IntPtr.Size == 4;
                 var symbolResolver = new DbgHelpDisasmSymbolResolver(dbgHelp);
 
-                ISymbolModule symbolModule;
+                IUnmanagedSymbolModule symbolModule;
 
                 if (mockSymbolModule == null)
                     symbolModule = dbgHelpModule;

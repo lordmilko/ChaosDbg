@@ -8,9 +8,20 @@ namespace ChaosDbg
     {
         #region x86
 
+        public static long GetRegisterValue(this CrossPlatformContext context, Register register)
+        {
+            if (context.IsX86)
+                return context.Raw.X86Context.GetRegisterValue(register);
+
+            if (context.IsAmd64)
+                return context.Raw.Amd64Context.GetRegisterValue(register);
+
+            throw new NotImplementedException($"Don't know what CPU architecture the register context is (flags: {context.Flags})");
+        }
+
         public static int GetRegisterValue(this in X86_CONTEXT context, Register register)
         {
-            var fullRegister = register.GetFullRegister();
+            var fullRegister = register.GetFullRegister32();
 
             var result = GetFullRegisterValue(context, fullRegister);
 

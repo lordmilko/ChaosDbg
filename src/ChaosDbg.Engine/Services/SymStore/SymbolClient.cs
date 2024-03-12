@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ChaosDbg.SymStore
 {
@@ -59,7 +60,7 @@ namespace ChaosDbg.SymStore
             return result;
         }
 
-        public string GetPdb(string modulePath)
+        public async Task<string> GetPdbAsync(string modulePath, CancellationToken token)
         {
             using (var fileStream = File.Open(modulePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -84,7 +85,7 @@ namespace ChaosDbg.SymStore
                     //In this sample we're synchronous, however in a real debugger while doing a stack trace you could potentially
                     //run special logic symbols for all modules you see in the stack simultaneously. You know when a module is present
                     //by looking up an address between the bounds of all modules you know about
-                    var file = StoreChain.GetFile(key, CancellationToken.None).GetAwaiter().GetResult();
+                    var file = await StoreChain.GetFile(key, token);
 
                     var result = GetCachedFile(key.Index);
 

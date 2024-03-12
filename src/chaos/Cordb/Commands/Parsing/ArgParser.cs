@@ -40,7 +40,7 @@ namespace chaos
 
                 while (true)
                 {
-                    var ch = Next();
+                    var ch = Next(false);
 
                     if (ch == '\0')
                         break;
@@ -62,7 +62,7 @@ namespace chaos
                 chars = args.ToCharArray();
         }
 
-        public char Next()
+        public char Next(bool skipSpaces = true)
         {
             while (true)
             {
@@ -72,7 +72,7 @@ namespace chaos
                 var ch = chars[current];
                 current++;
 
-                if (ch == ' ')
+                if (ch == ' ' && skipSpaces)
                     continue;
 
                 return ch;

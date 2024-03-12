@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ChaosLib;
+using ChaosDbg.Symbol;
 using ChaosLib.Metadata;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -23,6 +23,9 @@ namespace ChaosDbg.Cordb
              * We already have ISymbolModule objects saved on the modules maintained by our debugger, so retrieve
              * those instead of creating duplicate instances */
 
+            if (addr == 0)
+                return default;
+
             if (process.Modules.TryGetModuleForAddress(addr, out var module))
             {
                 if (module is CordbNativeModule m)
@@ -32,15 +35,15 @@ namespace ChaosDbg.Cordb
                     //I suppose it's possible to have an assembly with absolutely no symbols in it?
 
                     if (inlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
-                        symbol = m.SymbolModule.GetInlineSymbolFromAddress(addr, inlineFrameContext.ContextValue);
+                        symbol = m.SymbolModule!.GetInlineSymbolFromAddress(addr, inlineFrameContext.ContextValue);
                     else
-                        symbol = m.SymbolModule.GetSymbolFromAddress(addr);
+                        symbol = m.SymbolModule!.GetSymbolFromAddress(addr);
 
                     return (symbol, m.SymbolModule);
                 }
 
-                if (process.DbgHelp.TrySymFromAddr(addr, out var symbolResult) == HRESULT.S_OK)
-                    throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.SymbolInfo.ModuleBase:X} which ChaosDbg wasn't able to detect as having symbols.");
+                if (process.Symbols.TrySymFromAddr(addr, SymFromAddrOption.Native, out var symbolResult))
+                    throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.Module.Address:X} which ChaosDbg wasn't able to detect as having symbols.");
 
                 return default;
             }
@@ -93,8 +96,22 @@ namespace ChaosDbg.Cordb
                 var process = accessor.Thread.Process;
 
                 //If we can't query for frames because the thread has died, not much we can really do!
-                if (accessor.CorDebugThread.TryCreateStackWalk(out var stackWalk) != S_OK)
-                    return Array.Empty<CordbFrame>();
+                switch (accessor.CorDebugThread.TryCreateStackWalk(out var stackWalk))
+                {
+                    case S_OK:
+                        break;
+
+                    case CORDBG_E_PROCESS_NOT_SYNCHRONIZED:
+                        //If we did something naughty like set a breakpoint inside the CLR, we can't show a managed stack trace at this point,
+                        //but we _can_ attempt to do a native stack trace instead!
+                        if (process.Session.IsInterop)
+                            return Native.Enumerate(accessor.Thread).ToArray();
+
+                        return Array.Empty<CordbFrame>();
+
+                    default:
+                        return Array.Empty<CordbFrame>();
+                }
 
                 var contextFlags = GetContextFlags(accessor.Thread.Process.MachineType);
 
@@ -128,7 +145,7 @@ namespace ChaosDbg.Cordb
                          * way of truly knowing what's a native frame and what's not! But since our managed frames will report the same IP regardless
                          * of whether we query them via ICorDebug or a native stack walker, we'll simply make note that there's meant to be a
                          * transition here, and then at the end we can do a stack walk up until any managed frames that then follow. */
-                        results.Add(new CordbNativeTransitionFrame(context));
+                        results.Add(new CordbNativeTransitionFrame(accessor.Thread, context));
                     }
                     else
                     {
@@ -139,25 +156,25 @@ namespace ChaosDbg.Cordb
                         else if (frame is CorDebugInternalFrame @internal)
                             throw new NotImplementedException($"V3 stack walker returned a {frame.GetType().Name}. This should be impossible.");
                         else if (frame is CorDebugNativeFrame native)
-                            results.Add(GetRuntimeNativeFrame(process, native, context));
+                            results.Add(GetRuntimeNativeFrame(process, accessor.Thread, native, context));
                         else if (frame is CorDebugILFrame il)
-                            results.Add(GetILFrame(process, il, context));
+                            results.Add(GetILFrame(process, accessor.Thread, il, context));
                         else
                             throw new NotImplementedException($"Don't know how to handle a {frame.GetType().Name}");
                     }
                 }
 
                 if (process.Session.IsInterop)
-                    return ResolveNativeFrames(process, accessor.Handle, process.DAC.DataTarget, process.DbgHelp, results);
+                    return ResolveNativeFrames(process, accessor, process.DataTarget, process.Symbols, results);
 
                 return results.ToArray();
             }
 
             private static CordbFrame[] ResolveNativeFrames(
                 CordbProcess process,
-                IntPtr hThread,
+                CordbThread.ManagedAccessor accessor,
                 ICLRDataTarget dataTarget,
-                DbgHelpSession dbgHelpSession,
+                DebuggerSymbolProvider symbolProvider,
                 List<CordbFrame> frames)
             {
                 /* Ostensibly, we'd like to iterate over all of our frames, and any time we see a transition frame,
@@ -173,19 +190,19 @@ namespace ChaosDbg.Cordb
 
                 using var walker = new NativeStackWalker(
                     dataTarget,
-                    dbgHelpSession,
+                    symbolProvider,
                     process.Session.PauseContext.DynamicFunctionTableCache,
                     (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );
 
                 //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(dbgHelpSession.hProcess, hThread, frames[0].Context).ToArray();
+                var nativeFrames = walker.Walk(symbolProvider.hProcess, accessor.Handle, frames[0].Context).ToArray();
 
                 //Concat our native and ICorDebug derived frames together. The stack pointer of each frame should increase
                 //as you go from more recent function calls to older function calls. I'm not sure if this solution of merging
                 //our native and managed frames together is either dodgy or genius
                 var allFrames = nativeFrames
-                    .Select(n => new {n.SP, Value = (object) n})
+                    .Select(n => new {SP = n.FrameSP, Value = (object) n})
                     .Concat(frames.Select(f => new {f.Context.SP, Value = (object) f}))
                     .OrderBy(v => v.SP)
                     .ToArray();
@@ -206,10 +223,10 @@ namespace ChaosDbg.Cordb
                         if (i < allFrames.Length - 1 && allFrames[i + 1].Value is CordbFrame c2 && !(c2 is CordbNativeTransitionFrame) && c2.Context.SP == item.SP)
                             continue;
 
-                        process.Modules.TryGetModuleForAddress(native.IP, out var module);
+                        process.Modules.TryGetModuleForAddress(native.FrameIP, out var module);
 
                         //It's a normal NativeFrame then
-                        newFrames.Add(new CordbNativeFrame(native, module));
+                        newFrames.Add(new CordbNativeFrame(native, accessor.Thread, module));
                     }
                     else
                     {
@@ -224,33 +241,41 @@ namespace ChaosDbg.Cordb
                 return newFrames.ToArray();
             }
 
-            private static CordbFrame GetRuntimeNativeFrame(CordbProcess process, CorDebugNativeFrame corDebugNativeFrame, CrossPlatformContext context)
+            private static CordbFrame GetRuntimeNativeFrame(CordbProcess process, CordbThread thread, CorDebugNativeFrame corDebugNativeFrame, CrossPlatformContext context)
             {
-                //It should be a "runtime native" frame. In the V3 stackwalker, this basically refers to frames that would have previously
-                //been referred to as "internal frames". A CorDebugNativeFrame does not contain an IL frame inside it when it either has no metadata,
-                //or when its function type is "native". In the latter case, there is metadata we can get at to name the function.
+                /* It should be a "runtime native" frame. In the V3 stackwalker, this basically refers to frames that would have previously
+                 * been referred to as "internal frames". A CorDebugNativeFrame does not contain an IL frame inside it when it either has no metadata,
+                 * or when its function type is "native". In the latter case, there is metadata we can get at to name the function. */
 
-                if (corDebugNativeFrame.TryGetFunction(out var function) == S_OK)
+                /* CordbFrame::GetFunction internally throws when you ask whether it has a function. This is bad for performance. We can circumvent this
+                 * by instead calling CordbFrame::GetFunctionToken() internally (which may return null) and then checking whether the token is valid or not.
+                 * Both a null function and an invalid function token would cause CordbFrame::GetFunction(ICorDebugFunction **ppFunction) to throw.
+                 * Apparently, a nil methodDef can signify a dynamic function */
+                if (corDebugNativeFrame.TryGetFunctionToken(out var methodDef) == S_OK && !methodDef.IsNil)
                 {
-                    //It sounds like it might be a P/Invoke or a QCall
+                    //At this point there's no reason this should fail, but we'll still code defensively in case something changes in the future
+                    if (corDebugNativeFrame.TryGetFunction(out var function) == S_OK)
+                    {
+                        //It sounds like it might be a P/Invoke or a QCall
 
-                    var module = process.Modules.GetModule(function.Module);
+                        var module = process.Modules.GetModule(function.Module);
 
-                    var result = new CordbILTransitionFrame(corDebugNativeFrame, module, context);
+                        var result = new CordbILTransitionFrame(corDebugNativeFrame, thread, module, context);
 
-                    return result;
+                        return result;
+                    }
                 }
 
                 //It's a runtime native frame for sure then
-                return new CordbRuntimeNativeFrame(corDebugNativeFrame, null, context);
+                return new CordbRuntimeNativeFrame(corDebugNativeFrame, thread, null, context);
             }
 
-            private static CordbFrame GetILFrame(CordbProcess process, CorDebugILFrame corDebugILFrame, CrossPlatformContext context)
+            private static CordbFrame GetILFrame(CordbProcess process, CordbThread thread, CorDebugILFrame corDebugILFrame, CrossPlatformContext context)
             {
                 var module = process.Modules.GetModule(corDebugILFrame.Function.Module);
 
                 //Just a regular old IL frame
-                return new CordbILFrame(corDebugILFrame, module, context);
+                return new CordbILFrame(corDebugILFrame, thread, module, context);
             }
         }
     }

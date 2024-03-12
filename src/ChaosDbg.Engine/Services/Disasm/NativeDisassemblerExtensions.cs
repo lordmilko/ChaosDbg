@@ -71,7 +71,7 @@ namespace ChaosDbg.Disasm
             CordbProcess process,
             ISymbolResolver symbolResolver = null)
         {
-            var stream = new CordbMemoryStream(process.DAC.DataTarget);
+            var stream = new CordbMemoryStream(process.DataTarget);
 
             return nativeDisassemblerProvider.CreateDisassembler(stream, process.Is32Bit, symbolResolver);
         }

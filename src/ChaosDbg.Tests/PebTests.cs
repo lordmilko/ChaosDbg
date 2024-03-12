@@ -32,14 +32,12 @@ namespace ChaosDbg.Tests
                     using var nativeLibraryProvider = new NativeLibraryProvider();
                     nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
 
-                    var info = Ntdll.NtQueryInformationProcess<PROCESS_BASIC_INFORMATION>(process.Handle, PROCESSINFOCLASS.ProcessBasicInformation);
-
                     var dbgHelpSession = new DbgHelpSession(process.Handle, invadeProcess: true);
 
                     var reader = new MemoryReader(process.Handle);
-                    var remotePeb = new RemotePeb(info.PebBaseAddress, reader);
+                    var remotePeb = new RemotePeb(process);
 
-                    var typedDataProvider = new TypedDataProvider(dbgHelpSession);
+                    var typedDataProvider = new DbgHelpTypedDataProvider(dbgHelpSession);
 
                     //Ensure we use Peb32 for the purposes of this test, which RemotePeb will resolve
                     var typedPeb = typedDataProvider.CreateObject(remotePeb.Address, "ntdll!_PEB");

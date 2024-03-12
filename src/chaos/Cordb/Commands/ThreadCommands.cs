@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ChaosDbg;
 using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
@@ -118,7 +119,10 @@ namespace chaos.Cordb.Commands
 
                 number: id =>
                 {
-                    
+                    if (engine.Process.Threads.TryGetThreadByUserId(id, out var thread))
+                    {
+                        engine.Process.Threads.ActiveThread = thread;
+                    }
                 },
 
                 all: () => throw new InvalidCommandException("Illegal thread error")

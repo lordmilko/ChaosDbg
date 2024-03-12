@@ -19,10 +19,21 @@ namespace ChaosDbg.Cordb
 
         public CordbProcess Process { get; set; }
 
+        public EngineStatus LastStatus { get; set; }
+
         /// <summary>
         /// Gets or sets the current status of the process.
         /// </summary>
-        public EngineStatus Status { get; set; }
+        public EngineStatus Status
+        {
+            get
+            {
+                if (UserPauseCount == 0)
+                    return EngineStatus.Continue;
+
+                return EngineStatus.Break;
+            }
+        }
 
         /// <summary>
         /// Gets whether both managed and native code are being debugged in the process.
@@ -34,11 +45,24 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the current number of times a managed callback has been entered or Stop() has been called
         /// without subsequently calling Continue(). Any time this value is not 0, the process is not freely running.
+        /// Note that while in the middle of a callback, this value will naturally be greater than 1, and so this value
+        /// cannot be used to determine whether the debugger is actually "paused" from a user perspective.
         /// </summary>
-        public int CurrentStopCount
+        public int CallbackStopCount
         {
             get => currentStopCount;
             set => Interlocked.Exchange(ref currentStopCount, value);
+        }
+
+        private int userPauseCount;
+
+        /// <summary>
+        /// Gets the number of times the engine has currently stopped to prompt for user input. This value should typically be either 0 or 1.
+        /// </summary>
+        public int UserPauseCount
+        {
+            get => userPauseCount;
+            set => Interlocked.Exchange(ref userPauseCount, value);
         }
 
         /// <summary>
@@ -91,9 +115,20 @@ namespace ChaosDbg.Cordb
 
         public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
 
+        /// <summary>
+        /// Gets or sets whether this process was launched directly by the debugger, or whether it was attached to.
+        /// </summary>
+        public bool DidCreateProcess { get; internal set; }
+
+        /// <summary>
+        /// Gets or sets whether the process is in the process of attaching, wherein the debugger will be informed
+        /// of all of the key debugger events that occurred prior to the process becoming debugged.
+        /// </summary>
         internal bool IsAttaching { get; set; }
 
-        public TaskCompletionSource<object> WaitExitProcess { get; } = new TaskCompletionSource<object>();
+        public bool HaveLoaderBreakpoint { get; internal set; }
+
+        public ManualResetEventSlim WaitExitProcess { get; } = new ManualResetEventSlim(false);
 
         public bool IsCLRLoaded => EventHistory.ManagedEventCount > 0;
 
@@ -142,6 +177,7 @@ namespace ChaosDbg.Cordb
             ManagedCallback?.Dispose();
 
             Process?.Dispose();
+            WaitExitProcess.Dispose();
 
             //Clear out essential debugger objects
 

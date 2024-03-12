@@ -13,7 +13,7 @@ namespace ChaosDbg.Cordb
 
         public CordbILFunction Function { get; }
 
-        internal CordbILFrame(CorDebugILFrame corDebugFrame, CordbManagedModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        internal CordbILFrame(CorDebugILFrame corDebugFrame, CordbThread thread, CordbManagedModule module, CrossPlatformContext context) : base(corDebugFrame, thread, module, context)
         {
             Function = new CordbILFunction(corDebugFrame.Function, module);
         }
@@ -21,7 +21,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the arguments and local variables contained in this frame.
         /// </summary>
-        public CordbVariable[] Variables
+        public override CordbVariable[] Variables
         {
             get
             {
@@ -39,9 +39,9 @@ namespace ChaosDbg.Cordb
                     var home = homes[i];
 
                     if (home.TryGetArgumentIndex(out _) == HRESULT.S_OK)
-                        results[i] = new CordbParameterVariable(home, Module);
+                        results[i] = new CordbManagedParameterVariable(home, Module);
                     else
-                        results[i] = new CordbLocalVariable(home, Module);
+                        results[i] = new CordbManagedLocalVariable(home, Module);
                 }
 
                 //Each variable knows its relative offset within memory. In order to get its absolute address, we need to take into consideration
@@ -54,7 +54,7 @@ namespace ChaosDbg.Cordb
 
                 var startAddr = chunks.Single().startAddr;
 
-                foreach (var variable in results)
+                foreach (var variable in results.Cast<CordbManagedVariable>())
                 {
                     var range = variable.CorDebugVariableHome.LiveRange;
 

@@ -67,6 +67,7 @@ namespace ChaosDbg.Cordb
                     return threads.Values.FirstOrDefault();
                 }
             }
+            set => explicitActiveThread = value;
         }
 
         public CordbThread MainThread { get; private set; }
@@ -156,6 +157,13 @@ namespace ChaosDbg.Cordb
             explicitActiveThread = this[corDebugThread.Id];
         }
 
+        internal void SetActiveThread(int id)
+        {
+            var thread = this[id];
+
+            explicitActiveThread = thread;
+        }
+
         internal CordbThread this[int id]
         {
             get
@@ -179,6 +187,10 @@ namespace ChaosDbg.Cordb
                     threads.Remove(thread.Id);
 
                     thread.Exited = true;
+
+                    //If this was our active thread, clear it so that next time we're asked what our ActiveThread is, we pick an implicit one
+                    if (explicitActiveThread?.Id == id)
+                        explicitActiveThread = null;
                 }
 
                 return thread;
@@ -219,6 +231,8 @@ namespace ChaosDbg.Cordb
             {
                 if (process.Session.IsAttaching)
                 {
+                    //When we get a debug event for each thread while attaching, we pass that thread to IdentifySpecialThreads(). When we're finished attaching,
+                    //we specify null, indicating that we now have all our threads (the managed events of which I believe were sent to us in a random order) and now need to choose the best one
                     if (thread != null)
                         return;
 
@@ -328,6 +342,33 @@ namespace ChaosDbg.Cordb
                 throw new NotImplementedException($"Don't know how to choose the best native entry point from {nativeExeCandidates.Count} potential candidates");
 
             throw new NotImplementedException("Couldn't figure out how to identify the main thread");
+        }
+
+        public bool TryGetThreadByUserId(int userId, out CordbThread thread)
+        {
+            lock (threadLock)
+            {
+                foreach (var candidate in threads.Values)
+                {
+                    if (candidate.UserId == userId)
+                    {
+                        thread = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            thread = default;
+            return false;
+        }
+
+        internal void SaveRegisterContexts()
+        {
+            lock (threadLock)
+            {
+                foreach (var thread in threads.Values)
+                    thread.TrySaveRegisterContext(true);
+            }
         }
 
         public IEnumerator<CordbThread> GetEnumerator()

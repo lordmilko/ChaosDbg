@@ -1,5 +1,5 @@
 ﻿using System;
-using ClrDebug;
+using System.Collections.Generic;
 
 namespace ChaosDbg.Cordb
 {
@@ -18,7 +18,7 @@ namespace ChaosDbg.Cordb
 
             public IntPtr Handle { get; }
 
-            public CordbFrame[] StackTrace => CordbFrameEnumerator.Native.Enumerate(this);
+            public IEnumerable<CordbFrame> EnumerateFrames() => CordbFrameEnumerator.Native.Enumerate(Thread);
 
             public NativeAccessor(int id, IntPtr handle)
             {

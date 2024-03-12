@@ -185,7 +185,14 @@ namespace ChaosDbg.Evaluator.Masm
                         break;
 
                     case ':':
-                        SimpleToken(MasmSyntaxKind.ColonToken);
+                        if (NextChar == ':')
+                        {
+                            MoveNext();
+
+                            SimpleToken(MasmSyntaxKind.ColonColonToken);
+                        }
+                        else
+                            SimpleToken(MasmSyntaxKind.ColonToken);
                         break;
 
                     case ';':
@@ -257,7 +264,7 @@ namespace ChaosDbg.Evaluator.Masm
                     case (>= 'a' and <= 'z') or (>= 'A' and <= 'Z'):
                     case >= '0' and <= '9':
                     case '_':
-                        builder.Append(ch);
+                    case '.':
                         break;
 
                     default:
@@ -286,7 +293,12 @@ namespace ChaosDbg.Evaluator.Masm
 
             if (!keywords.TryGetValue(str, out kind))
             {
-                if (registers.TryGetValue(str, out var register))
+                var registerStr = str;
+
+                if (registerStr.StartsWith("@"))
+                    registerStr = str.Substring(1);
+
+                if (registers.TryGetValue(registerStr, out var register))
                 {
                     kind = MasmSyntaxKind.RegisterLiteralToken;
                     value = register;
@@ -300,7 +312,7 @@ namespace ChaosDbg.Evaluator.Masm
                 switch (expectedKind)
                 {
                     case MasmSyntaxKind.RegisterLiteralToken:
-                        AddError($"Bad register error at '@{value}'");
+                        AddError($"Bad register error at '{value}'");
                         break;
 
                     default:
@@ -390,8 +402,6 @@ namespace ChaosDbg.Evaluator.Masm
 
                 if (isValidDigit(ch))
                 {
-                    builder.Append(ch);
-
                     if (!MoveNext())
                         break;
 
@@ -402,8 +412,6 @@ namespace ChaosDbg.Evaluator.Masm
                 {
                     if (allowDelim)
                     {
-                        builder.Append(ch);
-
                         if (!MoveNext())
                             break;
 
@@ -427,7 +435,6 @@ namespace ChaosDbg.Evaluator.Masm
 
         private MasmSyntaxToken SimpleToken(MasmSyntaxKind kind)
         {
-            builder.Append(CurrentChar);
             MoveNext();
             return FinalizeToken(kind);
         }
@@ -446,6 +453,8 @@ namespace ChaosDbg.Evaluator.Masm
 
         public bool MoveNext(int count = 1)
         {
+            builder.Append(CurrentChar);
+
             currentCharIndex += count;
 
             if (char.IsWhiteSpace(CurrentChar))

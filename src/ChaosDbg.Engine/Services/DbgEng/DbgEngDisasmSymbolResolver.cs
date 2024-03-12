@@ -1,11 +1,15 @@
-﻿using ClrDebug.DbgEng;
+﻿using System;
+using ChaosDbg.Disasm;
+using ClrDebug.DbgEng;
 using Iced.Intel;
 
 namespace ChaosDbg.DbgEng
 {
-    public class DbgEngDisasmSymbolResolver : ISymbolResolver
+    public class DbgEngDisasmSymbolResolver : IIndirectSymbolResolver
     {
         private readonly DebugClient client;
+
+        public INativeDisassembler ProcessDisassembler { get; set; }
 
         public DbgEngDisasmSymbolResolver(DebugClient client)
         {
@@ -27,6 +31,12 @@ namespace ChaosDbg.DbgEng
             symbol = new SymbolResult(address - (ulong) result.Displacement, result.NameBuffer);
 
             return true;
+        }
+
+
+        public bool TryGetIndirectSymbol(in Instruction instruction, ulong address, int addressSize, out ulong targetAddress, out SymbolResult symbol)
+        {
+            throw new NotImplementedException();
         }
     }
 }

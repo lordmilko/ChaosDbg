@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using ClrDebug;
+﻿using System.Collections.Generic;
 
 namespace ChaosDbg.Cordb
 {
@@ -13,30 +12,32 @@ namespace ChaosDbg.Cordb
             /// <summary>
             /// Enumerates all frames in a thread that has so far never attempted to execute managed code.
             /// </summary>
-            /// <param name="accessor">The accessor that is used to interact with the native thread.</param>
+            /// <param name="thread">The thread to retrieve a stack trace of. This will typically be a thread with a native accessor,
+            /// however in the event we're doing interop debugging and can't show a managed stack trace because we set a breakpoint
+            /// inside the CLR, we'll fallback to doing a native stack trace instead.</param>
             /// <returns>A list of all frames in the stack trace.</returns>
-            public static CordbFrame[] Enumerate(CordbThread.NativeAccessor accessor)
+            public static IEnumerable<CordbFrame> Enumerate(CordbThread thread)
             {
-                var process = accessor.Thread.Process;
-                var dataTarget = (ICLRDataTarget) process.DAC.DataTarget;
+                var process = thread.Process;
+                var dataTarget = process.DataTarget;
 
                 using var walker = new NativeStackWalker(
                     dataTarget,
-                    process.DbgHelp,
+                    process.Symbols,
                     process.Session.PauseContext.DynamicFunctionTableCache,
                     (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );
 
-                var contextFlags = GetContextFlags(process.MachineType);
-                var context = new CrossPlatformContext(contextFlags, dataTarget.GetThreadContext<CROSS_PLATFORM_CONTEXT>(accessor.Id, contextFlags));
+                var rawFrames = walker.Walk(process.Handle, thread.Handle, thread.RegisterContext);
 
-                var frames = walker.Walk(process.Handle, accessor.Handle, context).ToArray();
-
-                return frames.Select(f =>
+                foreach (var rawFrame in rawFrames)
                 {
-                    process.Modules.TryGetModuleForAddress(f.IP, out var module);
-                    return (CordbFrame) new CordbNativeFrame(f, module);
-                }).ToArray();
+                    process.Modules.TryGetModuleForAddress(rawFrame.FrameIP, out var module);
+
+                    var frame = (CordbFrame) new CordbNativeFrame(rawFrame, thread, module);
+
+                    yield return frame;
+                }
             }
         }
     }

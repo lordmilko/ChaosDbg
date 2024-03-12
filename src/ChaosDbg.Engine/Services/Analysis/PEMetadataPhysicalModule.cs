@@ -26,7 +26,7 @@ namespace ChaosDbg.Analysis
 
         internal PEMetadataPhysicalModule(
             string fileName,
-            ISymbolModule symbolModule,
+            IUnmanagedSymbolModule symbolModule,
             IPEFile physicalPEFile,
             Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, createDisassembler)
         {

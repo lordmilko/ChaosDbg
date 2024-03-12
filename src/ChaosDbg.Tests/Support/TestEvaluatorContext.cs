@@ -6,14 +6,6 @@ namespace ChaosDbg.Tests
 {
     class TestEvaluatorContext : IEvaluatorContext
     {
-        public void BeginEvaluation()
-        {
-        }
-
-        public void EndEvaluation()
-        {
-        }
-
         public long GetRegisterValue(Register register)
         {
             switch (register)
@@ -45,7 +37,34 @@ namespace ChaosDbg.Tests
 
         public long GetCurrentIP() => 0x77b18087;
 
-        public bool TryGetSymbolValue(string symbolName, out long address)
+        public bool TryGetModuleQualifiedSymbolValue(string moduleName, string symbolName, out long address)
+        {
+            switch (moduleName)
+            {
+                case "ntdll":
+                    switch (symbolName)
+                    {
+                        case "LdrInitializeThunk":
+                            address = 0x77abdc60;
+                            return true;
+                    }
+                    break;
+
+                case "foo":
+                    switch (symbolName)
+                    {
+                        case "bar::baz":
+                            address = 40;
+                            return true;
+                    }
+                    break;
+            }
+
+            address = default;
+            return false;
+        }
+
+        public bool TryGetSimpleSymbolValue(string symbolName, out long address)
         {
             switch (symbolName)
             {
@@ -53,8 +72,8 @@ namespace ChaosDbg.Tests
                     address = 0x77a60000;
                     return true;
 
-                case "ntdll!LdrInitializeThunk":
-                    address = 0x77abdc60;
+                case "foo.bar":
+                    address = 20;
                     return true;
 
                 default:

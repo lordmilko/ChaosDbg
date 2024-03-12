@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using ChaosDbg;
 using ChaosDbg.Cordb;
 using ClrDebug;
 
@@ -14,9 +15,9 @@ namespace chaos.Cordb.Commands
         [Command("r")]
         public void Register()
         {
-            var frame = engine.Process.Threads.ActiveThread.StackTrace.First();
-
-            var context = frame.Context;
+            var thread = engine.Process.Threads.ActiveThread;
+            var frame = thread.EnumerateFrames().First(); //The context of the frame may be different from the context of the thread (e.g. we moved IP back because we're at a breakpoint)
+            var context = thread.RegisterContext;
 
             if (context.IsAmd64)
             {

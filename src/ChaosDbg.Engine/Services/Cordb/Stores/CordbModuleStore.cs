@@ -3,8 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using ChaosDbg.Analysis;
-using ChaosLib.Metadata;
+using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
 using ClrDebug;
 
@@ -19,7 +18,8 @@ namespace ChaosDbg.Cordb
 
         private Dictionary<CORDB_ADDRESS, CordbManagedModule> managedModules = new Dictionary<CORDB_ADDRESS, CordbManagedModule>();
         private Dictionary<CORDB_ADDRESS, CordbNativeModule> nativeModules = new Dictionary<CORDB_ADDRESS, CordbNativeModule>();
-        private Dictionary<ICorDebugProcess, CordbProcessModule> processModules = new Dictionary<ICorDebugProcess, CordbProcessModule>();
+        private Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule> managedProcessModules = new Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule>();
+        private Dictionary<int, CordbNativeModule> nativeProcessModules = new Dictionary<int, CordbNativeModule>();
 
         private CordbProcess process;
 
@@ -38,40 +38,78 @@ namespace ChaosDbg.Cordb
         /// <returns>A <see cref="CordbManagedModule"/> that encapsulates the raw <see cref="CorDebugModule"/>.</returns>
         internal CordbManagedModule Add(CorDebugModule corDebugModule)
         {
+            //This method is extremely performance critical. Any slowdowns in this thread will have a drastic effect on the performance of the process,
+            //due to the sheer number of modules it may have to load.
+
             IPEFile peFile = null;
+            var preferNativePE = false;
+            RelativeToAbsoluteStream stream = null;
+            var needFullPELoad = false;
 
             if (!corDebugModule.IsDynamic)
             {
-                var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, corDebugModule.BaseAddress);
+                stream = CordbMemoryStream.CreateRelative(process.DataTarget, corDebugModule.BaseAddress);
 
-                //We don't need to worry about getting symbol information for managed modules. If a module is a C++/CLI module,
-                //we'll get a native module load event prior to this managed load event, and we'll get the native symbol information
-                //in that event.
-                peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All);
+                if (process.Session.IsInterop)
+                    preferNativePE = true;
+                else
+                {
+                    //Defer querying the non-essential directories until we access the CordbModule.PEFile.
+                    //We'll also try and asynchronously eagerly load them on the Symbol Resolution Thread
+                    peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+                    needFullPELoad = true;
+                }
             }
+
+            CordbManagedModule module;
 
             lock (moduleLock)
             {
-                var module = new CordbManagedModule(corDebugModule, process, peFile);
-
-                managedModules.Add(corDebugModule.BaseAddress, module);
+                CordbNativeModule native = null;
 
                 if (process.Session.IsInterop)
                 {
-                    if (nativeModules.TryGetValue(corDebugModule.BaseAddress, out var native))
+                    if (nativeModules.TryGetValue(corDebugModule.BaseAddress, out native))
                     {
                         if (native.ManagedModule != null)
                             throw new InvalidOperationException($"Cannot set managed module: native module '{native}' already has a native module associated with it.");
-
-                        native.ManagedModule = module;
-                        module.NativeModule = native;
                     }
                 }
 
-                process.Assemblies.LinkModule(module);
+                if (preferNativePE)
+                {
+                    if (native != null)
+                    {
+                        //Don't ask for the public PEFile, as that will force symbol resolution which we're not ready for
+                        peFile = native.GetRawPEFile();
+                    }
+                    else
+                    {
+                        //Uh oh, need to resolve the PEFile under the lock!
+                        peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+                        needFullPELoad = true;
+                    }
+                }
 
-                return module;
+                module = new CordbManagedModule(corDebugModule, process, peFile);
+
+                if (native != null)
+                {
+                    native.ManagedModule = module;
+                    module.NativeModule = native;
+                }
+
+                managedModules.Add(corDebugModule.BaseAddress, module);
             }
+
+            //We don't need to add a managed module to our symbol store; we only resolve managed symbols when we see them
+
+            process.Assemblies.LinkModule(module);
+
+            if (needFullPELoad)
+                process.Symbols.DeferCalculateModuleInfoAsync(module.Name, corDebugModule.BaseAddress, peFile, resolvePESymbols: false);
+
+            return module;
         }
 
         /// <summary>
@@ -81,30 +119,28 @@ namespace ChaosDbg.Cordb
         /// <returns>A <see cref="CordbNativeModule"/> that represents the native module.</returns>
         internal unsafe CordbNativeModule Add(in LOAD_DLL_DEBUG_INFO loadDll)
         {
+            //This method is extremely performance critical. Any slowdowns in this thread will have a drastic effect on the performance of the process,
+            //due to the sheer number of modules it may have to load.
+
             var baseAddress = (long) (void*) loadDll.lpBaseOfDll;
 
-            var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, baseAddress);
-            var peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+            //Unfortunately, the LOAD_DLL_DEBUG_INFO does not tell us the size of the image, so we're forced to read the bare minimum from memory
+            var memoryStream = CordbMemoryStream.CreateRelative(process.DataTarget, baseAddress);
+
+            //We'll need to defer querying for the rest of the PEFile until later (inside CordbModule.PEFile), as PESymbolResolver will need to use symbols
+            //in order to resolve any exception handlers
+            var peFile = process.Session.Services.PEFileProvider.ReadStream(memoryStream, true);
 
             var name = CordbNativeModule.GetNativeModuleName(loadDll);
 
-            //Even if we don't have any symbols, we still must inform DbgHelp about this module. SymFunctionTableAccess64
-            //calls dbghelp!GetModuleForPC internally, which means if DbgHelp doesn't know about this module, on x64 we won't
-            //be able to unwind through it!
-            process.DbgHelp.AddVirtualModule(name, baseAddress, peFile.OptionalHeader.SizeOfImage);
-            var symbolModule = new DbgHelpSymbolModule(process.DbgHelp, name, baseAddress);
-
-            //We have an unfortunate timing issue here. We want to read the whole PE File, but doing so
-            //can require access to symbols in order to read ExceptionData correctly. So, we must populate
-            //the data directories after we've read the symbols
-            peFile.ReadDataDirectories(stream, PEFileDirectoryFlags.All, new PESymbolResolver(symbolModule));
+            CordbNativeModule native;
 
             lock (moduleLock)
             {
-                //The only way to get the image size is to read the PE header;
-                //DbgEng does that too
-
-                var native = new CordbNativeModule(name, baseAddress, process, peFile, symbolModule);
+                //The only way to get the image size is to read the PE header; DbgEng does that too
+                //Symbol resolution is deferred to the Symbol Resolution Thread, which will try and access
+                //CordbNativeModule.SymbolModule
+                native = new CordbNativeModule(name, baseAddress, process, peFile);
 
                 nativeModules.Add(baseAddress, native);
 
@@ -116,9 +152,11 @@ namespace ChaosDbg.Cordb
                     native.ManagedModule = managed;
                     managed.NativeModule = native;
                 }
-
-                return native;
             }
+
+            process.Symbols.DeferCalculateModuleInfoAsync(name, native.BaseAddress, peFile, resolvePESymbols: true);
+
+            return native;
         }
 
         /// <summary>
@@ -127,21 +165,21 @@ namespace ChaosDbg.Cordb
         /// to retrieve the executable's module details.
         /// </summary>
         /// <param name="corDebugProcess">The process to add.</param>
-        /// <returns>A <see cref="CordbProcessModule"/> that represents the process' module.</returns>
-        internal unsafe CordbProcessModule Add(CorDebugProcess corDebugProcess)
+        /// <returns>A <see cref="CordbManagedProcessPseudoModule"/> that represents the process' module.</returns>
+        internal unsafe CordbManagedProcessPseudoModule Add(CorDebugProcess corDebugProcess)
         {
             var win32Process = Process.GetProcessById(corDebugProcess.Id);
             var address = (long) (void*) win32Process.MainModule.BaseAddress;
-            var stream = CordbMemoryStream.CreateRelative(process.DAC.DataTarget, address);
+            var stream = CordbMemoryStream.CreateRelative(process.DataTarget, address);
 
             var peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All);
 
             //There is no CorDebugModule for a process, so we have to fake it
-            var module = new CordbProcessModule(win32Process.MainModule.FileName, corDebugProcess, process, peFile);
+            var module = new CordbManagedProcessPseudoModule(win32Process.MainModule.FileName, corDebugProcess, process, peFile);
 
             lock (moduleLock)
             {
-                processModules.Add(corDebugProcess.Raw, module);
+                managedProcessModules.Add(corDebugProcess.Raw, module);
 
                 if (process.Session.IsInterop)
                 {
@@ -195,33 +233,36 @@ namespace ChaosDbg.Cordb
         internal unsafe CordbNativeModule Remove(in UNLOAD_DLL_DEBUG_INFO unloadDll)
         {
             lock (moduleLock)
+                return RemoveNativeNoLock(unloadDll.lpBaseOfDll);
+        }
+
+        private CordbNativeModule RemoveNativeNoLock(CORDB_ADDRESS baseAddress)
+        {
+            if (nativeModules.TryGetValue(baseAddress, out var native))
             {
-                if (nativeModules.TryGetValue(unloadDll.lpBaseOfDll, out var native))
+                process.Symbols.RemoveNativeModule(baseAddress);
+                nativeModules.Remove(baseAddress);
+
+                if (managedModules.TryGetValue(baseAddress, out var managed))
                 {
-                    process.DbgHelp.RemoveModule((long) (void*) unloadDll.lpBaseOfDll);
-                    nativeModules.Remove(unloadDll.lpBaseOfDll);
-
-                    if (managedModules.TryGetValue(unloadDll.lpBaseOfDll, out var managed))
-                    {
-                        managed.NativeModule = null;
-                        native.ManagedModule = null;
-                    }
+                    managed.NativeModule = null;
+                    native.ManagedModule = null;
                 }
-
-                return native;
             }
+
+            return native;
         }
 
         /// <summary>
         /// Removes a managed process from the module store.
         /// </summary>
         /// <param name="corDebugProcess">The process to remove.</param>
-        /// <returns>The <see cref="CordbProcessModule"/> that was removed.</returns>
-        internal CordbProcessModule Remove(CorDebugProcess corDebugProcess)
+        /// <returns>The <see cref="CordbManagedProcessPseudoModule"/> that was removed.</returns>
+        internal CordbManagedProcessPseudoModule Remove(CorDebugProcess corDebugProcess)
         {
             lock (moduleLock)
             {
-                if (processModules.TryGetValue(corDebugProcess.Raw, out var module))
+                if (managedProcessModules.TryGetValue(corDebugProcess.Raw, out var module))
                 {
                     //The native module doesn't link back to us
                     module.NativeModule = null;
@@ -229,6 +270,21 @@ namespace ChaosDbg.Cordb
 
                 return module;
             }
+        }
+
+        internal CordbNativeModule RemoveProcessModule(int processId)
+        {
+            lock (moduleLock)
+            {
+                if (nativeProcessModules.TryGetValue(processId, out var module))
+                {
+                    nativeProcessModules.Remove(processId);
+
+                    return RemoveNativeNoLock(module.BaseAddress);
+                }
+            }
+
+            return null;
         }
 
         internal CordbManagedModule GetModule(CorDebugModule corDebugModule)
@@ -254,6 +310,9 @@ namespace ChaosDbg.Cordb
 
         internal bool TryGetModuleForAddress(long address, out CordbModule module)
         {
+            if (address == 0)
+                throw new ArgumentException("Address cannot be 0", nameof(address));
+
             lock (moduleLock)
             {
                 foreach (var item in nativeModules.Values)
@@ -274,7 +333,7 @@ namespace ChaosDbg.Cordb
                     }
                 }
 
-                foreach (var item in processModules.Values)
+                foreach (var item in managedProcessModules.Values)
                 {
                     if (address >= item.BaseAddress && address <= item.EndAddress)
                     {
@@ -286,6 +345,16 @@ namespace ChaosDbg.Cordb
 
             module = null;
             return false;
+        }
+
+        internal void SetAsProcess(CORDB_ADDRESS lpBaseOfImage, int processId)
+        {
+            lock (moduleLock)
+            {
+                var module = nativeModules[lpBaseOfImage];
+
+                nativeProcessModules.Add(processId, module);
+            }
         }
 
         public IEnumerator<CordbModule> GetEnumerator()

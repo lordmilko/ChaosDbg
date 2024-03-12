@@ -45,7 +45,9 @@ namespace ChaosDbg.Cordb
             {
                 //Is the target executable a .NET Framework or .NET Core process?
 
-                var kind = c.ExeKind ?? services.ExeTypeDetector.Detect(c.CommandLine);
+                var kind = c.FrameworkKind ?? services.FrameworkTypeDetector.Detect(c.CommandLine);
+
+                Session.DidCreateProcess = true;
 
                 NetInitCommon.Create(c, kind, InitCallback);
             }

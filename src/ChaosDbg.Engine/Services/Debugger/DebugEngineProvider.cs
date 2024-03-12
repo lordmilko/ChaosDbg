@@ -96,6 +96,12 @@ namespace ChaosDbg
             remove => events.RemoveHandler(nameof(ThreadExit), value);
         }
 
+        public event EventHandler<EngineBreakpointHitEventArgs> BreakpointHit
+        {
+            add => events.AddHandler(nameof(BreakpointHit), value);
+            remove => events.RemoveHandler(nameof(BreakpointHit), value);
+        }
+
         private void AddEvent(string key, Delegate value)
         {
             events.AddHandler(key, value);

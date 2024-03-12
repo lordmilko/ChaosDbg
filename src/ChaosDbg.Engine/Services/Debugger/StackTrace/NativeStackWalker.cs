@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using ChaosDbg.Symbol;
 using ChaosLib;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
@@ -15,14 +17,14 @@ namespace ChaosDbg
     class NativeStackWalker : IDisposable
     {
         private CLRDataTarget dataTarget;
-        private DbgHelpSession dbgHelpSession;
+        private DebuggerSymbolProvider symbols;
         private DynamicFunctionTableProvider dynamicFunctionTableProvider;
         private IntPtr dynamicFunctionTableResult;
         private Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol symbol, ISymbolModule module)> getSymbol;
 
         public NativeStackWalker(
             ICLRDataTarget dataTarget,
-            DbgHelpSession dbgHelpSession,
+            DebuggerSymbolProvider symbols,
             DynamicFunctionTableCache dynamicFunctionTableCache,
             Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol, ISymbolModule)> getSymbol)
         {
@@ -30,7 +32,7 @@ namespace ChaosDbg
                 throw new ArgumentNullException(nameof(dataTarget));
 
             this.dataTarget = new CLRDataTarget(dataTarget);
-            this.dbgHelpSession = dbgHelpSession;
+            this.symbols = symbols;
 
             //While our DbgHelpSession can retrieve modules for us, we want to retrieve enhanced ISymbol/ISymbolModule instances.
             //If we already have an ISymbolModule stored somewhere else (which is likely in a debugger), use those existing instances
@@ -48,7 +50,7 @@ namespace ChaosDbg
             if (this.dataTarget.MachineType != IMAGE_FILE_MACHINE.I386)
             {
                 dynamicFunctionTableProvider = new DynamicFunctionTableProvider(dataTarget, dynamicFunctionTableCache);
-                dbgHelpSession.FunctionEntryCallback = DynamicFunctionCallback;
+                symbols.FunctionEntryCallback = DynamicFunctionCallback;
             }
         }
 
@@ -100,6 +102,8 @@ namespace ChaosDbg
 
             var raw = context.Raw;
 
+            long? previousReturn = null;
+
             while (true)
             {
                 //StackWalKEx may modify the CONTEXT record. We want to capture this modified CONTEXT to store in the NativeFrame,
@@ -127,6 +131,17 @@ namespace ChaosDbg
 
                 if (!result)
                     break;
+
+                //We don't currently track the return address of a frame, because I think it should be implied
+                //that the return address of frame is the IP of the next frame. If that isn't the case though, we need
+                //to re-evaluate things
+                if (previousReturn != null)
+                    Debug.Assert(previousReturn.Value == stackFrame.AddrPC.Offset);
+
+                //In the case of an inline frame, the return address will be the same as the frame after it that it's actually
+                //a part of
+                if (!stackFrame.InlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
+                    previousReturn = stackFrame.AddrReturn.Offset;
 
                 var symbolResult = getSymbol(stackFrame.AddrPC.Offset, stackFrame.InlineFrameContext);
 
@@ -194,7 +209,7 @@ namespace ChaosDbg
             if (dynamicFunctionTableProvider != null)
             {
                 dynamicFunctionTableProvider.Dispose();
-                dbgHelpSession.FunctionEntryCallback = null;
+                symbols.FunctionEntryCallback = null;
             }
         }
     }

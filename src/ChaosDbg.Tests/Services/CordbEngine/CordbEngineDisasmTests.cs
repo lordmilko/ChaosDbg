@@ -16,7 +16,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Disasm_IL()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -40,7 +40,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Disasm_Native()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -110,7 +110,7 @@ namespace ChaosDbg.Tests
                     };
 
                     thread.Verify().Disasm(
-                        ctx.DbgEngEngine.Value,
+                        ctx.InProcDbgEng.Value,
                         "System.Threading.Thread.Sleep",
                         x86Expected: x86Expected,
                         x64Expected: x64Expected
@@ -122,7 +122,7 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void CordbEngine_Disasm_ILToNative_StressTest()
         {
-            TestDebugCreate(
+            TestSignalledDebugCreate(
                 TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
                 ctx =>
                 {
@@ -404,6 +404,51 @@ namespace ChaosDbg.Tests
                 r =>
                 {
                     Assert.AreEqual(21, r.Length);
+                }
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Disasm_ILToNative_ThreeRegions()
+        {
+            //We had an issue wherein the code region wasn't claiming any instructions, and then the final region (the epilog) came straight in, saw that there
+            //were unclaimed instructions and threw
+
+            var ilBytes = new byte[]
+            {
+                0x02, 0x02, 0x8e, 0x69, 0x28, 0x15, 0x00, 0x00, 0x0a, 0x2a
+            };
+
+            var nativeChunk = new CodeChunkInfo
+            {
+                startAddr = 0x7FFC209E10B0,
+                length = 19
+            };
+
+            var mapping = new[]
+            {
+                new COR_DEBUG_IL_TO_NATIVE_MAP { ilOffset = -2, nativeStartOffset = 0, nativeEndOffset = 4 },
+                new COR_DEBUG_IL_TO_NATIVE_MAP { ilOffset = 0,  nativeStartOffset = 4, nativeEndOffset = 13 },
+                new COR_DEBUG_IL_TO_NATIVE_MAP { ilOffset = -3, nativeStartOffset = 13, nativeEndOffset = 19 }
+            };
+
+            var readMemory = new Dictionary<CORDB_ADDRESS, byte[]>
+            {
+                //CodeChunkInfo bytes
+                { 0x7FFC209E10B0, new byte[]
+                {
+                    0x48, 0x83, 0xec, 0x28, 0x8b, 0x51, 0x08, 0xff, 0x15, 0xfb, 0x0f, 0x00, 0x00, 0x90, 0x48, 0x83, 0xc4, 0x28, 0xc3
+                } }
+            };
+
+            TestILToNative(
+                ilBytes,
+                nativeChunk,
+                mapping,
+                readMemory,
+                r =>
+                {
+                    Assert.AreEqual(3, r.Length);
                 }
             );
         }

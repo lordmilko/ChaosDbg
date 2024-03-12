@@ -4,26 +4,37 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using ChaosLib.Metadata;
+using ClrDebug.DIA;
 
 namespace ChaosDbg.Tests
 {
-    class MockSymbolModule : ISymbolModule
+    class MockSymbolModule : IUnmanagedSymbolModule
     {
-        private ISymbolModule symbolModule;
+        private IUnmanagedSymbolModule symbolModule;
 
         public string Name => symbolModule.Name;
         public string FilePath => symbolModule.FilePath;
         public long Address => symbolModule.Address;
+        public long Length => symbolModule.Length;
 
         private string[] allowed;
 
-        public MockSymbolModule(ISymbolModule symbolModule, params string[] allowed)
+        public MockSymbolModule(IUnmanagedSymbolModule symbolModule, params string[] allowed)
         {
             this.symbolModule = symbolModule;
             this.allowed = allowed;
         }
 
-        public IEnumerable<ISymbol> EnumerateSymbols()
+        IEnumerable<ISymbol> ISymbolModule.EnumerateSymbols() => EnumerateSymbols();
+
+        public string[] GetSourceLinkJson()
+        {
+            throw new NotImplementedException();
+        }
+
+        public DiaSession DiaSession { get; }
+
+        public IEnumerable<IUnmanagedSymbol> EnumerateSymbols()
         {
             foreach (var item in symbolModule.EnumerateSymbols())
             {

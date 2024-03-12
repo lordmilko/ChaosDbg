@@ -67,7 +67,7 @@ namespace chaos
                 typeof(ConsoleDisasmWriter),
                 { typeof(IConsole), typeof(PhysicalConsole) },
 
-                { typeof(IExeTypeDetector), typeof(ExeTypeDetector) },
+                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },
                 { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
                 { typeof(ISigReader), typeof(SigReader) }

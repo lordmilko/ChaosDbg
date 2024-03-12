@@ -18,15 +18,16 @@ namespace ChaosDbg
                     return FunctionName;
 
                 if (Module != null)
-                    return $"{Module}!{IP:X}";
+                    return $"{Module}!{FrameIP:X}";
 
-                return $"IP = {IP:X}, SP = {SP:X}, BP = {BP:X}";
+                return $"IP = {FrameIP:X}, SP = {FrameSP:X}, BP = {FrameBP:X}";
             }
         }
 
-        public long IP { get; }
-        public long SP { get; }
-        public long BP { get; }
+        public long FrameIP { get; }
+        public long FrameSP { get; }
+        public long FrameBP { get; }
+
         public long Return { get; }
 
         public string FunctionName => Symbol?.ToString();
@@ -41,9 +42,20 @@ namespace ChaosDbg
 
         public NativeFrame(in STACKFRAME_EX stackFrame, IDisplacedSymbol symbol, ISymbolModule module, CrossPlatformContext context)
         {
-            IP = stackFrame.AddrPC.Offset;
-            SP = stackFrame.AddrStack.Offset;
-            BP = stackFrame.AddrFrame.Offset;
+            /* It is _not_ necessarily the case that the BP of the frame is the same as the BP of the context. This is particularly true on x64.
+             * When this frame is at the top of the stack everything is all good, however if there's another frame above us, the BP of the second
+             * frame on the stack will be different from the BP of that same frame's context. Locals are defined as being relative to the frame BP;
+             * attempting to resolve locals based on the value of the context BP won't work */
+
+            FrameIP = stackFrame.AddrPC.Offset;
+            FrameSP = stackFrame.AddrStack.Offset;
+            FrameBP = stackFrame.AddrFrame.Offset;
+
+            //We currently make an assumption that the IP and SP of the frame's context will be the same as the IP and SP of the frame itself.
+            //If this turns out to not be true, we'll need to revisit how we utilize IP/SP values everywhere
+            Debug.Assert(context.IP == FrameIP);
+            Debug.Assert(context.SP == FrameSP);
+
             Return = stackFrame.AddrReturn.Offset;
             IsInline = stackFrame.InlineFrameContext.FrameType.HasFlag(ClrDebug.DbgEng.STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE);
 
@@ -51,15 +63,6 @@ namespace ChaosDbg
             Module = module;
 
             Context = context;
-
-            //Not all parts of the context seem to get updated by StackWalkEx, such as the base pointer. This is a bit of an issue,
-            //because we're going to lose our "correct" IP/SP/BP when our NativeFrame gets converted to a CordbFrame. Thus, we'll force
-            //overwrite these values so that the CONTEXT we store in the CordbFrame is correct
-            Context.IP = IP;
-            Context.SP = SP;
-
-            //I don't think we're meant to modify BP. When I do a .frame /r 0 vs .frame /r 1 in WinDbg, rbp is the same between both frames
-            //Context.BP = BP;
         }
     }
 }

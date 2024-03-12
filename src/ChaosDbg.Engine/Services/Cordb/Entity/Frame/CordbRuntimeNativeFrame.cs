@@ -11,7 +11,9 @@ namespace ChaosDbg.Cordb
     {
         protected override string DebuggerDisplay => "[Runtime] " + base.DebuggerDisplay;
 
-        internal CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, module, context)
+        public override CordbVariable[] Variables => throw new System.NotImplementedException();
+
+        internal CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbThread thread, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, thread, module, context)
         {
         }
     }

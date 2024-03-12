@@ -26,7 +26,7 @@ namespace ChaosDbg.Analysis
         internal PEMetadataVirtualModule(
             string fileName,
             CORDB_ADDRESS address,
-            ISymbolModule symbolModule,
+            IUnmanagedSymbolModule symbolModule,
             IPEFile physicalPEFile,
             IPEFile virtualPEFile,
             Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, physicalPEFile, createDisassembler)
@@ -51,7 +51,9 @@ namespace ChaosDbg.Analysis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsVirtualAddress(long address)
         {
-            var start = (long) VirtualPEFile.OptionalHeader.ImageBase;
+            //Do not use VirtualPEFile.OptionalHeader.ImageBase. It doesn't match the actual loaded
+            //base address in managed modules
+            var start = (long) Address;
             var end = start + VirtualPEFile.OptionalHeader.SizeOfImage;
 
             if (address >= start && address <= end)

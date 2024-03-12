@@ -1,6 +1,6 @@
 ﻿namespace ChaosDbg.Cordb
 {
-    enum CordbEventHistoryType
+    public enum CordbEventHistoryType
     {
         ManagedEvent,
         NativeEvent,
@@ -11,6 +11,9 @@
     {
         public CordbEventHistoryType EventType { get; }
 
+        /// <summary>
+        /// Gets the operating system ID of the thread the event occurred on.
+        /// </summary>
         public int EventThread { get; }
     }
 

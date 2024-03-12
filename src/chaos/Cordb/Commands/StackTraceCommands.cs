@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using ChaosDbg;
 using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
@@ -19,7 +20,7 @@ namespace chaos.Cordb.Commands
             var sw = new Stopwatch();
             sw.Start();
 
-            Console.WriteLine(" # Child-SP          RetAddr               Call Site");
+            Console.WriteLine($" # {"SP",-17} {"BP",-17} {"RetAddr",-17}     Call Site");
 
             for (var i = 0; i < thread.StackTrace.Length; i++)
             {
@@ -28,9 +29,9 @@ namespace chaos.Cordb.Commands
                 var nextIP = i < thread.StackTrace.Length - 1 ? thread.StackTrace[i + 1].Context.IP : 0;
 
                 if (current is CordbNativeFrame n && n.IsInline)
-                    Console.Write($"{i:X2} (InlineFunction) ----------------     ");
+                    Console.Write($"{i:X2} (Inline Function) ----------------- -----------------     ");
                 else
-                    Console.Write($"{i:X2} {current.Context.SP:x16} {nextIP:x16}     ");
+                    Console.Write($"{i:X2} {FormatAddr(current.FrameSP)} {FormatAddr(current.FrameBP)} {FormatAddr(nextIP)}     ");
 
                 Console.WriteColorLine(current.ToString(), current is CordbILFrame ? ConsoleColor.Green : null);
             }

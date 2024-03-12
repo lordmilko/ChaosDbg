@@ -91,6 +91,9 @@ namespace ChaosDbg.Disasm
 
         private void TryFormatIndirect(in Instruction instr, FormatterOutput formatWriter)
         {
+            if (instr.OpCount != 1)
+                return;
+
             ulong target;
 
             switch (instr.Op0Kind)

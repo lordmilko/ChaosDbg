@@ -11,11 +11,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Must explicitly reference to use path variables in SingleFile.targets -->
+    <PackageReference Include="Microsoft.Debugging.Platform.DbgEng" Version="$(DbgEngVersion)" />
+    <PackageReference Include="Microsoft.Debugging.Platform.SymSrv" Version="$(DbgEngVersion)" />
+
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+
+    <Reference Include="System.IO.Compression" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ChaosDbg.Engine\ChaosDbg.Engine.csproj" />
   </ItemGroup>
 
+  <Import Project="$(Build)SingleFile.targets" />
 </Project>

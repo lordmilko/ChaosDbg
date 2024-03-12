@@ -114,8 +114,15 @@ namespace ChaosDbg.Cordb
 
         #region Not Implemented
 
-        HRESULT ICLRDataTarget.WriteVirtual(CLRDATA_ADDRESS address, IntPtr buffer, int bytesRequested, out int bytesWritten) =>
-            throw new NotImplementedException();
+        HRESULT ICLRDataTarget.WriteVirtual(CLRDATA_ADDRESS address, IntPtr buffer, int bytesRequested, out int bytesWritten)
+        {
+            var result = Kernel32.WriteProcessMemory(reader.hProcess, address, buffer, bytesRequested, out bytesWritten);
+
+            if (!result)
+                return (HRESULT) Marshal.GetHRForLastWin32Error();
+
+            return S_OK;
+        }
 
         HRESULT ICLRDataTarget.GetTLSValue(int threadID, int index, out CLRDATA_ADDRESS value) =>
             throw new NotImplementedException();
@@ -161,8 +168,27 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        HRESULT ICLRDataTarget.SetThreadContext(int threadID, int contextSize, IntPtr context) =>
-            throw new NotImplementedException();
+        HRESULT ICLRDataTarget.SetThreadContext(int threadID, int contextSize, IntPtr context)
+        {
+            HRESULT hr;
+
+            if (context == IntPtr.Zero)
+                return E_INVALIDARG;
+
+            if ((hr = Kernel32.TryOpenThread(ThreadAccess.SET_CONTEXT, false, threadID, out var hThread)) != S_OK)
+                return hr;
+
+            try
+            {
+                hr = Kernel32.TrySetThreadContext(hThread, context);
+
+                return hr;
+            }
+            finally
+            {
+                hThread.Dispose();
+            }
+        }
 
         HRESULT ICLRDataTarget.Request(uint reqCode, int inBufferSize, IntPtr inBuffer, int outBufferSize, IntPtr outBuffer) =>
             throw new NotImplementedException();

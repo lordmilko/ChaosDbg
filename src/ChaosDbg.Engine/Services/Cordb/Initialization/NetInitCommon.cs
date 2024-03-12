@@ -21,7 +21,7 @@ namespace ChaosDbg.Cordb
 
         public static void Create(
             CreateProcessOptions createProcessOptions,
-            ExeKind kind,
+            FrameworkKind kind,
             InitCallback initCallback)
         {
             /* Launch the process suspended, store all required state, and resume the process.
@@ -33,12 +33,12 @@ namespace ChaosDbg.Cordb
 
             switch (kind)
             {
-                case ExeKind.Native: //The user specifically requested .NET debugging; we will assume it's a self extracting single file executable
-                case ExeKind.NetCore:
+                case FrameworkKind.Native: //The user specifically requested .NET debugging; we will assume it's a self extracting single file executable
+                case FrameworkKind.NetCore:
                     NetCoreProcess.Create(createProcessOptions, initCallback);
                     break;
 
-                case ExeKind.NetFramework:
+                case FrameworkKind.NetFramework:
                     NetFrameworkProcess.Create(createProcessOptions, initCallback);
                     break;
 
