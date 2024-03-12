@@ -1,24 +1,35 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using ChaosDbg.Disasm;
 
 namespace ChaosDbg.Analysis
 {
-    [DebuggerDisplay("[0x{StartAddress.ToString(\"X\"),nq} - 0x{EndAddress.ToString(\"X\"),nq}] XFG {string.Join(string.Empty, System.Linq.Enumerable.Select(Bytes, b => b.ToString(\"X2\"))),nq}")]
+    [DebuggerDisplay("[0x{StartAddress.ToString(\"X\"),nq} - 0x{EndAddress.ToString(\"X\"),nq}] XFG {Value} -> {Owner.Metadata}")]
     class XfgMetadataRange : IMetadataRange
     {
         public long StartAddress { get; }
         
         public long EndAddress { get; }
 
-        public byte[] Bytes { get; }
+        public ulong Value { get; }
 
-        public long Owner { get; }
+        public INativeFunctionChunkRegion Owner { get; }
 
-        internal XfgMetadataRange(long startAddress, byte[] bytes)
+        internal XfgMetadataRange(XfgMetadataInfo info, INativeFunctionChunkRegion owner)
         {
-            StartAddress = startAddress;
-            EndAddress = startAddress + bytes.Length - 1;
-            Bytes = bytes;
-            Owner = EndAddress + 1;
+            StartAddress = info.StartAddress;
+            EndAddress = info.EndAddress;
+            Value = BitConverter.ToUInt64(info.Bytes, 0);
+            Owner = owner;
+        }
+
+        public bool IsEquivalent(ulong other)
+        {
+            other |= 1;
+
+            //Most of the checks in ntdll!LdrpDispatchUserCallTargetXFG apply to the address of the function, not the XFG hash itself
+
+            return Value == other;
         }
     }
 }

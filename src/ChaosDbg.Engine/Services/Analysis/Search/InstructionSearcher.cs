@@ -328,7 +328,7 @@ namespace ChaosDbg.Analysis
                     reader.Seek(target);
                     var bytes = reader.ReadBytes(8);
 
-                    DataCandidates[target] = new XfgMetadataRange(target, bytes);
+                    DataCandidates[target] = new XfgMetadataInfo(target, bytes);
                 }
             }
         }
@@ -1175,7 +1175,7 @@ namespace ChaosDbg.Analysis
 
         private void ProcessChunkGraphs(ChunkGraph[] chunkGraphs)
         {
-            var functions = new List<IMetadataRange>();
+            var chunkRegions = new List<IMetadataRange>();
 
             var finalBuilders = new List<NativeFunctionChunkBuilder>();
 
@@ -1185,18 +1185,18 @@ namespace ChaosDbg.Analysis
                 {
                     //If there's only a single node in the graph, we know this is a function already
 
-                    MakeFunction(chunkGraph, functions, finalBuilders);
+                    MakeFunction(chunkGraph, chunkRegions, finalBuilders);
                 }
                 else
                 {
                     var results = ProcessComplexChunkGraph(chunkGraph);
 
                     foreach (var result in results)
-                        MakeFunction(result, functions, finalBuilders);
+                        MakeFunction(result, chunkRegions, finalBuilders);
                 }
             }
 
-            var ranges = GenerateMetadataRanges(functions);
+            var ranges = GenerateMetadataRanges(chunkRegions);
 
             var metadataMap = ranges.ToDictionary(r => r.StartAddress, r => r);
 
@@ -1207,7 +1207,7 @@ namespace ChaosDbg.Analysis
             Module.SetMetadata(ranges.ToArray());
         }
 
-        void MakeFunction(ChunkGraph graph, List<IMetadataRange> functions, List<NativeFunctionChunkBuilder> finalBuilders)
+        void MakeFunction(ChunkGraph graph, List<IMetadataRange> chunkRegions, List<NativeFunctionChunkBuilder> finalBuilders)
         {
             var preDag = graph.Vertices
                 .OrderBy(v =>
@@ -1273,7 +1273,7 @@ namespace ChaosDbg.Analysis
 
             sortedVertices.RemoveAll(v => toRemove.Contains(v));
 
-            if (TrySplitMajorDisconnectedChunks(sortedVertices, toRemove, functions, finalBuilders))
+            if (TrySplitMajorDisconnectedChunks(sortedVertices, toRemove, chunkRegions, finalBuilders))
                 return;
 
             finalBuilders.AddRange(sortedVertices.Select(v => v.Builder));
@@ -1285,7 +1285,7 @@ namespace ChaosDbg.Analysis
             var function = new NativeFunction<InstructionDiscoverySource>(chunks);
 
             foreach (var region in function.AllRegions)
-                functions.Add(region);
+                chunkRegions.Add(region);
         }
 
         private bool TrySplitMajorDisconnectedChunks(
@@ -1457,13 +1457,15 @@ namespace ChaosDbg.Analysis
                 builder.ApplyXRefs(metadataMap);
         }
 
-        private List<IMetadataRange> GenerateMetadataRanges(List<IMetadataRange> functions)
+        private List<IMetadataRange> GenerateMetadataRanges(List<IMetadataRange> chunkRegions)
         {
             var knownMetadata = new List<IMetadataRange>();
 
             var is32Bit = PEFile.OptionalHeader.Magic == PEMagic.PE32;
 
-            knownMetadata.AddRange(functions);
+            var regionMap = chunkRegions.ToDictionary(r => r.StartAddress, r => r);
+
+            knownMetadata.AddRange(chunkRegions);
 
             foreach (var kv in DataCandidates)
             {
@@ -1473,6 +1475,8 @@ namespace ChaosDbg.Analysis
                     metadataRange = new DataMetadataRange(c, is32Bit);
                 else if (kv.Value is IMetadataRange r)
                     metadataRange = r;
+                else if (kv.Value is XfgMetadataInfo i)
+                    metadataRange = new XfgMetadataRange(i, (INativeFunctionChunkRegion) regionMap[i.Owner]);
                 else
                     throw new NotImplementedException($"Don't know how to handle value of type {kv.Value.GetType().Name}");
 

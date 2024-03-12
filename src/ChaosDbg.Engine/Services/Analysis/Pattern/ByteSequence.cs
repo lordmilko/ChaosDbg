@@ -316,6 +316,9 @@ namespace ChaosDbg.Analysis
                         return m is not 0xf0 or 0x0f or 0xff;
                     }
 
+                    //Should we be returning true here?
+                    //https://github.com/lordmilko/ChaosDbg/issues/18
+
                     throw new NotImplementedException($"Don't know whether to treat dot dot as hex when index is {i}/{Masks.Length}");
                 }
 

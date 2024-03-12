@@ -7,6 +7,74 @@ namespace ChaosDbg.Analysis
 {
     class x64ByteSequence
     {
+        //XFG Compatible
+        public static readonly ByteSequence Int3Int3Int3_MARK_SubRspAny          = new ByteSequence(Int3, Int3, Int3, "*", Sub_Rsp_Any);
+        public static readonly ByteSequence Int3Int3_MARK_RexPushAny_SubRspAny = new ByteSequence(Int3, Int3, "*", RexPushAny, Sub_Rsp_Any);
+        public static readonly ByteSequence Int3Int3Int3_MARK_RexPushAny = new ByteSequence(Int3, Int3, Int3, "*", RexPushAny);
+
+        public static readonly ByteSequence Int3Int3_MARK_MovRspDispAnyReg       = new ByteSequence(Int3, Int3, "*", Mov_RspDisp_AnyReg);
+        public static readonly ByteSequence Int3Int3_MARK_MovAnyRsp              = new ByteSequence(Int3, Int3, "*", MovAnyRsp);
+        public static readonly ByteSequence RetInt3_MARK_MovAnyRsp               = new ByteSequence(Ret, Int3, "*", MovAnyRsp);
+        public static readonly ByteSequence Extra1                               = new ByteSequence(Ret, "*", "0x4C8BD1");
+        public static readonly ByteSequence Extra2                               = new ByteSequence(Int3, Int3, Int3, "*", "0x4C8BD1");
+        public static readonly ByteSequence Int3Int3Int3_MARK_RexPushAny_PushAny = new ByteSequence(Int3, Int3, Int3, "*", RexPushAny, PushAny);
+
+        //Non XFG
+        public static readonly ByteSequence Int3_MARK_RexPushAny_SubRspAny = new ByteSequence(Int3, "*", RexPushAny, Sub_Rsp_Any);
+        public static readonly ByteSequence RexInt3_MARK_RexPushAny_PushRbp = new ByteSequence(Ret, Int3, "*", RexPushAny, PushRbp);
+        public static readonly ByteSequence Extra3 = new ByteSequence("0xe9........", "*", RexPushAny, PushRbp);
+
+        public static ByteSequence[] XfgCompatiblePatterns =
+        {
+            //See https://github.com/lordmilko/ChaosDbg/issues/18
+        };
+
+        public static ByteSequence[] NonXfgPatterns =
+        {
+            /*new ByteSequence(Nop,  Nop,  Nop,  "*", Sub_Rsp_Any),
+            
+
+            new ByteSequence(Nop,  Nop,  Nop,  "*", Mov_RspDisp_AnyReg),
+            
+
+            new ByteSequence(            Nop,  "*", Mov_RspDisp_AnyReg_AnyDisp, RexMov),
+
+            new ByteSequence(            Nop,  "*", Mov_RspDisp_AnyReg_ArgDisp, PushAny, PushAny),
+            new ByteSequence(            Ret,  "*", Mov_RspDisp_AnyReg_ArgDisp, PushAny, PushAny),
+
+            new ByteSequence(            Ret,  "*", PushRbp, LeaRbpRsp),
+            new ByteSequence(            Nop,  "*", PushRbp, LeaRbpRsp),
+
+            new ByteSequence(            Nop,  "*", PushAny, PushRbp, LeaRbpRsp),
+            new ByteSequence(            Ret,  "*", PushAny, PushRbp, LeaRbpRsp),
+
+            new ByteSequence(Nop,  Nop,  Nop,  "*", MovRaxRsp),
+            new ByteSequence(Int3, Int3, Int3, "*", MovRaxRsp),
+
+            new ByteSequence(            Nop,  "*", PushRbpAlt, Sub_Rsp_Any),
+            new ByteSequence(            Int3, "*", PushRbpAlt, Sub_Rsp_Any),
+
+            new ByteSequence(            Nop,  "*", PushRbp, Sub_Rsp_Any),
+            new ByteSequence(            Ret,  "*", PushRbp, Sub_Rsp_Any),*/
+
+            //4055
+            Int3_MARK_RexPushAny_SubRspAny,
+
+            /*new ByteSequence(            Int3, "*", PushRbp, Sub_Rsp_Any),
+            new ByteSequence(Int3, Int3, Int3, "*", RexPushRbp, MovRbpAny),
+            new ByteSequence(            Int3, "*", MovAnyRsp, Sub_Rsp_Any),*/
+            
+
+            //Extra
+            
+            //4053
+            RexInt3_MARK_RexPushAny_PushRbp,
+
+            //4053
+            Extra3, //jmp ? / push ? / push rbp
+            //new ByteSequence("0xe9........", "*", RexPushRbp, Sub_Rsp_Any) //jmp ? / push rbp / sub rsp, ?
+        };
+
         [Obsolete("This member is for documentation purposes only")]
         private static ByteSequence[] x64Ghidra =
         {
@@ -77,8 +145,30 @@ namespace ChaosDbg.Analysis
             new ByteSequence(Int3, Int3, "*",  $"0x{x64Byte.RexWR}{x64Byte.OpCode.Mov_8B}", x64Byte.ModRM.AnyRsp, RexWB_AnyR_Mov),
         };
 
+        [Obsolete]
+        internal static void TestGhidra()
+        {
+            for (var i = 0; i < x64Ghidra.Length; i++)
+            {
+                var oldV = x64Ghidra[i];
+                var newV = x64Ghidra[i + 1];
+
+                if (oldV.ToString() != newV.ToString())
+                    throw new NotImplementedException($"Expected our Ghidra's pattern definition '{oldV}' to match our typed interpretation '{newV}'. There's an issue with our typed interpreter");
+
+                i++;
+            }
+        }
+
         public static ByteSequence[] GetPatterns()
         {
+            var patterns = new List<ByteSequence>();
+
+            patterns.AddRange(XfgCompatiblePatterns);
+            patterns.AddRange(NonXfgPatterns);
+            patterns.AddRange(XfgCompatiblePatterns.Select(v => v.WithXfg()));
+
+            return patterns.ToArray();
         }
     }
 }
