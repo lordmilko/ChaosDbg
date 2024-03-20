@@ -17,9 +17,9 @@ namespace ChaosDbg.DbgEng
 
         public long EndAddress => BaseAddress + Size;
 
-        public IPEFile PEFile { get; }
+        public PEFile PEFile { get; }
 
-        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize, IPEFile peFile)
+        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize, PEFile peFile)
         {
             BaseAddress = baseAddress;
             FileName = fileName;

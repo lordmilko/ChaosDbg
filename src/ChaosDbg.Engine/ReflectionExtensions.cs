@@ -46,5 +46,37 @@ namespace ChaosDbg
 
             return eventInfo;
         }
+
+        public static void SetPropertyValue(object instance, string propertyName, object value)
+        {
+            if (instance == null)
+                throw new ArgumentNullException(nameof(instance));
+
+            if (propertyName == null)
+                throw new ArgumentNullException(nameof(propertyName));
+
+            var type = instance.GetType();
+
+            var propertyInfo = type.GetProperty(propertyName);
+
+            if (propertyInfo == null)
+                throw new MissingMemberException(type.Name, propertyName);
+
+            var setter = propertyInfo.GetSetMethod();
+
+            if (setter != null)
+            {
+                setter.Invoke(instance, new[] { value });
+                return;
+            }
+
+            //There's no setter, so we need to find the backing field
+            var field = type.GetField($"<{propertyName}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (field == null)
+                throw new InvalidOperationException($"Could not find a backing field for property {type.Name}.{propertyName}");
+
+            field.SetValue(instance, value);
+        }
     }
 }

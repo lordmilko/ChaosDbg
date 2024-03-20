@@ -46,7 +46,7 @@ namespace ChaosDbg.Tests
                             if (props.pulCodeRVA == 0 || props.pdwAttr.HasFlag(CorMethodAttr.mdPinvokeImpl))
                                 continue;
 
-                            if (pe.TryReadCorILMethod(props.pulCodeRVA, peReader, out var result))
+                            if (pe.TryReadCorILMethod(props.pulCodeRVA, ref peReader, out var result))
                             {
                                 var dis = ilProvider.CreateDisassembler(result.ILBytes, metadataProvider);
 

@@ -10,11 +10,14 @@ namespace ChaosDbg.Tests
         {
             var stream = new MemoryStream(bytes);
 
-            var peFile = new MockPEFile
+            var peFile = new PEFile
             {
-                OptionalHeader = new MockImageOptionalHeader
+                NtHeaders = new ImageNtHeaders
                 {
-                    ImageBase = ip
+                    OptionalHeader = new ImageOptionalHeader
+                    {
+                        ImageBase = ip
+                    }
                 }
             };
 

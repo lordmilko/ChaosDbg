@@ -21,7 +21,7 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbNativeModule? NativeModule { get; set; }
 
-        public CordbManagedProcessPseudoModule(string name, CorDebugProcess corDebugProcess, CordbProcess process, IPEFile peFile) :
+        public CordbManagedProcessPseudoModule(string name, CorDebugProcess corDebugProcess, CordbProcess process, PEFile peFile) :
             base(name, peFile.OptionalHeader.ImageBase, peFile.OptionalHeader.SizeOfImage, process, peFile)
         {
             CorDebugProcess = corDebugProcess;

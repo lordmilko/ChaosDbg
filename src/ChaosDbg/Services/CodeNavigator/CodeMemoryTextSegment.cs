@@ -9,7 +9,7 @@ namespace ChaosDbg
 {
     class CodeMemoryTextSegment : IMemoryTextSegment
     {
-        public IImageSectionHeader SectionHeader { get; }
+        public ImageSectionHeader SectionHeader { get; }
 
         public long Position
         {
@@ -26,7 +26,7 @@ namespace ChaosDbg
         private long lastValidAddress;
 
         public CodeMemoryTextSegment(
-            IImageSectionHeader sectionHeader,
+            in ImageSectionHeader sectionHeader,
             INativeDisassembler nativeDisassembler,
             long moduleBase,
             int start,

@@ -29,11 +29,11 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbProcess Process { get; }
 
-        protected readonly IPEFile? peFile;
+        protected readonly PEFile? peFile;
         private bool hasFullPEFile;
 
         /// <inheritdoc />
-        public IPEFile? PEFile
+        public PEFile? PEFile
         {
             get
             {
@@ -49,7 +49,7 @@ namespace ChaosDbg.Cordb
 
         public bool IsExe => peFile != null && !peFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll);
 
-        protected CordbModule(string name, long baseAddress, int size, CordbProcess process, IPEFile? peFile)
+        protected CordbModule(string name, long baseAddress, int size, CordbProcess process, PEFile? peFile)
         {
             Name = name;
             BaseAddress = baseAddress;

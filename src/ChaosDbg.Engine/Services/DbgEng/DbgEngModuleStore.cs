@@ -27,7 +27,7 @@ namespace ChaosDbg.DbgEng
         internal DbgEngModule Add(long baseAddress, string imageName, string moduleName, int moduleSize)
         {
             var stream = DbgEngMemoryStream.CreateRelative(session.EngineClient, baseAddress);
-            IPEFile peFile = services.PEFileProvider.ReadStream(stream, true);
+            PEFile peFile = services.PEFileProvider.ReadStream(stream, true);
 
             lock (moduleLock)
             {

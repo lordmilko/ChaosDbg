@@ -1023,7 +1023,7 @@ namespace ChaosDbg.Tests
                         var symbols = mockSymbolModule.EnumerateSymbols().ToArray();
 
                         if (v.ExportDirectory != null)
-                            v.ExportDirectory = new MockImageExportDirectoryInfo(v.ExportDirectory, v.ExportDirectory.Exports.Where(e => symbols.Any(s => s.Name == e.Name)).ToArray());
+                            ReflectionExtensions.SetPropertyValue(v.ExportDirectory, nameof(ImageExportDirectoryInfo.Exports), v.ExportDirectory.Exports.Where(e => symbols.Any(sym => sym.Name == e.Name)).ToArray());
                     };
 
                     return mockSymbolModule;
@@ -1062,7 +1062,7 @@ namespace ChaosDbg.Tests
                                 return true;
 
                             //todo: why is exceptiondata a bunch of cc's sometimes?
-                            if (e.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is IImageScopeTable table)
+                            if (e.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is ImageScopeTable table)
                             {
                                 foreach (var record in table)
                                 {
@@ -1084,8 +1084,8 @@ namespace ChaosDbg.Tests
                         })).ToArray();
 
                         //For each symbol we want to consider, disassemble the function to get all its chunks, and then get all unwind items that exist within those chunks
-                        v.ExceptionDirectory = allowed;
-                        v.ExportDirectory = null;
+                        ReflectionExtensions.SetPropertyValue(v, nameof(PEFile.ExceptionDirectory), allowed);
+                        ReflectionExtensions.SetPropertyValue(v, nameof(PEFile.ExportDirectory), null);
                     };
 
                     return mockSymbolModule;

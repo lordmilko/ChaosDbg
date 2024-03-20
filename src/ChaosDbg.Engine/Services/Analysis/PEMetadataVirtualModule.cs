@@ -21,14 +21,14 @@ namespace ChaosDbg.Analysis
         /// <summary>
         /// Gets information about the PE File as it exists in memory.
         /// </summary>
-        public IPEFile VirtualPEFile { get; }
+        public PEFile VirtualPEFile { get; }
 
         internal PEMetadataVirtualModule(
             string fileName,
             CORDB_ADDRESS address,
             IUnmanagedSymbolModule symbolModule,
-            IPEFile physicalPEFile,
-            IPEFile virtualPEFile,
+            PEFile physicalPEFile,
+            PEFile virtualPEFile,
             Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, physicalPEFile, createDisassembler)
         {
             Address = address;

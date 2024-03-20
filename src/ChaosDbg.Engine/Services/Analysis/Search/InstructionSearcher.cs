@@ -36,7 +36,7 @@ namespace ChaosDbg.Analysis
         /// </summary>
         public INativeDisassembler Disassembler { get; }
 
-        public IPEFile PEFile { get; }
+        public PEFile PEFile { get; }
 
         /// <summary>
         /// Gets a memory stream that contains a copy of the module, read from the remote process.
@@ -59,7 +59,7 @@ namespace ChaosDbg.Analysis
         private Dictionary<long, object> ignoreMap = new Dictionary<long, object>();
         private HashSet<long> knownCallTargets = new HashSet<long>();
         private HashSet<long> knownJumpTargets = new HashSet<long>();
-        private Dictionary<long, HashSet<IImageScopeRecord>> exceptionUnwindMap = new Dictionary<long, HashSet<IImageScopeRecord>>();
+        private Dictionary<long, HashSet<ImageScopeRecord>> exceptionUnwindMap = new Dictionary<long, HashSet<ImageScopeRecord>>();
         private List<(InstructionDiscoverySource, NativeCodeRegionCollection)> badFunctions = new();
         private List<InstructionDiscoverySource> deferredNewInstructions = new();
         internal HashSet<long> deferredSeen = new HashSet<long>();
@@ -70,7 +70,7 @@ namespace ChaosDbg.Analysis
         public InstructionSearcher(
             PEMetadataSearchOptions options,
             PEMetadataModule module,
-            IPEFile peFile,
+            PEFile peFile,
             Func<Stream, INativeDisassembler> createDisassembler)
         {
             Options = options;
@@ -277,7 +277,7 @@ namespace ChaosDbg.Analysis
             }
         }
 
-        private void HydrateGuardCFFunctionTable(IImageLoadConfigDirectory config, PEBinaryReader reader)
+        private void HydrateGuardCFFunctionTable(ImageLoadConfigDirectory config, PEBinaryReader reader)
         {
             //__guard_fids_table
             if (config.GuardCFFunctionTable != 0 && config.GuardCFFunctionCount != 0)
@@ -333,7 +333,7 @@ namespace ChaosDbg.Analysis
             }
         }
 
-        private void HydrateGuardEHContinuationTable(IImageLoadConfigDirectory config, PEBinaryReader reader)
+        private void HydrateGuardEHContinuationTable(ImageLoadConfigDirectory config, PEBinaryReader reader)
         {
             /* https://learn.microsoft.com/en-us/cpp/build/reference/guard-enable-eh-continuation-metadata?view=msvc-170
              * The instruction pointer of the __except block isn't expected to be on the shadow stack, because it would fail instruction pointer validation.
@@ -395,7 +395,7 @@ namespace ChaosDbg.Analysis
                             AddFunctionCandidate(handler + Module.Address, FoundBy.FHandler, DiscoveryTrustLevel.Trusted, false);
                     }
 
-                    if (runtimeFunctionInfo.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is IImageScopeTable table)
+                    if (runtimeFunctionInfo.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is ImageScopeTable table)
                     {
                         foreach (var record in table)
                         {
@@ -407,7 +407,7 @@ namespace ChaosDbg.Analysis
                                 }
                                 else
                                 {
-                                    set = new HashSet<IImageScopeRecord>
+                                    set = new HashSet<ImageScopeRecord>
                                     {
                                         record
                                     };
@@ -776,7 +776,7 @@ namespace ChaosDbg.Analysis
                     searchData.Caller = item;
 
                     //We don't fully trust external jumps to begin with, but if it turns out it was in an executable section, trust it fully
-                    if (searchData.Section == null || searchData.Section.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
+                    if (searchData.Section == null || searchData.Section.Value.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
                         item.TrustLevel = DiscoveryTrustLevel.Trusted;
 
                     //If we added this item as data, don't enqueue it
@@ -829,7 +829,7 @@ namespace ChaosDbg.Analysis
 #endif
                 existing = (T) (object) item;
 
-                if (dataDict != null && item.Section != null && !item.Section.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
+                if (dataDict != null && item.Section != null && !item.Section.Value.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
                     dataDict[address] = existing;
                 else
                     dict[address] = existing;
@@ -957,7 +957,7 @@ namespace ChaosDbg.Analysis
                 {
                     var searchData = AddFunctionCandidate(addr, FoundBy.RVA, DiscoveryTrustLevel.Untrusted, false);
 
-                    if (searchData.Section == null || searchData.Section.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
+                    if (searchData.Section == null || searchData.Section.Value.Characteristics.HasFlag(IMAGE_SCN.MEM_EXECUTE))
                         untrustedPriorityQueue.Enqueue(searchData, searchData.Priority);
                 }
             }

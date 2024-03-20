@@ -41,7 +41,7 @@ namespace ChaosDbg.Cordb
             //This method is extremely performance critical. Any slowdowns in this thread will have a drastic effect on the performance of the process,
             //due to the sheer number of modules it may have to load.
 
-            IPEFile peFile = null;
+            PEFile peFile = null;
             var preferNativePE = false;
             RelativeToAbsoluteStream stream = null;
             var needFullPELoad = false;

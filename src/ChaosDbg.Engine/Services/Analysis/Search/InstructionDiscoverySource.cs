@@ -28,7 +28,7 @@ namespace ChaosDbg.Analysis
 
         public bool? DoesReturn { get; set; }
 
-        public IImageSectionHeader? Section { get; set; }
+        public ImageSectionHeader? Section { get; set; }
 
 #if DEBUG
         //Only store the discovered code on the discovery source in debug so we can investigate what instructions a given source yielded
@@ -40,7 +40,7 @@ namespace ChaosDbg.Analysis
 
         public IUnmanagedSymbol? Symbol { get; set; }
 
-        public IImageRuntimeFunctionInfo? RuntimeFunction { get; set; }
+        public ImageRuntimeFunctionInfo? RuntimeFunction { get; set; }
 
         public IImageExportInfo? Export { get; set; }
 

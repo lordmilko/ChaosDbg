@@ -8,34 +8,30 @@ namespace ChaosDbg.Tests
     {
         private PEFileProvider peProvider = new PEFileProvider();
 
-        public Action<MockRelayPEFile> ConfigureMock { get; set; }
+        public Action<PEFile> ConfigureMock { get; set; }
 
-        public override IPEFile ReadStream(Stream stream, bool isLoadedImage, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver symbolResolver = null)
+        public override PEFile ReadStream(Stream stream, bool isLoadedImage, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver symbolResolver = null)
         {
             var realFile = peProvider.ReadStream(stream, isLoadedImage, flags, symbolResolver);
 
             if (ConfigureMock == null)
                 return realFile;
 
-            var mockFile = new MockRelayPEFile(realFile);
+            ConfigureMock(realFile);
 
-            ConfigureMock(mockFile);
-
-            return mockFile;
+            return realFile;
         }
 
-        public override IPEFile ReadFile(string path, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver symbolResolver = null)
+        public override PEFile ReadFile(string path, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver symbolResolver = null)
         {
             var realFile = peProvider.ReadFile(path, flags, symbolResolver);
 
             if (ConfigureMock == null)
                 return realFile;
 
-            var mockFile = new MockRelayPEFile(realFile);
+            ConfigureMock(realFile);
 
-            ConfigureMock(mockFile);
-
-            return mockFile;
+            return realFile;
         }
     }
 }

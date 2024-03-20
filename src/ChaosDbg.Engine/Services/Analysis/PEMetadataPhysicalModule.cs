@@ -22,12 +22,12 @@ namespace ChaosDbg.Analysis
         /// This PE File does not contain optional data directories. To retrieve this information,
         /// use <see cref="PEMetadataVirtualModule.VirtualPEFile"/>.
         /// </summary>
-        public IPEFile PhysicalPEFile { get; }
+        public PEFile PhysicalPEFile { get; }
 
         internal PEMetadataPhysicalModule(
             string fileName,
             IUnmanagedSymbolModule symbolModule,
-            IPEFile physicalPEFile,
+            PEFile physicalPEFile,
             Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, createDisassembler)
         {
             PhysicalPEFile = physicalPEFile;

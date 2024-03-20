@@ -10,12 +10,12 @@ namespace ChaosDbg
     {
         public IMemoryTextSegment[] Segments { get; }
 
-        private IPEFile pe;
+        private PEFile pe;
         private long BaseAddress => pe.OptionalHeader.ImageBase;
         private int currentSegmentIndex = 0;
         private IMemoryTextSegment currentSegment => Segments[currentSegmentIndex];
 
-        public CodeNavigator(IPEFile pe, INativeDisassembler nativeDisassembler)
+        public CodeNavigator(PEFile pe, INativeDisassembler nativeDisassembler)
         {
             this.pe = pe;
 

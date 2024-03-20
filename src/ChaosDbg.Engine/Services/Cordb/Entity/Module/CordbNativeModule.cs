@@ -54,7 +54,7 @@ namespace ChaosDbg.Cordb
             string name,
             long baseAddress,
             CordbProcess process,
-            IPEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, process, peFile)
+            PEFile peFile) : base(name, baseAddress, peFile.OptionalHeader.SizeOfImage, process, peFile)
         {
             var fileName = Path.GetFileName(name);
 
@@ -65,7 +65,7 @@ namespace ChaosDbg.Cordb
         /// Gets the PE File of this module without forcing symbol resolution.
         /// </summary>
         /// <returns>The PE File of this module.</returns>
-        internal IPEFile? GetRawPEFile() => peFile;
+        internal PEFile? GetRawPEFile() => peFile;
 
         #region GetNativeModuleName
 
@@ -91,7 +91,7 @@ namespace ChaosDbg.Cordb
         //As stated above however, if we can get the name from the hFile, why not just do that?
         private static string AlternateModuleNameStrategies(
             MemoryReader memoryReader,
-            IPEFile peFile,
+            PEFile peFile,
             in LOAD_DLL_DEBUG_INFO loadDll)
         {
             var name = GetNativeModuleNameFromPtr(memoryReader, loadDll.lpImageName, loadDll.fUnicode == 1);
@@ -168,11 +168,11 @@ namespace ChaosDbg.Cordb
             return str;
         }
 
-        private static string? GetNativeModuleNameFromPE(IPEFile peFile, IntPtr hFile)
+        private static string? GetNativeModuleNameFromPE(PEFile peFile, IntPtr hFile)
         {
             //ntdll can hit this code path
 
-            foreach (var dir in peFile.DebugDirectoryInfo.Entries)
+            foreach (var dir in peFile.DebugDirectory.Entries)
             {
                 if (dir.Type == ImageDebugType.Misc)
                     throw new NotImplementedException("Retrieving a module name from the Misc debug directory is not implemented.");
@@ -184,7 +184,7 @@ namespace ChaosDbg.Cordb
                     return peFile.ExportDirectory.Name;
             }
 
-            foreach (var codeView in peFile.DebugDirectoryInfo.CodeViews)
+            foreach (var codeView in peFile.DebugDirectory.CodeViews)
             {
                 var fileName = Path.GetFileNameWithoutExtension(codeView.Path);
 

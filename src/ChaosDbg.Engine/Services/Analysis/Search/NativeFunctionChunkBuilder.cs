@@ -99,7 +99,7 @@ namespace ChaosDbg.Analysis
         internal void ResolveReferences(
             Dictionary<long ,ChunkedInstruction> chunkedInstrMap,
             Dictionary<long, JumpTableMetadataRange> jumpTables,
-            Dictionary<long, HashSet<IImageScopeRecord>> exceptionUnwindMap,
+            Dictionary<long, HashSet<ImageScopeRecord>> exceptionUnwindMap,
             long moduleAddress)
         {
             ChunkedInstruction targetInstr;

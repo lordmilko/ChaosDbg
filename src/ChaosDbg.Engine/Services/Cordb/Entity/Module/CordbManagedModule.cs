@@ -77,7 +77,7 @@ namespace ChaosDbg.Cordb
 
         public bool IsDynamic => CorDebugModule.IsDynamic;
 
-        public CordbManagedModule(CorDebugModule corDebugModule, CordbProcess process, IPEFile? peFile) : base(corDebugModule.Name, corDebugModule.BaseAddress, corDebugModule.Size, process, peFile)
+        public CordbManagedModule(CorDebugModule corDebugModule, CordbProcess process, PEFile? peFile) : base(corDebugModule.Name, corDebugModule.BaseAddress, corDebugModule.Size, process, peFile)
         {
             CorDebugModule = corDebugModule;
         }

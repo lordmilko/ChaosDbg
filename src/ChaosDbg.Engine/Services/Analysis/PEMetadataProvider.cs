@@ -124,8 +124,8 @@ namespace ChaosDbg.Analysis
             long moduleAddress,
             string modulePath,
             IPESymbolResolver peSymbolResolver,
-            out IPEFile physicalPEFile,
-            out IPEFile virtualPEFile)
+            out PEFile physicalPEFile,
+            out PEFile virtualPEFile)
         {
             physicalPEFile = GetPhysicalPEFile(modulePath);
 
@@ -136,7 +136,7 @@ namespace ChaosDbg.Analysis
             virtualPEFile = peFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All, peSymbolResolver);
         }
 
-        private IPEFile GetPhysicalPEFile(string modulePath, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver peSymbolResolver = null)
+        private PEFile GetPhysicalPEFile(string modulePath, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver peSymbolResolver = null)
         {
             //Don't need any flags here. All we're really interested in is the base address.
             var physicalPEFile = peFileProvider.ReadFile(modulePath, flags, peSymbolResolver);

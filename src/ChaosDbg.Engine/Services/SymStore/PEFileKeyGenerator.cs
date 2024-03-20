@@ -51,11 +51,11 @@ namespace ChaosDbg.SymStore
                 }
                 if ((flags & KeyTypeFlags.SymbolKey) != 0)
                 {
-                    var pdbs = _peFile.DebugDirectoryInfo.CodeViews;
+                    var pdbs = _peFile.DebugDirectory.CodeViews;
 
                     foreach (var pdb in pdbs)
                     {
-                        yield return GetPDBKey(pdb.Path, pdb.Signature, pdb.Age);
+                        yield return GetPDBKey(pdb.Path, pdb.Guid, pdb.Age);
                     }
                 }
 
