@@ -10,7 +10,7 @@ namespace ChaosDbg.DbgEng
             bool startMinimized = false,
             Action<DbgEngEngine> initCallback = null)
         {
-            return engineProvider.CreateProcess(new CreateProcessOptions(commandLine)
+            return engineProvider.CreateProcess(new LaunchTargetOptions(commandLine)
             {
                 StartMinimized = startMinimized
             }, initCallback: initCallback);
@@ -20,12 +20,16 @@ namespace ChaosDbg.DbgEng
             this DbgEngEngineProvider engineProvider,
             int processId,
             bool nonInvasive = false,
-            bool noSuspend = false)
+            bool noSuspend = false,
+            bool useDbgEngSymOpts = true,
+            int? dbgEngEngineId = null)
         {
-            return engineProvider.Attach(new AttachProcessOptions(processId)
+            return engineProvider.Attach(new LaunchTargetOptions(processId)
             {
                 NonInvasive = nonInvasive,
-                NoSuspend = noSuspend
+                NoSuspend = noSuspend,
+                UseDbgEngSymOpts = useDbgEngSymOpts,
+                DbgEngEngineId = dbgEngEngineId
             });
         }
     }

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using ChaosLib;
 
 namespace ChaosDbg.Cordb
 {
@@ -110,6 +111,8 @@ namespace ChaosDbg.Cordb
 
         protected CordbBreakpoint(bool isOneShot)
         {
+            Log.Debug<CordbBreakpoint>("CordbBreakpoint {hashCode}: Created", GetHashCode());
+
             IsOneShot = isOneShot;
         }
 
@@ -121,6 +124,8 @@ namespace ChaosDbg.Cordb
         {
             if (!enable && IsSuspended)
             {
+                Log.Debug<CordbBreakpoint>("CordbBreakpoint {hashCode}: Setting enable to {enable} and suspended to false", GetHashCode(), enable);
+
                 //If the user is trying to disable a breakpoint that we've suspended, remove the suspension
                 IsSuspended = false;
             }
@@ -137,7 +142,9 @@ namespace ChaosDbg.Cordb
         /// <param name="suspend">Whether to suspend or resume the breakpoint.</param>
         public void SetSuspended(bool suspend)
         {
-            Debug.Assert(IsSuspended != suspend);
+            Log.Debug<CordbBreakpoint>("CordbBreakpoint {hashCode}: Setting suspended to {suspend}", GetHashCode(), suspend);
+
+            Debug.Assert(IsSuspended != suspend, $"Tried to set the a breakpoint to {suspend} when it was already {suspend}");
             Activate(!suspend);
             IsSuspended = suspend;
         }

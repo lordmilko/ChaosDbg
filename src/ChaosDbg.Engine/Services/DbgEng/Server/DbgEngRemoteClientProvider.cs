@@ -28,6 +28,9 @@ namespace ChaosDbg.DbgEng.Server
         {
             this.services = services;
             debugClient = services.SafeDebugCreate(false);
+
+            Log.Debug<DebugClient>($"Using DebugClient {{hashCode}} for {nameof(DbgEngRemoteClientProvider)}", debugClient.GetHashCode());
+
             debugClient.OutputCallbacks = output;
 
             services.EnableTestHook();
@@ -38,6 +41,11 @@ namespace ChaosDbg.DbgEng.Server
 
             if (!File.Exists(cdb))
                 throw new FileNotFoundException($"Could not find debug server EXE '{cdb}'");
+        }
+
+        ~DbgEngRemoteClientProvider()
+        {
+            Debug.Assert(activeClients.Count == 0, $"Had {activeClients.Count} outstanding {nameof(DbgEngRemoteClient)} objects. All DebugClient objects must be properly disposed prior to unloading DbgEng");
         }
 
         public DbgEngServerInfo[] GetServers()
@@ -96,9 +104,15 @@ namespace ChaosDbg.DbgEng.Server
             {
                 var debugClient = services.SafeDebugConnect(info.ToString(), false);
 
+                using var holder = new DisposeHolder(debugClient);
+
+                Log.Debug<DebugClient>($"Using DebugClient {{hashCode}} for {nameof(DbgEngRemoteClient)}", debugClient.GetHashCode());
+
                 WaitForTargetInitialize(debugClient);
 
                 remoteClient = new DbgEngRemoteClient(debugClient, info, process, this);
+
+                holder.SuppressDispose();
 
                 return remoteClient;
             }

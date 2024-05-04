@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ChaosDbg.Symbol;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 using ClrDebug.DbgEng;
 using static ClrDebug.HRESULT;
@@ -164,7 +164,7 @@ namespace ChaosDbg.Cordb
                     }
                 }
 
-                if (process.Session.IsInterop)
+                if (!process.IsV3 && process.Session.IsInterop)
                     return ResolveNativeFrames(process, accessor, process.DataTarget, process.Symbols, results);
 
                 return results.ToArray();

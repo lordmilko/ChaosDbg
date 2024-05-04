@@ -1,5 +1,4 @@
-﻿using System;
-using ChaosDbg.Evaluator.Masm;
+﻿using ChaosDbg.Evaluator.Masm;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests.Evaluator

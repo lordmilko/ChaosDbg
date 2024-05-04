@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using ChaosDbg.Cordb;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 using static ClrDebug.HRESULT;
 
@@ -388,7 +388,7 @@ namespace ChaosDbg.Symbol
             if (clrSymbolModule != null)
                 return;
 
-            var name = Path.GetFileName(module.FilePath);
+            var name = Path.GetFileName(module.ModulePath);
 
             if (CordbNativeModule.IsCLRName(name))
                 clrSymbolModule = module;

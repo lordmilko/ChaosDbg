@@ -242,12 +242,12 @@ namespace ChaosDbg.Cordb
                     //There's an epilog after us. Consume all remaining instructions
                     var remaining = ilInstructions.Length - ilIndex;
 
-                    var result = new ILInstruction[remaining];
+                    var results = new ILInstruction[remaining];
 
                     for (var i = 0; ilIndex < ilInstructions.Length; i++, ilIndex++)
-                        result[i] = ilInstructions[ilIndex];
+                        results[i] = ilInstructions[ilIndex];
 
-                    return result;
+                    return results;
                 }
                 else
                 {
@@ -271,12 +271,30 @@ namespace ChaosDbg.Cordb
                 if (ilIndex == ilInstructions.Length)
                     return Array.Empty<ILInstruction>();
 
-                //It's the last mapping. We're expecting that this should be an epilog region or something. We wouldn't expect that this would be a code region.
-                //Therefore if we have IL instructions that haven't been claimed yet, this would likely indicate a bug with our logic above for the regions
-                //that came before us
+                //There isn't always an epilog.
+
+                var ilOffset = ilToNativeMappingILSort[mappingIndex].ilOffset;
+                var remaining = ilInstructions.Length - ilIndex;
+
+                if (ilOffset < 0)
+                {
+                    //It's a special region (like an epilog). The fact there's still IL instructions we haven't claimed indicates a bug with our logic above for the regions
+                    //that came before us
+
+                    throw new InvalidOperationException($"Had {remaining} unclaimed IL instructions when the last mapping region (with offset {ilOffset}) was reached. This indicates a bug.");
+                }
 
                 if (ilIndex < ilInstructions.Length)
-                    throw new NotImplementedException($"Don't know how to handle having instructions owned by the last code region");
+                {
+                    //We're a normal code region (and there is no epilog). All remaining instructions belong to us!
+
+                    var results = new ILInstruction[remaining];
+
+                    for (var i = 0; ilIndex < ilInstructions.Length; i++, ilIndex++)
+                        results[i] = ilInstructions[ilIndex];
+
+                    return results;
+                }
 
                 throw new NotImplementedException($"IL index {ilIndex} should not be greater than the number of instructions available ({ilInstructions.Length})");
             }

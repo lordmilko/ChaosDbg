@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
 using ChaosDbg.Commands;
+using ChaosLib.Memory;
 
-namespace ChaosDbg.Cordb
+namespace ChaosDbg
 {
     /// <summary>
     /// Represents, and provides access to manipulating the individual bits inside the DR7 debug register.

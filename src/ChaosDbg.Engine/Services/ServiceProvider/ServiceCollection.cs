@@ -29,6 +29,30 @@ namespace ChaosDbg.Engine
             services[type] = new ServiceDescriptor(type, type, factory: factory);
         }
 
+        public void Add(Type serviceType, Type[] implementationTypes)
+        {
+            if (!serviceType.IsArray)
+                throw new NotImplementedException();
+
+            Validate(serviceType, null);
+
+            services[serviceType] = new ServiceDescriptor(serviceType, serviceType, factory: s =>
+            {
+                var array = Array.CreateInstance(serviceType.GetElementType(), implementationTypes.Length);
+
+                for (var i = 0; i < implementationTypes.Length; i++)
+                {
+                    var element = ((ServiceProvider) s).ResolveArrayService(implementationTypes[i]);
+
+                    ((ServiceProvider) s).AddSingleton(element.GetType(), element);
+
+                    array.SetValue(element, i);
+                }
+
+                return array;
+            });
+        }
+
         public void Add(Type serviceType, object implementation)
         {
             if (serviceType == null)

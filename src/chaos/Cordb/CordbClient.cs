@@ -9,6 +9,7 @@ using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
 using ChaosDbg.Symbol;
+using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace chaos
 {
@@ -26,6 +27,8 @@ namespace chaos
         protected IConsole Console { get; }
 
         private string lastCommand;
+
+        private Stopwatch sw = new Stopwatch();
 
         public CordbClient(
             IConsole console,
@@ -47,6 +50,11 @@ namespace chaos
 
             Console.RegisterInterruptHandler(Console_CancelKeyPress);
 
+            engineProvider.EngineFailure += (s, e) => Console.WriteColorLine($"FATAL: {e.Exception}", ConsoleColor.Red);
+
+            sw.Start();
+
+            Console.WriteLine("Launching...");
             engineProvider.CreateProcess(executable, minimized, interop, frameworkKind);
 
             EngineLoop();
@@ -81,11 +89,17 @@ namespace chaos
 
                 try
                 {
+                    sw.Stop();
+
                     PrintPrompt();
+
+                    Console.WriteColorLine(sw.Elapsed, ConsoleColor.Yellow);
 
                     //There doesn't seem to be a super great way of interrupting the console,
                     //but in the case of our unit tests, our ReadLine is fake anyway so it doesn't matter
                     command = Console.ReadLine();
+
+                    sw.Restart();
 
                     if (string.IsNullOrEmpty(command) && !string.IsNullOrEmpty(lastCommand))
                         command = lastCommand;
@@ -111,6 +125,14 @@ namespace chaos
             engine.Process.Symbols.TrySymFromAddr(ip, SymFromAddrOption.Safe, out var symbol);
 
             Console.WriteLine($"{symbol?.ToString() ?? ip.ToString("X")}:");
+
+            if (symbol?.Module is MicrosoftPdbSymbolModule m)
+            {
+                var location = m.GetSourceLocation(ip);
+
+                if (location != null)
+                    Console.WriteLine(location.Value);
+            }
 
             var instr = engine.Process.ProcessDisassembler.Disassemble(ip);
             Console.WriteLine(instr);
@@ -148,8 +170,6 @@ namespace chaos
 
                 if (e.UserContext is true)
                     extra = "[OutOfBand] ";
-
-                Console.WriteLine($"{extra}ModLoad: {e.Module.BaseAddress:X} {e.Module.EndAddress:X}   {e.Module}");
             };
             engineProvider.ModuleUnload += (s, e) =>
             {
@@ -167,8 +187,6 @@ namespace chaos
 
                 if (e.UserContext is true)
                     extra = "[OutOfBand] ";
-
-                Console.WriteLine($"{extra}ThreadCreate {e.Thread}");
             };
             engineProvider.ThreadExit += (s, e) =>
             {

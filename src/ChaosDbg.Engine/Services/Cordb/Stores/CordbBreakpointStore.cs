@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Disasm;
 using ChaosDbg.Symbol;
+using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
 
@@ -216,6 +217,7 @@ namespace ChaosDbg.Cordb
             //If we're doing a step in, or we don't actually need to step over, just do a single step
             if (!stepOver)
             {
+                Log.Debug<CordbBreakpointStore>("Single stepping {ip}", thread.RegisterContext.IP.ToString("X"));
                 stepBreakpoint.Address = 0;
                 thread.RegisterContext.EFlags |= X86_CONTEXT_FLAGS.TF;
                 thread.TrySaveRegisterContext();

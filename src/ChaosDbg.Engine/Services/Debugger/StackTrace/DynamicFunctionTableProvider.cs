@@ -131,6 +131,7 @@ namespace ChaosDbg
                     loadedLibraries[outOfProcessDll] = existing;
                 }
 
+                //If the cache already has the entries from the function table, it will return it. Otherwise, it will invoke the callback and cache the entries
                 if (!dynamicFunctionTableCache.TryGetOrAdd(hProcess, existing.hModule, existing.callback, tablePtr, out var functionEntries))
                     return false;
 

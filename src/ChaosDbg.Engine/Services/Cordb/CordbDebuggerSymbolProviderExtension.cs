@@ -1,7 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
 using ChaosDbg.Symbol;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -34,6 +35,9 @@ namespace ChaosDbg.Cordb
             return false;
         }
 
+        public HRESULT TryReadVirtual(long address, IntPtr buffer, int size, out int read) =>
+            process.DataTarget.ReadVirtual(address, buffer, size, out read);
+
         public bool TryNativeSymFromAddr(long address, out IDisplacedSymbol symbol)
         {
             /* Because we don't receive notification events for module unloads, it's not exactly safe to load every single module we try and find symbols for. Also, we expect most of our modules will be managed, so we don't want to waste
@@ -61,5 +65,7 @@ namespace ChaosDbg.Cordb
             symbol = default;
             return false;
         }
+
+        public void WriteVirtual<T>(long address, T value) where T : struct => process.DataTarget.WriteVirtual(address, value);
     }
 }

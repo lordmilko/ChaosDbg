@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using ClrDebug;
 
 namespace ChaosDbg.Symbol
@@ -9,5 +10,9 @@ namespace ChaosDbg.Symbol
     interface IDebuggerSymbolProviderExtension
     {
         bool TryGetSOS(out SOSDacInterface sos, out ProcessModule clr);
+
+        HRESULT TryReadVirtual(long address, IntPtr buffer, int size, out int read);
+
+        void WriteVirtual<T>(long address, T value) where T : struct;
     }
 }

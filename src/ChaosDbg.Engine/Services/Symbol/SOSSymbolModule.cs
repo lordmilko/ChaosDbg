@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 namespace ChaosDbg.Symbol
@@ -19,9 +19,9 @@ namespace ChaosDbg.Symbol
 
         public string Name { get; }
 
-        public string FilePath { get; }
+        public string ModulePath { get; }
 
-        public long Length => throw new NotImplementedException();
+        public int Length => throw new NotImplementedException();
 
         public SOSSymbolModule(CLRDATA_ADDRESS address, string name)
         {
@@ -29,7 +29,7 @@ namespace ChaosDbg.Symbol
             Name = Path.GetFileNameWithoutExtension(name);
 
             if (Path.IsPathRooted(name))
-                FilePath = name;
+                ModulePath = name;
         }
 
         public void AddSymbol(IManagedSymbol symbol)
@@ -52,6 +52,10 @@ namespace ChaosDbg.Symbol
 
         //Not supported
         public IDisplacedSymbol GetInlineSymbolFromAddress(long address, int inlineFrameContext) => null;
+        public ISymbol GetSymbolFromName(string name)
+        {
+            throw new NotImplementedException();
+        }
 
         public override string ToString()
         {

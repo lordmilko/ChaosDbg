@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
-using ChaosDbg.Cordb;
 using ClrDebug;
-using Iced.Intel;
 
 namespace ChaosDbg
 {

@@ -16,14 +16,14 @@ namespace ChaosDbg.SymStore
         /// The input file stream to generate the key or the output file stream
         /// for the symbol stores to write.
         /// </summary>
-        public readonly Stream Stream;
+        public Stream Stream { get; }
 
         /// <summary>
         /// The name of the input file for key generation or the name of where 
         /// the output file came for symbol stores i.e. cached file name, file.ptr
         /// UNC path or http request URL.
         /// </summary>
-        public readonly string FileName;
+        public string FileName { get; }
 
         /// <summary>
         /// Create a symbol file instance

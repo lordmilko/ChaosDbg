@@ -2,7 +2,7 @@
 using System.Linq;
 using ChaosDbg;
 using ChaosDbg.Cordb;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 
 namespace chaos.Cordb.Commands
 {

@@ -4,6 +4,7 @@ using System.Linq;
 using ChaosDbg.Cordb;
 using ChaosDbg.IL;
 using ChaosLib.Metadata;
+using ChaosLib.PortableExecutable;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
@@ -38,6 +39,7 @@ namespace ChaosDbg.Tests
         }
 
         [TestMethod]
+        [DoNotParallelize]
         public void CordbEngine_Disasm_Native()
         {
             TestSignalledDebugCreate(
@@ -54,21 +56,21 @@ namespace ChaosDbg.Tests
                         "33c0            xor     eax,eax",
                         "8945f0          mov     dword ptr [ebp-10h],eax",
                         "894dfc          mov     dword ptr [ebp-4],ecx",
-                        "8b05a813c87a    mov     eax,dword ptr [mscorlib.ni+0x13a8]",
+                        "8b05a813d37a    mov     eax,dword ptr [mscorlib.ni+0x13a8 (7ad313a8)] ds:7ad313a8={mscorlib.ni+0x12ac}",
                         "833800          cmp     dword ptr [eax],0",
-                        "7406            je      System.Threading.Thread.Sleep(Int32)+0x1f",
-                        "ff156095027b    call    dword ptr [CORINFO_HELP_DBG_IS_JUST_MY_CODE]",
+                        "7406            je      mscorlib!System.Threading.Thread.Sleep(Int32)+0x1f",
+                        "ff156095027b    call    dword ptr [mscorlib.ni+0x3a9560 (7b0d9560)] ds:7b0d9560={CORINFO_HELP_DBG_IS_JUST_MY_CODE (clr!JIT_DbgIsJustMyCode)}",
                         "8b4dfc          mov     ecx,dword ptr [ebp-4]",
-                        "ff15388ac87a    call    dword ptr [System.Threading.Thread.SleepInternal(Int32)]",
-                        "ff15dc93eb7a    call    dword ptr [System.AppDomainPauseManager.get_IsPaused()]",
+                        "ff15388ac87a    call    dword ptr [mscorlib.ni+0x8a38 (7ad38a38)] ds:7ad38a38={clr!ThreadNative::Sleep}",
+                        "ff15dc93eb7a    call    dword ptr [mscorlib.ni+0x2393dc (7af693dc)] ds:7af693dc={mscorlib!System.AppDomainPauseManager.get_IsPaused()}",
                         "8945f8          mov     dword ptr [ebp-8],eax",
                         "837df800        cmp     dword ptr [ebp-8],0",
-                        "7418            je      System.Threading.Thread.Sleep(Int32)+0x4f",
-                        "ff15f093eb7a    call    dword ptr [System.AppDomainPauseManager.get_ResumeEvent()]",
+                        "7418            je      mscorlib!System.Threading.Thread.Sleep(Int32)+0x4f",
+                        "ff15f093eb7a    call    dword ptr [mscorlib.ni+0x2393f0 (7af693f0)] ds:7af693f0={mscorlib!System.AppDomainPauseManager.get_ResumeEvent()}",
                         "8945f0          mov     dword ptr [ebp-10h],eax",
                         "8b4df0          mov     ecx,dword ptr [ebp-10h]",
                         "3909            cmp     dword ptr [ecx],ecx",
-                        "ff155890cf7a    call    dword ptr [System.Threading.WaitHandle.WaitOneWithoutFAS()]",
+                        "ff155890cf7a    call    dword ptr [mscorlib.ni+0x79058 (7ada9058)] ds:7ada9058={mscorlib!System.Threading.WaitHandle.WaitOneWithoutFAS()}",
                         "8945f4          mov     dword ptr [ebp-0Ch],eax",
                         "90              nop",
                         "90              nop",
@@ -86,20 +88,20 @@ namespace ChaosDbg.Tests
                         "488945f0        mov     qword ptr [rbp-10h],rax",
                         "894d10          mov     dword ptr [rbp+10h],ecx",
                         "833d86e5deff00  cmp     dword ptr [<memory>],0",
-                        "7405            je      System.Threading.Thread.Sleep(Int32)+0x21",
-                        "e85fd69c5f      call    CORINFO_HELP_DBG_IS_JUST_MY_CODE",
+                        "7405            je      mscorlib!System.Threading.Thread.Sleep(Int32)+0x21",
+                        "e85fd69c5f      call    CORINFO_HELP_DBG_IS_JUST_MY_CODE (clr!JIT_DbgIsJustMyCode)",
                         "8b4d10          mov     ecx,dword ptr [rbp+10h]",
-                        "e817b2605f      call    System.Threading.Thread.SleepInternal(Int32)",
-                        "e842faffff      call    System.AppDomainPauseManager.get_IsPaused()",
+                        "e817b2605f      call    clr!ThreadNative::Sleep",
+                        "e842faffff      call    mscorlib!System.AppDomainPauseManager.get_IsPaused()",
                         "0fb6c0          movzx   eax,al",
                         "8945fc          mov     dword ptr [rbp-4],eax",
                         "837dfc00        cmp     dword ptr [rbp-4],0",
-                        "741b            je      System.Threading.Thread.Sleep(Int32)+0x55",
-                        "e839faffff      call    System.AppDomainPauseManager.get_ResumeEvent()",
+                        "741b            je      mscorlib!System.Threading.Thread.Sleep(Int32)+0x55",
+                        "e839faffff      call    mscorlib!System.AppDomainPauseManager.get_ResumeEvent()",
                         "488945f0        mov     qword ptr [rbp-10h],rax",
                         "488b4df0        mov     rcx,qword ptr [rbp-10h]",
                         "3909            cmp     dword ptr [rcx],ecx",
-                        "e89226feff      call    System.Threading.WaitHandle.WaitOneWithoutFAS()",
+                        "e89226feff      call    mscorlib!System.Threading.WaitHandle.WaitOneWithoutFAS()",
                         "0fb6c0          movzx   eax,al",
                         "8945f8          mov     dword ptr [rbp-8],eax",
                         "90              nop",
@@ -460,6 +462,22 @@ namespace ChaosDbg.Tests
             Dictionary<CORDB_ADDRESS, byte[]> readMemory,
             Action<ILToNativeInstruction[]> validate)
         {
+            using var process = new CordbProcess(
+                new CorDebugProcess(
+                    new MockCorDebugProcess
+                    {
+                        ReadMemory = readMemory
+                    }
+                ),
+                new CordbSessionInfo(
+                    GetService<CordbEngineServices>(),
+                    () => { },
+                    default
+                ),
+                false,
+                null
+            );
+
             var function = new CordbILFunction(
                 new CorDebugFunction(
                     new MockCorDebugFunction
@@ -481,24 +499,8 @@ namespace ChaosDbg.Tests
                     new CorDebugModule(
                         new MockCorDebugModule()
                     ),
-
-                    new CordbProcess(
-                        new CorDebugProcess(
-                            new MockCorDebugProcess
-                            {
-                                ReadMemory = readMemory
-                            }
-                        ),
-                        new CordbSessionInfo(
-                            GetService<CordbEngineServices>(),
-                            () => { },
-                            default
-                        ),
-                        false,
-                        null
-                    ),
-
-                    new MockPEFile()
+                    process,
+                    new PEFile()
                 )
             );
 

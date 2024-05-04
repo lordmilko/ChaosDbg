@@ -96,7 +96,6 @@ namespace ChaosDbg.Disasm
         }
 
         #endregion
-
         #region CV_HREG_e
 
         public static Register ToIcedRegister(this CV_HREG_e register, IMAGE_FILE_MACHINE arch)
@@ -104,9 +103,15 @@ namespace ChaosDbg.Disasm
             switch (arch)
             {
                 case IMAGE_FILE_MACHINE.I386:
+                    if (register == CV_HREG_e.CV_ALLREG_VFRAME)
+                        return Register.EBP; //Based on dbgeng!MachineInfo::CvRegToMachine
+
                     return ToIcedRegisterX86(register);
 
                 case IMAGE_FILE_MACHINE.AMD64:
+                    if (register == CV_HREG_e.CV_ALLREG_VFRAME)
+                        return Register.RSP; //Based on dbgeng!MachineInfo::CvRegToMachine. Backed up by the expected behavior when DIA calls IDiaStackWalkHelper::put_registerValue
+
                     return ToIcedRegisterX64(register);
 
                 default:

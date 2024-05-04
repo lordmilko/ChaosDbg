@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Runtime.ExceptionServices;
 using System.Threading;
-using ClrDebug;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
@@ -57,10 +57,13 @@ namespace ChaosDbg.DbgEng
         #endregion
 
         private readonly DbgEngEngineServices services;
+        private readonly DbgEngEngineProvider engineProvider;
+        private bool disposed;
 
-        public DbgEngEngine(DbgEngEngineServices services)
+        public DbgEngEngine(DbgEngEngineServices services, DbgEngEngineProvider engineProvider)
         {
             this.services = services;
+            this.engineProvider = engineProvider;
 
             Threads = new DbgEngThreadStore();
         }
@@ -71,21 +74,24 @@ namespace ChaosDbg.DbgEng
         internal void WakeEngineForInput() => Session.UiClient.ExitDispatch(Session.EngineClientRaw);
 
         [Obsolete("Do not call this method. Use DbgEngEngineProvider.CreateProcess() instead")]
-        void IDbgEngineInternal.CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         [Obsolete("Do not call this method. Use DbgEngEngineProvider.Attach() instead")]
-        void IDbgEngineInternal.Attach(AttachProcessOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.Attach(LaunchTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        private void CreateSession(object options, CancellationToken cancellationToken)
+        private void CreateSession(LaunchTargetOptions options, CancellationToken cancellationToken)
         {
             if (Session != null)
                 throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
 
             Session = new DbgEngSessionInfo(
                 () => ThreadProc(options),
-                services.SafeDebugCreate(true),
+#pragma warning disable CS0618
+                services.SafeDebugCreate(options.UseDbgEngSymOpts ?? true), //g_Machine is protected by the DbgEngEngineProvider
+#pragma warning restore CS0618
+                options.DbgEngEngineId,
                 cancellationToken
             );
 
@@ -94,13 +100,25 @@ namespace ChaosDbg.DbgEng
             //We must start the debugger thread AFTER the Session variable has been assigned to
             Session.Start();
 
-            //Once the target has been created, all the core values will exist
-            //in our Session that are required to interact with the target
-            Session.TargetCreated.Wait(cancellationToken);
+            try
+            {
+                //We want to be able to wait on the TCS with our CancellationToken, but this will result in an AggregateException being thrown on failure.
+                //GetAwaiter().GetResult() won't let you use your CancellationToken in conjunction with them
+                Session.TargetCreated.Task.Wait(cancellationToken);
+            }
+            catch (AggregateException ex)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            }
         }
 
         public void Dispose()
         {
+            if (disposed)
+                return;
+
+            engineProvider.Remove(this);
+
             Session?.Dispose();
             Session = null;
             Modules = null;

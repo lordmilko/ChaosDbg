@@ -1,6 +1,4 @@
-﻿using ClrDebug.DbgEng;
-
-namespace ChaosDbg.DbgEng
+﻿namespace ChaosDbg.DbgEng
 {
     /// <summary>
     /// Stores information about a debug target.

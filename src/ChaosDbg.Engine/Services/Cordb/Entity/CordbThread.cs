@@ -15,7 +15,7 @@ namespace ChaosDbg.Cordb
     /// Represents a thread that may or may not have ever executed managed code within a <see cref="CordbProcess"/>.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
-    public partial class CordbThread : IDbgThread
+    public partial class CordbThread : IDbgThread, IDisposable
     {
         private static readonly int OFFSETOF__TLS__tls_EETlsData = 2 * IntPtr.Size;
 
@@ -459,5 +459,11 @@ namespace ChaosDbg.Cordb
         }
 
         #endregion
+
+        public void Dispose()
+        {
+            if (accessor is IDisposable d)
+                d.Dispose();
+        }
     }
 }

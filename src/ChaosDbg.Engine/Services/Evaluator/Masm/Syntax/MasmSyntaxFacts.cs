@@ -2,18 +2,6 @@
 {
     class MasmSyntaxFacts
     {
-        public static bool IsHexDigit(char c) =>
-            c is >= '0' and <= '9' or >= 'A' and <= 'F' or >= 'a' and <= 'f';
-
-        public static bool IsDecimalDigit(char c) =>
-            c is >= '0' and <= '9';
-
-        public static bool IsOctalDigit(char c) =>
-            c is >= '0' and <= '7';
-
-        public static bool IsBinaryDigit(char c) =>
-            c == '0' | c == '1';
-
         public static bool IsPrefixUnaryExpression(MasmSyntaxKind token) =>
             GetPrefixUnaryExpression(token) != MasmSyntaxKind.None;
 

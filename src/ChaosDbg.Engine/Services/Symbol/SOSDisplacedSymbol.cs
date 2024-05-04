@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.Symbols;
 
 namespace ChaosDbg.Symbol
 {
@@ -12,6 +12,14 @@ namespace ChaosDbg.Symbol
         {
             Displacement = displacement;
             Symbol = symbol;
+        }
+
+        public override string ToString()
+        {
+            if (Displacement == 0)
+                return base.ToString();
+
+            return $"{base.ToString()}+{Displacement:X}";
         }
     }
 }

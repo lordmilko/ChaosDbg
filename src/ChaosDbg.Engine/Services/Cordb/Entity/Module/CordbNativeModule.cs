@@ -3,8 +3,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Handle;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 #nullable enable
@@ -184,9 +184,11 @@ namespace ChaosDbg.Cordb
                     return peFile.ExportDirectory.Name;
             }
 
-            foreach (var codeView in peFile.DebugDirectory.CodeViews)
+            var codeViews = peFile.DebugDirectory.CodeView;
+
+            if (codeViews != null && codeViews.Length > 0)
             {
-                var fileName = Path.GetFileNameWithoutExtension(codeView.Path);
+                var fileName = Path.GetFileNameWithoutExtension(codeViews[0].Path);
 
                 //Ostensibly we should have a filename ntdll.pdb. If the filename is ntdll.dll.pdb however,
                 //fileName is going to still contain ".dll" in it

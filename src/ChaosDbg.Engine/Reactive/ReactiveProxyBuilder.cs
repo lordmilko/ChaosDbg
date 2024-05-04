@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using ChaosDbg.Dynamic;
+using ChaosLib;
+using ChaosLib.Dynamic;
+using ChaosLib.Dynamic.Emit;
 
 namespace ChaosDbg.Reactive
 {
@@ -20,11 +22,11 @@ namespace ChaosDbg.Reactive
 
             var assembly = DynamicAssembly.Instance;
 
-            var builder = assembly.DefineProxy(type.Name, type);
+            var builder = assembly.DefineType($"{type.Name}Proxy", type);
 
             var reactiveProperties = GetReactiveProperties(type);
 
-            var setPropertyDef = type.GetInternalMethodInfo("SetProperty");
+            var setPropertyDef = type.GetMethodInfo("SetProperty");
 
             foreach (var property in reactiveProperties)
             {
@@ -138,26 +140,7 @@ namespace ChaosDbg.Reactive
             il.Emit(OpCodes.Ldarg_0); //this
 
             for (var i = 1; i <= args.Length; i++)
-            {
-                switch (i)
-                {
-                    case 0:
-                        il.Emit(OpCodes.Ldarg_0);
-                        break;
-                    case 1:
-                        il.Emit(OpCodes.Ldarg_1);
-                        break;
-                    case 2:
-                        il.Emit(OpCodes.Ldarg_2);
-                        break;
-                    case 3:
-                        il.Emit(OpCodes.Ldarg_3);
-                        break;
-                    default:
-                        il.Emit(OpCodes.Ldarg_S, (byte) i); //If you don't cast the int to a byte you get a bunch of nops
-                        break;
-                }
-            }
+                il.Ldarg(i);
 
             il.Emit(OpCodes.Call, baseCtor);
             il.Emit(OpCodes.Ret);

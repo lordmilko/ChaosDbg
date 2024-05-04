@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.Symbols;
 using ChaosLib.TypedData;
 
 namespace ChaosDbg.Cordb

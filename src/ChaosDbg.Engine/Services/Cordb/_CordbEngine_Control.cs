@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using ChaosDbg.Disasm;
+using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
 
@@ -8,30 +9,55 @@ namespace ChaosDbg.Cordb
 {
     partial class CordbEngine
     {
-        public void Invoke(Action action) =>
-            Session.EngineThread.Invoke(action);
+        public void Invoke(Action action)
+        {
+            CheckIfDisposed();
 
-        /// <inheritdoc />
+            Session.EngineThread.Invoke(action);
+        }
+
+        /// <summary>
+        /// User-level resumes the current process.<para/>
+        /// This method will repeatedly call <see cref="CorDebugController.Continue(bool)"/> until
+        /// <see cref="CordbSessionInfo.UserPauseCount"/> is 0, indicating that the process is now
+        /// freely running.
+        /// </summary>
         public void Continue()
         {
-            //If we're already running, nothing to do!
-            if (Session.UserPauseCount == 0)
-                return;
-
-            var lastPause = Session.EventHistory.LastStopReason;
-
-            //If we paused as a result of a native event (especially if it was an out of band one) we need to continue that event first
-            if (lastPause is CordbNativeEventPauseReason nativePause)
+            lock (Session.UserPauseCountLock)
             {
-                Session.UserPauseCount--;
-                DoContinue(Process.CorDebugProcess, nativePause.OutOfBand, true);
-            }
+                Log.Debug<CordbEngine>("Attempting to Continue");
 
-            //Keep calling CorDebugController.Continue() until we're freely running again
-            while (Session.UserPauseCount > 0)
-            {
-                Session.UserPauseCount--;
-                DoContinue(Process.CorDebugProcess, false);
+                CheckIfDisposed();
+
+                //If we're already running, nothing to do!
+                if (Session.UserPauseCount == 0)
+                {
+                    Log.Debug<CordbEngine>("Ignoring Continue as target is already running");
+                    return;
+                }
+
+                var lastPause = Session.EventHistory.LastStopReason;
+
+                //If we paused as a result of a native event (especially if it was an out of band one) we need to continue that event first
+                if (lastPause is CordbNativeEventPauseReason nativePause)
+                {
+                    Session.UserPauseCount--;
+
+                    Log.Debug<CordbEngine>("Last pause had a native reason. Continuing Win32 Event Thread prior to Continuing (remaining pause count: {pauseCount})", Session.UserPauseCount);
+
+                    DoContinue(Process.CorDebugProcess, nativePause.OutOfBand, true);
+                }
+
+                //Keep calling CorDebugController.Continue() until we're freely running again
+                while (Session.UserPauseCount > 0)
+                {
+                    Session.UserPauseCount--;
+
+                    Log.Debug<CordbEngine>("Continuing managed event thread (remaining pause count: {pauseCount}", Session.UserPauseCount);
+
+                    DoContinue(Process.CorDebugProcess, false);
+                }
             }
         }
 
@@ -41,17 +67,24 @@ namespace ChaosDbg.Cordb
             //indicating that the process is now freely running
             if (Session.CallbackStopCount == 1)
             {
-                Process.Breakpoints.RestoreCurrentBreakpoint();
-
-                if (isUnmanaged)
+                if (!Session.IsCrashing)
                 {
-                    //If this is an ExitThread event, the event thread won't exist anymore
+                    //These items are nice to haves, but if the engine is in the middle of crashing, don't bother with them, as
+                    //we can't guarantee whether we have an accurate picture of the processes state (not to mention we intentionally
+                    //skip event callbacks while in the middle of crashing)
 
-                    TryClearHardInterrupt();
+                    Process.Breakpoints.RestoreCurrentBreakpoint();
+
+                    if (isUnmanaged)
+                    {
+                        //If this is an ExitThread event, the event thread won't exist anymore
+
+                        TryClearHardInterrupt();
+                    }
+
+                    //Apply any modified register contexts
+                    Process.Threads.SaveRegisterContexts();
                 }
-
-                //Apply any modified register contexts
-                Process.Threads.SaveRegisterContexts();
 
                 //Invalidate any data we collected while we were paused
                 Session.PauseContext.Clear();
@@ -69,17 +102,21 @@ namespace ChaosDbg.Cordb
 
             if (isUnmanaged)
             {
+                Log.Debug<CordbEngine>("Continuing (unmanaged: {unmanaged}, outOfband: {outOfBand})", true, outOfBand);
                 hr = TryUnmanagedContinue(controller, outOfBand);
             }
             else
             {
                 Debug.Assert(!outOfBand);
+                Log.Debug<CordbEngine>("Continuing (unmanaged: {unmanaged})", false);
                 hr = controller.TryContinue(false);
             }
 
             switch (hr)
             {
                 case HRESULT.CORDBG_E_PROCESS_TERMINATED:
+                    //If the process wasn't marked as terminated before, it is now!
+                    Session.IsTerminated = true;
                     break;
 
                 default:
@@ -175,6 +212,8 @@ namespace ChaosDbg.Cordb
 
         public void Break()
         {
+            CheckIfDisposed();
+
             Process.CorDebugProcess.Stop(0);
             Session.EventHistory.Add(new CordbUserBreakPauseReason());
             OnStopping(false);
@@ -183,6 +222,8 @@ namespace ChaosDbg.Cordb
 
         public HRESULT TryCreateBreakpoint(CordbILFunction function, int offset, out CordbManagedCodeBreakpoint breakpoint)
         {
+            CheckIfDisposed();
+
             breakpoint = default;
 
             //Process.CorDebugProcess.Break
@@ -203,6 +244,8 @@ namespace ChaosDbg.Cordb
 
         public void CreateNativeBreakpoint(CORDB_ADDRESS address)
         {
+            CheckIfDisposed();
+
             //Info about stepping:
             //https://www.codereversing.com/archives/169
             //https://www.codereversing.com/archives/178
@@ -212,17 +255,23 @@ namespace ChaosDbg.Cordb
 
         public void CreateDataBreakpoint(long address, DR7.Kind accessKind, DR7.Length size)
         {
+            CheckIfDisposed();
+
             Process.Breakpoints.Add(address, accessKind, size);
         }
 
         public void StepIntoNative()
         {
+            CheckIfDisposed();
+
             Process.Breakpoints.AddNativeStep(null, false);
             Continue();
         }
 
         public void StepOverNative()
         {
+            CheckIfDisposed();
+
             /* In DbgEng, when you do step into or over, this command is dispatched by ParseStepTrace to SetExecStepTrace()
              * The pivotal handling of step over vs step into is then handled in BaseX86MachineInfo::GetNextOffset(). When
              * stepping into, the global step breakpoint's address is set to either the address of the next instruction (when

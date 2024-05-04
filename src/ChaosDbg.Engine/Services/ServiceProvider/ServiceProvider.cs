@@ -50,18 +50,30 @@ namespace ChaosDbg.Engine
 
         public void AddSingleton(Type serviceType, Type implementationType)
         {
-            if (implementationType.IsInterface)
-                throw new ArgumentException($"Cannot create service using implementation type '{implementationType.Name}': type is an interface.", nameof(implementationType));
-
-            if (services.TryGetValue(serviceType, out _))
-                throw new InvalidOperationException($"Cannot create service '{serviceType.Name}': service has already been added to the {nameof(ServiceCollection)}.");
+            Validate(serviceType, implementationType);
 
             services[serviceType] = new ServiceDescriptor(serviceType, implementationType);
         }
 
+        public void AddSingleton(Type serviceType, object implementation)
+        {
+            if (serviceType == null)
+                throw new ArgumentNullException(nameof(serviceType));
+
+            if (implementation == null)
+                throw new ArgumentNullException(nameof(implementation));
+
+            if (!serviceType.IsInstanceOfType(implementation))
+                throw new ArgumentException($"Implementation type '{implementation.GetType().Name}' does not implement service type '{serviceType.Name}'");
+
+            Validate(serviceType, implementation.GetType());
+
+            services[serviceType] = new ServiceDescriptor(serviceType, implementation.GetType(), implementation: implementation);
+        }
+
         public object GetService(Type serviceType) => GetServiceInternal(serviceType, new Stack<ServiceDescriptor>());
 
-        private object GetServiceInternal(Type serviceType, Stack<ServiceDescriptor> resolutionScope)
+        private object GetServiceInternal(Type serviceType, Stack<ServiceDescriptor> resolutionScope, bool optional = false)
         {
             if (!services.TryGetValue(serviceType, out var descriptor))
             {
@@ -74,7 +86,12 @@ namespace ChaosDbg.Engine
                     services[serviceType] = descriptor;
                 }
                 else
+                {
+                    if (optional)
+                        return null;
+
                     throw new InvalidOperationException($"Cannot retrieve service '{serviceType.Name}': service has not been registered with the service provider.");
+                }
             }
 
             if (descriptor.Value != null)
@@ -135,6 +152,15 @@ namespace ChaosDbg.Engine
             return (Func<IServiceProvider, object>) func;
         }
 
+        internal object ResolveArrayService(Type type)
+        {
+            var service = ResolveService(type, new Stack<ServiceDescriptor>());
+
+            resolutionOrder.Add(service);
+
+            return service;
+        }
+
         private object ResolveService(Type type, Stack<ServiceDescriptor> resolutionScope)
         {
             try
@@ -144,12 +170,19 @@ namespace ChaosDbg.Engine
                 if (ctors.Length > 1)
                     throw new InvalidOperationException($"Cannot resolve service '{type.Name}': more than one constructor was found.");
 
-                if (ctors.Length == 0)
-                    return Activator.CreateInstance(type);
+                try
+                {
+                    if (ctors.Length == 0)
+                        return Activator.CreateInstance(type);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to create an instance of type {type}", ex);
+                }
 
                 var ctor = ctors.Single();
 
-                var parameters = ctor.GetParameters().Select(p => GetServiceInternal(p.ParameterType, resolutionScope)).ToArray();
+                var parameters = ctor.GetParameters().Select(p => GetServiceInternal(p.ParameterType, resolutionScope, p.HasDefaultValue)).ToArray();
 
                 return ctor.Invoke(parameters);
             }
@@ -162,12 +195,23 @@ namespace ChaosDbg.Engine
             }
         }
 
+        private void Validate(Type serviceType, Type implementationType)
+        {
+            if (implementationType.IsInterface)
+                throw new ArgumentException($"Cannot create service using implementation type '{implementationType.Name}': type is an interface.", nameof(implementationType));
+
+            if (services.TryGetValue(serviceType, out _))
+                throw new InvalidOperationException($"Cannot create service '{serviceType.Name}': service has already been added to the {nameof(ServiceProvider)}.");
+        }
+
         private bool disposed;
 
         public void Dispose()
         {
             if (disposed)
                 return;
+
+            //Array elements are added to the resolutionOrder in ResolveArrayService, so we'll ensure they get disposed as well
 
             resolutionOrder.Reverse();
 

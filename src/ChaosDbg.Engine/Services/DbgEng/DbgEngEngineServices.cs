@@ -12,14 +12,19 @@ namespace ChaosDbg.DbgEng
 
         public IPEFileProvider PEFileProvider { get; }
 
-        public DbgEngEngineServices(
+        internal DbgEngNativeLibraryLoadCallback DbgEngNativeLibraryLoadCallback { get; }
+
+        internal DbgEngEngineServices(
             NativeLibraryProvider nativeLibraryProvider,
-            IPEFileProvider peFileProvider)
+            IPEFileProvider peFileProvider,
+            DbgEngNativeLibraryLoadCallback dbgEngNativeLibraryLoadCallback)
         {
             NativeLibraryProvider = nativeLibraryProvider;
             PEFileProvider = peFileProvider;
+            DbgEngNativeLibraryLoadCallback = dbgEngNativeLibraryLoadCallback;
         }
 
+        [Obsolete("DbgEng is not thread safe. Attempting to use multiple debuggers concurrently will cause g_Machine to be overwritten. Ensure only a single thread utilizes a DebugClient at a time")]
         public DebugClient SafeDebugCreate(bool allowOverwriteSymbolOpts)
         {
             return DebugCreateOrConnect<DebugCreateDelegate>(
@@ -27,7 +32,11 @@ namespace ChaosDbg.DbgEng
                 {
                     d(DebugClient.IID_IDebugClient, out var pDebugClient).ThrowDbgEngNotOK();
 
-                    return new DebugClient(pDebugClient);
+                    var client = new DebugClient(pDebugClient);
+
+                    Log.Debug<DebugClient>("Created DebugCreate DebugClient {hashCode}", client.GetHashCode());
+
+                    return client;
                 },
                 "DebugCreate",
                 allowOverwriteSymbolOpts
@@ -41,7 +50,11 @@ namespace ChaosDbg.DbgEng
                 {
                     d(remoteOptions, DebugClient.IID_IDebugClient, out var pDebugClient).ThrowDbgEngNotOK();
 
-                    return new DebugClient(pDebugClient);
+                    var client = new DebugClient(pDebugClient);
+
+                    Log.Debug<DebugClient>("Created DebugConnect DebugClient {hashCode}", client.GetHashCode());
+
+                    return client;
                 },
                 "DebugConnect",
                 allowOverwriteSymbolOpts
@@ -78,19 +91,23 @@ namespace ChaosDbg.DbgEng
              *
              * Thus, to mitigate this we force load DbgHelp prior to DbgEng to ensure its loaded */
 
+            //Force load DbgHelp from the same directory as DbgEng, so that DbgEng doesn't try and load it from some other directory (such as our output folder if we're
+            //trying to use the system DbgEng installation)
             NativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
-
-            /* DebugCreate/DebugConnect will both call dbgeng!OneTimeInitialization which will overwrite our symbol options.
-             * This is particularly troublesome since DbgEng prefers to use deferred symbol loads, while we may prefer eager. Thus,
-             * if we don't want to allow DbgEng to control our symbol options, we'll revert them back after we create our client */
-            var originalOpts = DbgHelp.SymGetOptions();
 
             var debugCreateOrConnect = NativeLibraryProvider.GetExport<TDelegate>(WellKnownNativeLibrary.DbgEng, procName);
 
-            var debugClient = createClient(debugCreateOrConnect);
+            /* If we're trying to use DbgHelp ourselves, we may cause crashes if DbgEng tries to do its own things with DbgHelp at the same
+             * time that we do. As such, hook all DbgHelp functions imported by DbgEng that operate on a hProcess.
+             *
+             * DebugCreate/DebugConnect will both call dbgeng!OneTimeInitialization which will overwrite our symbol options.
+             * This is particularly troublesome since DbgEng prefers to use deferred symbol loads, while we may prefer eager. We can't
+             * simply store and revert the old options after DebugCreate/DebugConnect returns, because in the meantime one of our other
+             * threads may be trying to do stuff with DbgHelp, and this will mess up their options. Thus, we solve this by intercepting
+             * DbgEng's call to SymSetOptions and denying the request. */
+            DbgEngNativeLibraryLoadCallback.AllowOverwriteSymbolOpts = allowOverwriteSymbolOpts;
 
-            if (!allowOverwriteSymbolOpts)
-                DbgHelp.SymSetOptions(originalOpts);
+            var debugClient = createClient(debugCreateOrConnect);
 
             return debugClient;
         }

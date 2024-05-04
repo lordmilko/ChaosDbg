@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 using ChaosLib;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 
 namespace ChaosDbg
 {

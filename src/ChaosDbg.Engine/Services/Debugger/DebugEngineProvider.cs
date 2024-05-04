@@ -40,15 +40,21 @@ namespace ChaosDbg
          * in the event a new engine is created, it can immediately be brought up to speed with all of the event handlers
          * that it should be participating in */
 
-        protected readonly EventHandlerList events = new EventHandlerList();
+        //Engine Providers that derive from DebugEngineProvider should store a copy of the items in this list inside themselves inside their NewEngine() override
+        protected EventHandlerList events = new EventHandlerList();
+
+        public void ClearEventHandlers()
+        {
+            events = new EventHandlerList();
+        }
 
         /// <summary>
         /// The event that occurs when the engine wishes to print output to the console.
         /// </summary>
         public event EventHandler<EngineOutputEventArgs> EngineOutput
         {
-            add => events.AddHandler(nameof(EngineOutput), value);
-            remove => events.RemoveHandler(nameof(EngineOutput), value);
+            add => AddEvent(nameof(EngineOutput), value);
+            remove => RemoveEvent(nameof(EngineOutput), value);
         }
 
         /// <summary>
@@ -56,8 +62,17 @@ namespace ChaosDbg
         /// </summary>
         public event EventHandler<EngineStatusChangedEventArgs> EngineStatusChanged
         {
-            add => events.AddHandler(nameof(EngineStatusChanged), value);
-            remove => events.RemoveHandler(nameof(EngineStatusChanged), value);
+            add => AddEvent(nameof(EngineStatusChanged), value);
+            remove => RemoveEvent(nameof(EngineStatusChanged), value);
+        }
+
+        /// <summary>
+        /// The event that occurs when a fatal exception occurs inside the debugger engine.
+        /// </summary>
+        public event EventHandler<EngineFailureEventArgs> EngineFailure
+        {
+            add => AddEvent(nameof(EngineFailure), value);
+            remove => RemoveEvent(nameof(EngineFailure), value);
         }
 
         /// <summary>
@@ -65,8 +80,8 @@ namespace ChaosDbg
         /// </summary>
         public event EventHandler<EngineModuleLoadEventArgs> ModuleLoad
         {
-            add => events.AddHandler(nameof(ModuleLoad), value);
-            remove => events.RemoveHandler(nameof(ModuleLoad), value);
+            add => AddEvent(nameof(ModuleLoad), value);
+            remove => RemoveEvent(nameof(ModuleLoad), value);
         }
 
         /// <summary>
@@ -74,8 +89,8 @@ namespace ChaosDbg
         /// </summary>
         public event EventHandler<EngineModuleUnloadEventArgs> ModuleUnload
         {
-            add => events.AddHandler(nameof(ModuleUnload), value);
-            remove => events.RemoveHandler(nameof(ModuleUnload), value);
+            add => AddEvent(nameof(ModuleUnload), value);
+            remove => RemoveEvent(nameof(ModuleUnload), value);
         }
 
         /// <summary>
@@ -83,8 +98,8 @@ namespace ChaosDbg
         /// </summary>
         public event EventHandler<EngineThreadCreateEventArgs> ThreadCreate
         {
-            add => events.AddHandler(nameof(ThreadCreate), value);
-            remove => events.RemoveHandler(nameof(ThreadCreate), value);
+            add => AddEvent(nameof(ThreadCreate), value);
+            remove => RemoveEvent(nameof(ThreadCreate), value);
         }
 
         /// <summary>
@@ -92,14 +107,14 @@ namespace ChaosDbg
         /// </summary>
         public event EventHandler<EngineThreadExitEventArgs> ThreadExit
         {
-            add => events.AddHandler(nameof(ThreadExit), value);
-            remove => events.RemoveHandler(nameof(ThreadExit), value);
+            add => AddEvent(nameof(ThreadExit), value);
+            remove => RemoveEvent(nameof(ThreadExit), value);
         }
 
         public event EventHandler<EngineBreakpointHitEventArgs> BreakpointHit
         {
-            add => events.AddHandler(nameof(BreakpointHit), value);
-            remove => events.RemoveHandler(nameof(BreakpointHit), value);
+            add => AddEvent(nameof(BreakpointHit), value);
+            remove => RemoveEvent(nameof(BreakpointHit), value);
         }
 
         private void AddEvent(string key, Delegate value)
@@ -109,7 +124,7 @@ namespace ChaosDbg
             lock (engines)
             {
                 foreach (var engine in engines)
-                    ((IDbgEngineInternal) engine).EventHandlers.AddHandler(engine, value);
+                    ((IDbgEngineInternal) engine).EventHandlers.AddHandler(key, value);
             }
         }
 
@@ -127,14 +142,15 @@ namespace ChaosDbg
         #endregion
 
         /// <summary>
-        /// Creates a new <typeparamref name="T"/> against a newly created process.
+        /// Creates a new <typeparamref name="TEngine"/> against a newly created process.
         /// </summary>
         /// <param name="options">The options to use to create the process.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to shutdown the engine thread.</param>
         /// <param name="initCallback">A callback that is used to initialize the newly created engine prior to launching the target process.</param>
         /// <returns>An <see cref="ICordbEngine"/> for debugging the specified process.</returns>
-        public TEngine CreateProcess(CreateProcessOptions options, CancellationToken cancellationToken = default, Action<TEngine> initCallback = null)
+        public TEngine CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken = default, Action<TEngine> initCallback = null)
         {
+            CheckRequiredEventHandlers();
             CheckIfDisposed();
 
             var engine = CreateEngine();
@@ -146,9 +162,10 @@ namespace ChaosDbg
             return engine;
         }
 
-        public TEngine Attach(AttachProcessOptions options, CancellationToken cancellationToken = default)
+        public TEngine Attach(LaunchTargetOptions options, CancellationToken cancellationToken = default)
         {
             CheckIfDisposed();
+            CheckRequiredEventHandlers();
 
             var engine = CreateEngine();
 
@@ -157,7 +174,7 @@ namespace ChaosDbg
             return engine;
         }
 
-        private TEngine CreateEngine()
+        protected virtual TEngine CreateEngine()
         {
             lock (objLock)
             {
@@ -170,6 +187,23 @@ namespace ChaosDbg
         }
 
         protected abstract TEngine NewEngine();
+
+        public virtual void Remove(TEngine engine)
+        {
+            lock (objLock)
+            {
+                if (activeEngine != null && activeEngine.Equals(engine))
+                    activeEngine = default;
+
+                engines.Remove(engine);
+            }
+        }
+
+        private void CheckRequiredEventHandlers()
+        {
+            if (events[nameof(EngineFailure)] == null)
+                throw new InvalidOperationException($"Cannot create '{typeof(TEngine).Name}' instance: an '{nameof(EngineFailure)}' event handler has not been set.");
+        }
 
         private void CheckIfDisposed()
         {

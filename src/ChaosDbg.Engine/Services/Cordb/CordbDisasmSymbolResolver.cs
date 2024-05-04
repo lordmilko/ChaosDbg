@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
 using ChaosDbg.Symbol;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 using Iced.Intel;
 using static ClrDebug.HRESULT;
@@ -58,6 +57,19 @@ namespace ChaosDbg.Cordb
                     case OpKind.Immediate32:
                         if ((int) address == int.MaxValue) //0x7fffffff
                             return false;
+
+                        break;
+
+                    case OpKind.Memory:
+                        switch (instruction.MemorySize)
+                        {
+                            case MemorySize.Int32:
+                            case MemorySize.UInt32:
+                                if (((int) address) < 0)
+                                    return false;
+
+                                break;
+                        }
 
                         break;
                 }

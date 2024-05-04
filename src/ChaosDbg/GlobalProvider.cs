@@ -5,6 +5,7 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
+using ChaosLib;
 using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg

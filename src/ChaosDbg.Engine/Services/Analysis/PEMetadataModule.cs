@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using ChaosDbg.Disasm;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 namespace ChaosDbg.Analysis

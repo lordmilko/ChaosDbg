@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using ChaosLib;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -14,75 +13,108 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Represents the entry point of the DbgEng Engine Thread. The thread containing this entry point is created inside of <see cref="DbgEngSessionInfo"/>.
         /// </summary>
-        /// <param name="launchInfo">Information about the debug target that should be launched.</param>
-        private void ThreadProc(object launchInfo)
+        /// <param name="options">Information about the debug target that should be launched.</param>
+        private void ThreadProc(LaunchTargetOptions options)
         {
-            //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
-            //The real client however exists on the engine thread here
-            Session.CreateEngineClient();
-
-            //Sometimes we need to execute commands that only emit output to the output callbacks (e.g. OutputDisassemblyLines). Rather than pollute our normal output display,
-            //we define a special purpose "buffer client" that has its own output callbacks that write to an array.
-            Session.CreateBufferClient();
-
-            EngineClient.Control.EngineOptions =
-                DEBUG_ENGOPT.INITIAL_BREAK | //Break immediately upon starting the debug session
-                DEBUG_ENGOPT.FINAL_BREAK;    //Break when the debug target terminates
-
-            //https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/symbol-options
-            EngineClient.Symbols.SymbolOptions =
-                //Standard default settings
-                SYMOPT.CASE_INSENSITIVE     | //Ignore case when searching for symbols.
-                SYMOPT.UNDNAME              | //Undecorate symbols when they are displayed/ignore decorations in symbol searches
-                SYMOPT.DEFERRED_LOADS       | //Don't load symbols for modules until the debugger actually requires them
-                SYMOPT.OMAP_FIND_NEAREST    | //Standard default setting. Use the nearest symbol when optimization causes an expected symbol to not exist at a given location
-                SYMOPT.LOAD_LINES           | //Read line information from source files for use in source level debugging
-                SYMOPT.FAIL_CRITICAL_ERRORS | //Don't display a dialog box if an error occurs during symbol loading. Not sure why one would though
-                SYMOPT.AUTO_PUBLICS         | //Fallback to using public symbols in the PDB as a last resort
-                SYMOPT.NO_IMAGE_SEARCH      |  //Don't search the disk for a copy of the image when symbols are loaded
-
-                //Custom ChaosDbg default settings
-                0; //None
-
-            //Launch the target process and get some basic information about it
-            Target = CreateDebugTarget(launchInfo);
-
-            var attachFlags = DEBUG_ATTACH.DEFAULT;
-
-            if (launchInfo is AttachProcessOptions a && a.NonInvasive)
+            try
             {
-                attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+                //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
+                //The real client however exists on the engine thread here
+                Session.CreateEngineClient();
 
-                if (a.NoSuspend)
-                    attachFlags |= DEBUG_ATTACH.NONINVASIVE_NO_SUSPEND;
+                //Sometimes we need to execute commands that only emit output to the output callbacks (e.g. OutputDisassemblyLines). Rather than pollute our normal output display,
+                //we define a special purpose "buffer client" that has its own output callbacks that write to an array.
+                Session.CreateBufferClient();
+
+                EngineClient.Control.EngineOptions =
+                    DEBUG_ENGOPT.INITIAL_BREAK | //Break immediately upon starting the debug session
+                    DEBUG_ENGOPT.FINAL_BREAK;    //Break when the debug target terminates
+
+                //If we aren't allowing DbgEng to control DbgHelp options, our IAT hook for DbgHelp on DbgEng will intercept this
+
+                //https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/symbol-options
+                EngineClient.Symbols.SymbolOptions =
+                    //Standard default settings
+                    SYMOPT.CASE_INSENSITIVE     | //Ignore case when searching for symbols.
+                    SYMOPT.UNDNAME              | //Undecorate symbols when they are displayed/ignore decorations in symbol searches
+                    SYMOPT.DEFERRED_LOADS       | //Don't load symbols for modules until the debugger actually requires them
+                    SYMOPT.OMAP_FIND_NEAREST    | //Standard default setting. Use the nearest symbol when optimization causes an expected symbol to not exist at a given location
+                    SYMOPT.LOAD_LINES           | //Read line information from source files for use in source level debugging
+                    SYMOPT.FAIL_CRITICAL_ERRORS | //Don't display a dialog box if an error occurs during symbol loading. Not sure why one would though
+                    SYMOPT.AUTO_PUBLICS         | //Fallback to using public symbols in the PDB as a last resort
+                    SYMOPT.NO_IMAGE_SEARCH      |  //Don't search the disk for a copy of the image when symbols are loaded
+
+                    //Custom ChaosDbg default settings
+                    0; //None
+
+                var attachFlags = DEBUG_ATTACH.DEFAULT;
+
+                if (options.IsAttach && options.NonInvasive)
+                {
+                    //dbgeng!InvalidAttachFlags() will prevent specifying NONINVASIVE and EXISTING at the same time
+
+                    attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+
+                    if (options.NoSuspend)
+                        attachFlags |= DEBUG_ATTACH.NONINVASIVE_NO_SUSPEND;
+                }
+
+                //Hook up callbacks last. If multiple engines are running simultaneously, a broadcast to all clients may result in us receiving notifications that don't belong to us.
+                //We don't want to trip over such alerts when we're not ready to receive them yet
+
+                /* The DbgEngEngine class will serve as both the output and event handlers. The reason for this is that only the class that owns an event
+                 * handler is allowed to invoke it. If we had separate classes for our engine, thread and event callbacks, we would have to write a lot of "middleware"
+                 * events to relay the same event over and over so the owning class can dispatch it further. Having everything in one big class simplifies dispatching
+                 * of events as well as accessing engine resources */
+                EngineClient.OutputCallbacks = this;
+                EngineClient.EventCallbacks = this;
+
+                //We also serve as our input handler. This is the same thing that WinDbg does. Inside our input handler we call ReturnInput()
+                //against the UI Client
+                EngineClient.InputCallbacks = this;
+
+                HRESULT hr;
+
+                if (options.IsAttach)
+                {
+                    var process = Process.GetProcessById(options.ProcessId);
+
+                    var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+
+                    Target = new DbgEngTargetInfo(null, options.ProcessId, is32Bit);
+
+                    //There's no need to suspend threads prior to attaching. Debug events won't be dispatched until we start calling
+                    //WaitForEvent
+                    hr = EngineClient.TryAttachProcess(0, Target.ProcessId, attachFlags);
+                }
+                else
+                {
+                    hr = TryCreateProcess(options);
+                }
+
+                switch (hr)
+                {
+                    case HRESULT.ERROR_NOT_SUPPORTED:
+                    case HRESULT.STATUS_NOT_SUPPORTED:
+                        throw new DebuggerInitializationException($"Failed to attach to process: process most likely does not match architecture of debugger ({(IntPtr.Size == 4 ? "x86" : "x64")}).", hr);
+
+                    default:
+                        hr.ThrowOnNotOK();
+                        break;
+                }
+
+                //Enter the main engine loop. This method will not return until the debugger ends
+                EngineLoop();
             }
-
-            //Hook up callbacks last. If multiple engines are running simultaneously, a broadcast to all clients may result in us receiving notifications that don't belong to us.
-            //We don't want to trip over such alerts when we're not ready to receive them yet
-
-            /* The DbgEngEngine class will serve as both the output and event handlers. The reason for this is that only the class that owns an event
-             * handler is allowed to invoke it. If we had separate classes for our engine, thread and event callbacks, we would have to write a lot of "middleware"
-             * events to relay the same event over and over so the owning class can dispatch it further. Having everything in one big class simplifies dispatching
-             * of events as well as accessing engine resources */
-            EngineClient.OutputCallbacks = this;
-            EngineClient.EventCallbacks = this;
-
-            //We also serve as our input handler. This is the same thing that WinDbg does. Inside our input handler we call ReturnInput()
-            //against the UI Client
-            EngineClient.InputCallbacks = this;
-
-            //Now let's attach to it
-            var hr = EngineClient.TryAttachProcess(0, Target.ProcessId, attachFlags);
-
-            switch (hr)
+            catch (Exception ex)
             {
-                case HRESULT.ERROR_NOT_SUPPORTED:
-                case HRESULT.STATUS_NOT_SUPPORTED:
-                    throw new DebuggerInitializationException($"Failed to attach to process: process most likely does not match architecture of debugger ({(IntPtr.Size == 4 ? "x86" : "x64")}).", hr);
-            }
+                Session.TargetCreated.SetResult();
+                Session.BreakEvent.SetResult();
 
-            //Enter the main engine loop. This method will not return until the debugger ends
-            EngineLoop();
+                Log.Error<DbgEngEngine>(ex, "An unhandled exception occurred on the DbgEng Engine Thread: {message}", ex.Message);
+
+                throw;
+            }
         }
 
         /// <summary>
@@ -92,11 +124,33 @@ namespace ChaosDbg.DbgEng
         {
             try
             {
+                /* Ostensibly, we want to do a WaitForEvent with 0 timeout prior to enterting the main loop, so that we can set our TargetCreated event. A bunch of debugger callbacks to trigger
+                 * when we call WaitForEvent with 0 timeout. However, it seems when we go to do the "real" wait, and we've non-invasively attached, dbgeng!LiveUserTargetInfo::WaitInitialize
+                 * is not very happy for some reason, which causes us to get an error. Thus, we have no choice but to set our TargetCreated event inside of the loop. This will be an issue if
+                 * we allow launching the target without breaking initially, but we'll have to deal with that when that issue arises (currently we always break on the loader/attach breakpoint) */
+
+                var hasSetTargetCreated = false;
+
                 while (!IsEngineCancellationRequested)
                 {
-                    //Go to sleep and wait for an event to occur. We can force the debugger to wake up
-                    //via our UiClient by calling DebugControl.SetInterrupt()
-                    EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, Kernel32.INFINITE);
+                    try
+                    {
+                        //Go to sleep and wait for an event to occur. We can force the debugger to wake up
+                        //via our UiClient by calling DebugControl.SetInterrupt()
+                        EngineClient.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, Kernel32.INFINITE);
+                    }
+                    catch (NullReferenceException ex)
+                    {
+                        Debug.Assert(false, $"A {ex.GetType().Name} occurred while waiting for a DbgEng debug event. This most likely indicates an issue with a DbgHelp hook. The DbgEng engine lock most likely is still being held; any future attempts at interacting with DbgEng will hang");
+
+                        throw;
+                    }
+
+                    if (!hasSetTargetCreated)
+                    {
+                        hasSetTargetCreated = true;
+                        Session.TargetCreated.SetResult();
+                    }
 
                     //When disposing our debug session on the UI thread, we will cancel our CTS and then attempt to call DebugControl.SetInterrupt().
                     //If we can see cancellation was requested, the engine is shutting down, and we should break out of the engine loop
@@ -142,68 +196,59 @@ namespace ChaosDbg.DbgEng
             }
         }
 
-        /// <summary>
-        /// Launches the specified target (e.g. creates the target process) and creates a <see cref="DbgEngTargetInfo"/> that provides key information about the target.
-        /// </summary>
-        private DbgEngTargetInfo CreateDebugTarget(object launchInfo)
+        private unsafe HRESULT TryCreateProcess(LaunchTargetOptions options)
         {
-            bool is32Bit;
-            DbgEngTargetInfo target;
+            /* We have a bit of a problem. We want to be able to launch new processes minimized for ease of debugging. However, DbgEng
+             * does not expose a mechanism for us to do this. We can always start the process suspended and *then* attach, but then
+             * we've got a new issue: the loader breakpoint won't have occurred yet, and attaching to a process also causes an attach
+             * breakpoint to occur. Thus, we're going to end up breaking twice, which is not what we want. There is no combination of DEBUG_ATTACH
+             * flags that will do what we want. In order to get the desired behavior, DbgEng *must* be the one to create the process. Thus, we have
+             * no choice but to go with plan B: intercept DbgEng calling CreateProcess, and add in the required startup options ourself! */
 
-            if (launchInfo is AttachProcessOptions a)
+            try
             {
-                var process = Process.GetProcessById(a.ProcessId);
+                services.DbgEngNativeLibraryLoadCallback.HookCreateProcess = ctx =>
+                {
+                    var si = (STARTUPINFOW*) ctx.Arg<IntPtr>("lpStartupInfo");
 
-                is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+                    //Specifies that CreateProcess should look at the settings specified in wShowWindow
+                    si->dwFlags = STARTF.STARTF_USESHOWWINDOW;
 
-                target = new DbgEngTargetInfo(null, a.ProcessId, is32Bit);
+                    //We use ShowMinNoActive here instead of ShowMinimized, as ShowMinimized has the effect of causing our debugger
+                    //window to flash, losing and then regaining focus. If we never active the newly created process, we never lose
+                    //focus to begin with
+                    si->wShowWindow = ShowWindow.ShowMinNoActive;
 
-                return target;
+                    /* If you specify DEBUG_PROCESS or DEBUG_ONLY_THIS_PROCESS,
+                     * a debug object will be created immediately in CreateProcessInternalW,
+                     * after which you won't need to attach to the process manually. */
+                    var result = ctx.InvokeOriginal();
+
+                    if ((bool) result)
+                    {
+                        var pi = ctx.Arg<PROCESS_INFORMATION>("lpProcessInformation");
+
+                        var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
+
+                        Target = new DbgEngTargetInfo(options.CommandLine, pi.dwProcessId, is32Bit);
+                    }
+
+                    return result;
+                };
+
+                //There's no need to create the process suspended. Debug events won't be dispatched until we start calling
+                //WaitForEvent. There is a 500ms delay the first time this is called, which seems to be related to the DbgEng Extension Gallery
+                return EngineClient.TryCreateProcessAndAttachWide(
+                    0, options.CommandLine,
+                    DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS,
+                    0,
+                    DEBUG_ATTACH.DEFAULT
+                );
             }
-
-            var c = (CreateProcessOptions) launchInfo;
-
-            var si = new STARTUPINFOW
+            finally
             {
-                cb = Marshal.SizeOf<STARTUPINFOW>()
-            };
-
-            if (c.StartMinimized)
-            {
-                //Specifies that CreateProcess should look at the settings specified in wShowWindow
-                si.dwFlags = STARTF.STARTF_USESHOWWINDOW;
-
-                //We use ShowMinNoActive here instead of ShowMinimized, as ShowMinimized has the effect of causing our debugger
-                //window to flash, losing and then regaining focus. If we never active the newly created process, we never lose
-                //focus to begin with
-                si.wShowWindow = ShowWindow.ShowMinNoActive;
+                services.DbgEngNativeLibraryLoadCallback.HookCreateProcess = null;
             }
-
-            var creationFlags =
-                CreateProcessFlags.CREATE_NEW_CONSOLE | //In the event ChaosDbg is invoked via some sort of command line tool, we want our debuggee to be created in a new window
-                CreateProcessFlags.CREATE_SUSPENDED;    //Don't let the process start running; after we create it we want our debugger to attach to it
-
-            PROCESS_INFORMATION pi;
-
-            Kernel32.CreateProcessW(
-                c.CommandLine,
-                creationFlags,
-                IntPtr.Zero,
-                Environment.CurrentDirectory,
-                ref si,
-                out pi
-            );
-
-            is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
-
-            target = new DbgEngTargetInfo(c.CommandLine, pi.dwProcessId, is32Bit);
-
-            //We have everything we need, now finally close the process and thread handles we were given.
-            //We don't need to resume the thread before closing it, DbgEng can get its own handle when its ready to resume
-            Kernel32.CloseHandle(pi.hProcess);
-            Kernel32.CloseHandle(pi.hThread);
-
-            return target;
         }
     }
 }

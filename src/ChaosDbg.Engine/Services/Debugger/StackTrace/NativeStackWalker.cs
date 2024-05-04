@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using ChaosDbg.Symbol;
 using ChaosLib;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using ClrDebug;
 using ClrDebug.DbgEng;
 
@@ -17,14 +16,14 @@ namespace ChaosDbg
     class NativeStackWalker : IDisposable
     {
         private CLRDataTarget dataTarget;
-        private DebuggerSymbolProvider symbols;
+        private INativeStackWalkerFunctionTableProvider functionTables;
         private DynamicFunctionTableProvider dynamicFunctionTableProvider;
         private IntPtr dynamicFunctionTableResult;
         private Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol symbol, ISymbolModule module)> getSymbol;
 
         public NativeStackWalker(
             ICLRDataTarget dataTarget,
-            DebuggerSymbolProvider symbols,
+            INativeStackWalkerFunctionTableProvider functionTables,
             DynamicFunctionTableCache dynamicFunctionTableCache,
             Func<long, INLINE_FRAME_CONTEXT, (IDisplacedSymbol, ISymbolModule)> getSymbol)
         {
@@ -32,7 +31,7 @@ namespace ChaosDbg
                 throw new ArgumentNullException(nameof(dataTarget));
 
             this.dataTarget = new CLRDataTarget(dataTarget);
-            this.symbols = symbols;
+            this.functionTables = functionTables;
 
             //While our DbgHelpSession can retrieve modules for us, we want to retrieve enhanced ISymbol/ISymbolModule instances.
             //If we already have an ISymbolModule stored somewhere else (which is likely in a debugger), use those existing instances
@@ -50,10 +49,17 @@ namespace ChaosDbg
             if (this.dataTarget.MachineType != IMAGE_FILE_MACHINE.I386)
             {
                 dynamicFunctionTableProvider = new DynamicFunctionTableProvider(dataTarget, dynamicFunctionTableCache);
-                symbols.FunctionEntryCallback = DynamicFunctionCallback;
+                functionTables.FunctionEntryCallback = DynamicFunctionCallback;
             }
         }
 
+        /// <summary>
+        /// Represents the entry point for resolving dynamic function entry items via DbgHelp.
+        /// </summary>
+        /// <param name="hProcess">The process that the function entry should be resolved for.</param>
+        /// <param name="AddrBase">The address to resolve.</param>
+        /// <param name="UserContext">The user context that was set when this callback was resolved.</param>
+        /// <returns>If <paramref name="AddrBase"/> was resolved to a dynamic function entry, a pointer to the resolved <see cref="RUNTIME_FUNCTION"/> entry. Otherwise, <see cref="IntPtr.Zero"/>.</returns>
         private IntPtr DynamicFunctionCallback(IntPtr hProcess, long AddrBase, long UserContext)
         {
             /* When attempting to resolve function table addresses (required for unwinding dynamically generated 64-bit
@@ -108,42 +114,48 @@ namespace ChaosDbg
             {
                 //StackWalKEx may modify the CONTEXT record. We want to capture this modified CONTEXT to store in the NativeFrame,
                 //but we can't use unsafe code in an iterator, so we're forced to play games, wrapping the unsafe code up in an internal method
-                unsafe bool DoStackWalk(ref CROSS_PLATFORM_CONTEXT ctx)
+                unsafe bool DoStackWalk(ref CROSS_PLATFORM_CONTEXT ctx, ref STACKFRAME_EX frame)
                 {
-                    fixed (CROSS_PLATFORM_CONTEXT* ptr = &ctx)
+                    STACKFRAME_EX* p = default;
+
+                    fixed (CROSS_PLATFORM_CONTEXT* pCtx = &ctx)
+                    fixed (STACKFRAME_EX* pFrame = &frame)
                     {
-                        return DbgHelp.Native.StackWalkEx(
+                        var walkResult = DbgHelp.Native.StackWalkEx(
                             machineType,
                             hProcess,
                             hThread,
-                            ref stackFrame,
-                            (IntPtr) ptr,
+                            (IntPtr) pFrame,
+                            (IntPtr) pCtx,
                             null,
                             FunctionTableAccess,
                             GetModuleBase,
                             null,
                             SYM_STKWALK.DEFAULT
                         );
+
+                        return walkResult;
                     }
                 }
 
-                var result = DoStackWalk(ref raw);
+                var result = DoStackWalk(ref raw, ref stackFrame);
 
                 if (!result)
                     break;
 
+                //Get the symbol first to aid in debugging the asserts below
+                var symbolResult = getSymbol(stackFrame.AddrPC.Offset, stackFrame.InlineFrameContext);
+
                 //We don't currently track the return address of a frame, because I think it should be implied
                 //that the return address of frame is the IP of the next frame. If that isn't the case though, we need
                 //to re-evaluate things
-                if (previousReturn != null)
+                if (previousReturn != null && previousReturn != 0)
                     Debug.Assert(previousReturn.Value == stackFrame.AddrPC.Offset);
 
                 //In the case of an inline frame, the return address will be the same as the frame after it that it's actually
                 //a part of
                 if (!stackFrame.InlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
                     previousReturn = stackFrame.AddrReturn.Offset;
-
-                var symbolResult = getSymbol(stackFrame.AddrPC.Offset, stackFrame.InlineFrameContext);
 
                 var newFrame = new NativeFrame(stackFrame, symbolResult.symbol, symbolResult.module, new CrossPlatformContext(context.Flags, raw));
 
@@ -154,7 +166,7 @@ namespace ChaosDbg
             }
         }
 
-        private unsafe IntPtr FunctionTableAccess(IntPtr hProcess, long addrBase)
+        private IntPtr FunctionTableAccess(IntPtr hProcess, long addrBase)
         {
             /* DbgEng employs the following logic in SwFunctionTableAccess():
              * - if the target is i386, it tries to resolve the function table via SymFunctionTableAccess()
@@ -172,7 +184,8 @@ namespace ChaosDbg
             //since we should be informing DbgHelp whenever modules are loaded when doing interop debugging). If we're trying
             //to resolve the function table of an address in a CLR method, this will occur in the DynamicFunctionCallback()
             //registered above after DbgHelp's normal resolution logic fails
-            return DbgHelp.Native.SymFunctionTableAccess64(hProcess, addrBase);
+
+            return functionTables.GetFunctionTableEntry(addrBase);
         }
 
         private long GetModuleBase(IntPtr hProcess, long qwAddr)
@@ -180,17 +193,15 @@ namespace ChaosDbg
             //DbgHelp searches the modules it knows about, and if no module is found, defers to querying for dynamic function tables directly.
             //All modules we know about should be known to DbgHelp as well, so we're fine to just call SymGetModuleBase64() directly
 
-            var result = DbgHelp.Native.SymGetModuleBase64(hProcess, qwAddr);
-
-            if (result != 0)
-                return result;
+            if (functionTables.TryGetNativeModuleBase(qwAddr, out var moduleBase))
+                return moduleBase;
 
             //Dynamic function tables only apply to 64-bit processes, so our resolver won't be initialized
             //when we're targeting an i386 process.
             if (dynamicFunctionTableProvider != null)
             {
                 //Maybe this address is within a dynamically generated function
-                if (dynamicFunctionTableProvider.TryGetDynamicFunctionTableModuleBase(qwAddr, out result))
+                if (dynamicFunctionTableProvider.TryGetDynamicFunctionTableModuleBase(qwAddr, out var result))
                     return result;
             }
 
@@ -209,7 +220,7 @@ namespace ChaosDbg
             if (dynamicFunctionTableProvider != null)
             {
                 dynamicFunctionTableProvider.Dispose();
-                symbols.FunctionEntryCallback = null;
+                functionTables.FunctionEntryCallback = null;
             }
         }
     }

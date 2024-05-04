@@ -36,7 +36,7 @@ namespace ChaosDbg.DbgEng
         public string[] ExecuteBufferedCommand(Action<DebugClient> action) =>
             Session.EngineThread.Invoke(() => Session.ExecuteBufferedCommand(action));
 
-        public void WaitForBreak() => Session.BreakEvent.Wait();
+        public void WaitForBreak() => Session.BreakEvent.Task.Wait();
 
         public DbgEngFrame[] GetStackTrace()
         {

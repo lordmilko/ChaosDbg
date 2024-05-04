@@ -13,6 +13,6 @@ namespace ChaosDbg
         /// <summary>
         /// Gets the virtual PE File of this module.
         /// </summary>
-        IPEFile PEFile { get; }
+        PEFile PEFile { get; }
     }
 }

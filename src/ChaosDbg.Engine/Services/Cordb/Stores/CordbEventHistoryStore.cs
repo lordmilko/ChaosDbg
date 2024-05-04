@@ -74,6 +74,12 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        public void Add(CordbEngineFailureEventHistoryItem item)
+        {
+            lock (objLock)
+                history.Add(item);
+        }
+
         public IEnumerator<ICordbEventHistoryItem> GetEnumerator()
         {
             lock (objLock)

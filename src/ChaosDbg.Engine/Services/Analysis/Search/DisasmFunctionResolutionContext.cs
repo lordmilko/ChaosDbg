@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using ChaosDbg.Disasm;
+using ChaosLib.Symbols;
 using Iced.Intel;
 
 namespace ChaosDbg.Analysis
@@ -268,13 +269,18 @@ namespace ChaosDbg.Analysis
                 if (noReturnFunctions.Contains(existing.Symbol.Name))
                     return false;
 
-                if (noReturnFunctions.Contains(existing.Symbol.DiaSymbol.UndecoratedName))
-                    return false;
+                if (existing.Symbol is IHasDiaSymbol m)
+                {
+                    if (noReturnFunctions.Contains(m.DiaSymbol.UndecoratedName))
+                        return false;
 
-                //If we have symbol information indicating the function never returns. No need to disassemble it to check
-                //this manually
-                if (existing.Symbol.DiaSymbol.NoReturn)
-                    return false;
+                    //If we have symbol information indicating the function never returns. No need to disassemble it to check
+                    //this manually
+                    if (m.DiaSymbol.NoReturn)
+                        return false;
+                }
+                else
+                    throw new NotImplementedException();
             }
 
             var oldIP = searcher.Disassembler.IP;

@@ -14,7 +14,9 @@ namespace ChaosDbg
         /* We need to get RUNTIME_FUNCTION entries in order to show x64 stack traces properly. While unwinding a given stack,
          * we may need to query this information hundreds of times, returning the exact same couple of table lists each time.
          * Each function table can have potentially thousands of RUNTIME_FUNCTION entries in it, making it very inefficient
-         * to keep having our OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK keep regenerating this information over and over and over. */
+         * to keep having our OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK keep regenerating this information over and over and over.
+         * Thus, we cache this information, clearing it each time the debuggee resumes. This is important because as new methods
+         * are jitted, they may be added to the same few function tables we already cached, making this data stale. */
 
         private Dictionary<(IntPtr, IntPtr, IntPtr), RUNTIME_FUNCTION[]> cache = new Dictionary<(IntPtr, IntPtr, IntPtr), RUNTIME_FUNCTION[]>();
 
@@ -27,6 +29,7 @@ namespace ChaosDbg
         {
             if (!cache.TryGetValue((hProcess, hModule, tablePtr), out functionEntries))
             {
+                //Don't have this table, so invoke the callback
                 var status = callback(hProcess, tablePtr, out var entries, out var pFunctions);
 
                 //Not sure whether I should cache anything on fail so we don't ask again. For now, we don't cache

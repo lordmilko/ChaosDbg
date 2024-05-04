@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -9,7 +10,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Provides facilities for interacting with a thread that has executed managed code on at least one occassion.
         /// </summary>
-        public class ManagedAccessor : ICordbThreadAccessor
+        public class ManagedAccessor : ICordbThreadAccessor, IDisposable
         {
             public CordbThread Thread { get; set; }
 
@@ -39,6 +40,8 @@ namespace ChaosDbg.Cordb
             /// <inheritdoc cref="CordbThread.Handle" />
             public IntPtr Handle { get; }
 
+            private bool ownsHandle;
+
             public IEnumerable<CordbFrame> EnumerateFrames() => CordbFrameEnumerator.V3.Enumerate(this);
 
             public ManagedAccessor(CorDebugThread corDebugThread)
@@ -50,9 +53,32 @@ namespace ChaosDbg.Cordb
                 //asking for it from the CorDebugThread will fail
                 Id = CorDebugThread.Id;
 
-                //If we've stopped at an unmanaged event, we won't be able to receive our thread handle as we won't
-                //be synchronized
-                Handle = CorDebugThread.Handle;
+                var hr = corDebugThread.TryGetHandle(out var hThread);
+
+                switch (hr)
+                {
+                    case HRESULT.S_OK:
+                        //If we've stopped at an unmanaged event, we won't be able to receive our thread handle as we won't
+                        //be synchronized
+                        Handle = hThread;
+                        break;
+
+                    case HRESULT.E_NOTIMPL:
+                        //In V3, we have to provide the thread handle ourselves
+                        Handle = Kernel32.OpenThread(ThreadAccess.THREAD_ALL_ACCESS, false, Id);
+                        ownsHandle = true;
+                        break;
+
+                    default:
+                        hr.ThrowOnNotOK();
+                        break;
+                }
+            }
+
+            public void Dispose()
+            {
+                if (ownsHandle)
+                    Kernel32.CloseHandle(Handle);
             }
         }
     }

@@ -29,23 +29,23 @@ namespace ChaosDbg.Tests
                 is32Bit,
                 process =>
                 {
-                    using var nativeLibraryProvider = new NativeLibraryProvider();
-                    nativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+                    //Ensure we're not using the system32 version
+                    GetService<NativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
 
-                    var dbgHelpSession = new DbgHelpSession(process.Handle, invadeProcess: true);
+                    using var dbgHelp = DbgHelpProvider.Acquire(process.Handle, invadeProcess: true);
 
                     var reader = new MemoryReader(process.Handle);
                     var remotePeb = new RemotePeb(process);
 
-                    var typedDataProvider = new DbgHelpTypedDataProvider(dbgHelpSession);
+                    var typedDataProvider = new DbgHelpTypedDataProvider(dbgHelp, null);
 
                     //Ensure we use Peb32 for the purposes of this test, which RemotePeb will resolve
                     var typedPeb = typedDataProvider.CreateObject(remotePeb.Address, "ntdll!_PEB");
 
-                    var typedLdr = typedPeb["Ldr"];
+                    var typedLdr = (IDbgRemoteValue) typedPeb["Ldr"].Value;
                     var remoteLdr = remotePeb.Ldr;
 
-                    DbgRemoteObject[] GetModuleNames(string listName, string linkName)
+                    IDbgRemoteObject[] GetModuleNames(string listName, string linkName)
                     {
                         var head = (DbgRemoteListEntryHead) typedLdr[listName];
 
@@ -82,8 +82,8 @@ namespace ChaosDbg.Tests
                             var typedItem = typedItems[i];
                             var remoteItem = remoteItems[i];
 
-                            Assert.AreEqual(typedItem["FullDllName"].ToString(), remoteItem.FullDllName);
-                            Assert.AreEqual(typedItem["BaseDllName"].ToString(), remoteItem.BaseDllName);
+                            Assert.AreEqual(typedItem["FullDllName"].ToString().Trim('\"'), remoteItem.FullDllName);
+                            Assert.AreEqual(typedItem["BaseDllName"].ToString().Trim('\"'), remoteItem.BaseDllName);
                         }
                     }
                 }

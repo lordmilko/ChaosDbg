@@ -6,19 +6,19 @@ namespace ChaosDbg.Disasm
 {
     class DbgHelpDisasmSymbolResolver : IIndirectSymbolResolver
     {
-        private readonly DbgHelpSession dbgHelpSession;
+        private readonly IDbgHelp dbgHelp;
 
         public INativeDisassembler ProcessDisassembler { get; set; }
 
-        public DbgHelpDisasmSymbolResolver(DbgHelpSession dbgHelpSession)
+        public DbgHelpDisasmSymbolResolver(IDbgHelp dbgHelp)
         {
-            this.dbgHelpSession = dbgHelpSession;
+            this.dbgHelp = dbgHelp;
         }
 
         public bool TryGetSymbol(in Instruction instruction, int operand, int instructionOperand, ulong address, int addressSize,
             out SymbolResult symbol)
         {
-            if (dbgHelpSession.TrySymFromAddr((long) address, out var result) != HRESULT.S_OK)
+            if (dbgHelp.TrySymFromAddr((long) address, out var result) != HRESULT.S_OK)
             {
                 symbol = default;
                 return false;

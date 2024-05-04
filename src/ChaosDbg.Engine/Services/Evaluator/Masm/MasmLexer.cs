@@ -3,21 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using Iced.Intel;
 
 namespace ChaosDbg.Evaluator.Masm
 {
     //Based on https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Parser/Lexer.cs
 
-    class MasmLexer
+    class MasmLexer : AbstractLexer<MasmSyntaxKind, MasmSyntaxToken>
     {
-        private char[] chars;
-        private StringBuilder builder = new StringBuilder();
-
-        private List<MasmSyntaxToken> tokens = new List<MasmSyntaxToken>();
-        private List<string> errors = new List<string>();
-
         private static Dictionary<string, MasmSyntaxKind> keywords = new Dictionary<string, MasmSyntaxKind>(StringComparer.OrdinalIgnoreCase)
         {
             { "and", MasmSyntaxKind.AndKeyword },
@@ -51,32 +44,6 @@ namespace ChaosDbg.Evaluator.Masm
         }
 #endif
 
-        private int currentCharIndex;
-
-        public char CurrentChar
-        {
-            get
-            {
-                if (currentCharIndex < chars.Length)
-                    return chars[currentCharIndex];
-
-                return char.MaxValue;
-            }
-        }
-
-        public string CurrentWord => builder.ToString();
-
-        public char NextChar
-        {
-            get
-            {
-                if (currentCharIndex >= chars.Length - 1)
-                    return char.MaxValue;
-
-                return chars[currentCharIndex + 1];
-            }
-        }
-
         public static (MasmSyntaxToken[] result, string[] errors) Lex(string expr)
         {
             var lexer = new MasmLexer(expr);
@@ -84,9 +51,8 @@ namespace ChaosDbg.Evaluator.Masm
             return (lexer.tokens.ToArray(), lexer.errors.ToArray());
         }
 
-        private MasmLexer(string expr)
+        private MasmLexer(string expr) : base(expr.ToCharArray())
         {
-            chars = expr.ToCharArray();
         }
 
         public void LexInternal()
@@ -230,7 +196,7 @@ namespace ChaosDbg.Evaluator.Masm
 
                         break;
 
-                    case (>= 'a' and <= 'z') or (>= 'A' and <= 'Z'):
+                    case ('_' or >= 'a' and <= 'z') or (>= 'A' and <= 'Z'):
                         ScanIdentifierOrKeywordOrRegister();
                         break;
 
@@ -253,28 +219,7 @@ namespace ChaosDbg.Evaluator.Masm
 
         private void ScanIdentifierOrKeywordOrRegister(MasmSyntaxKind expectedKind = MasmSyntaxKind.None)
         {
-            var read = true;
-
-            do
-            {
-                var ch = CurrentChar;
-
-                switch (ch)
-                {
-                    case (>= 'a' and <= 'z') or (>= 'A' and <= 'Z'):
-                    case >= '0' and <= '9':
-                    case '_':
-                    case '.':
-                        break;
-
-                    default:
-                        read = false;
-                        break;
-                }
-            } while (read && MoveNext());
-
-            var str = builder.ToString();
-            builder.Clear();
+            var str = ScanIdentifier(allowDot: true, allowDollar: false);
 
             if (expectedKind == MasmSyntaxKind.None)
             {
@@ -374,105 +319,25 @@ namespace ChaosDbg.Evaluator.Masm
 
             if (isHex)
             {
-                value = ScanNumberInternal(MasmSyntaxFacts.IsHexDigit, true, 16);
+                value = ScanInteger(IsHexDigit, true, 16);
 
                 //Ignore any 'h' identifier on the end
                 if (CurrentChar == 'h')
                     MoveNext();
             }
             else if (isDecimal)
-                value = ScanNumberInternal(MasmSyntaxFacts.IsDecimalDigit, false, 10);
+                value = ScanInteger(IsDecimalDigit, false, 10);
             else if (isOctal)
-                value = ScanNumberInternal(MasmSyntaxFacts.IsOctalDigit, false, 8);
+                value = ScanInteger(IsOctalDigit, false, 8);
             else if (isBinary)
-                value = ScanNumberInternal(MasmSyntaxFacts.IsBinaryDigit, false, 2);
+                value = ScanInteger(IsBinaryDigit, false, 2);
             else
                 throw new NotImplementedException("Don't know what type of value this is");
 
             return FinalizeToken(MasmSyntaxKind.NumericLiteralToken, value);
         }
 
-        private long ScanNumberInternal(Func<char, bool> isValidDigit, bool allowDelim, int fromBase)
-        {
-            var badDelim = false;
-
-            while (currentCharIndex < chars.Length)
-            {
-                var ch = CurrentChar;
-
-                if (isValidDigit(ch))
-                {
-                    if (!MoveNext())
-                        break;
-
-                    continue;
-                }    
-
-                if (ch == '`')
-                {
-                    if (allowDelim)
-                    {
-                        if (!MoveNext())
-                            break;
-
-                        continue;
-                    }
-
-                    badDelim = true;
-                }
-
-                break;
-            }
-
-            if (badDelim)
-                AddError($"Extra character ` in '{CurrentWord}'");
-
-            if (builder.Length == 0)
-                return 0;
-
-            return Convert.ToInt64(CurrentWord.Replace("`", string.Empty), fromBase);
-        }
-
-        private MasmSyntaxToken SimpleToken(MasmSyntaxKind kind)
-        {
-            MoveNext();
-            return FinalizeToken(kind);
-        }
-
-        private MasmSyntaxToken FinalizeToken(MasmSyntaxKind kind, object value = null)
-        {
-            var str = builder.ToString();
-            builder.Clear();
-
-            var token = new MasmSyntaxToken(kind, str, value);
-
-            tokens.Add(token);
-
-            return token;
-        }
-
-        public bool MoveNext(int count = 1)
-        {
-            builder.Append(CurrentChar);
-
-            currentCharIndex += count;
-
-            if (char.IsWhiteSpace(CurrentChar))
-            {
-                do
-                {
-                    currentCharIndex++;
-                } while (currentCharIndex < chars.Length && char.IsWhiteSpace(CurrentChar));
-
-                return false;
-            }
-
-            return currentCharIndex < chars.Length;
-        }
-
-        private void AddError(string message)
-        {
-            errors.Add(message);
-        }
+        protected override MasmSyntaxToken CreateToken(MasmSyntaxKind kind, string text, object value) =>
+            new MasmSyntaxToken(kind, text, value);
     }
 }

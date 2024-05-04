@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 using ClrDebug.DIA;
 
 namespace ChaosDbg.Tests
@@ -13,9 +11,9 @@ namespace ChaosDbg.Tests
         private IUnmanagedSymbolModule symbolModule;
 
         public string Name => symbolModule.Name;
-        public string FilePath => symbolModule.FilePath;
+        public string ModulePath => symbolModule.ModulePath;
         public long Address => symbolModule.Address;
-        public long Length => symbolModule.Length;
+        public int Length => symbolModule.Length;
 
         private string[] allowed;
 
@@ -57,6 +55,11 @@ namespace ChaosDbg.Tests
         }
 
         public IDisplacedSymbol GetInlineSymbolFromAddress(long address, int inlineFrameContext)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ISymbol GetSymbolFromName(string name)
         {
             throw new NotImplementedException();
         }

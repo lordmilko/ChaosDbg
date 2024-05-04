@@ -2,8 +2,8 @@
 using System.IO;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 namespace ChaosDbg.Analysis

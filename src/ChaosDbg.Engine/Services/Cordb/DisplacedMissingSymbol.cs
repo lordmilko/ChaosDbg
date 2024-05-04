@@ -1,5 +1,5 @@
 ﻿using System;
-using ChaosLib.Metadata;
+using ChaosLib.Symbols;
 
 namespace ChaosDbg.Cordb
 {
@@ -14,7 +14,7 @@ namespace ChaosDbg.Cordb
         
         public long Displacement { get; }
 
-        public ISymbolModule Module => throw new NotSupportedException();
+        public ISymbolModule Module { get; }
 
         public ISymbol Symbol { get; }
 

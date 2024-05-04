@@ -27,6 +27,9 @@ namespace ChaosDbg.DbgEng
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
             HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineStatusChanged)], args);
 
+        private void RaiseEngineFailure(EngineFailureEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineFailure)], args);
+
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
             HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ModuleLoad)], args);
 
@@ -172,7 +175,7 @@ namespace ChaosDbg.DbgEng
                 if (oldStatus != newStatus)
                 {
                     if (newStatus == EngineStatus.Break)
-                        Session.BreakEvent.Set();
+                        Session.BreakEvent.SetResult();
                     else
                         Session.BreakEvent.Reset();
 
@@ -240,7 +243,7 @@ namespace ChaosDbg.DbgEng
                 return EngineStatus.None;
 
             //I think GO_HANDLED and GO_NOT_HANDLED relate to exception handling. GO_HANDLED is also generated when EndSession() is called
-            if (status == DEBUG_STATUS.GO || status == DEBUG_STATUS.GO_HANDLED)
+            if (status == DEBUG_STATUS.GO || status == DEBUG_STATUS.REVERSE_GO || status == DEBUG_STATUS.GO_HANDLED)
                 return EngineStatus.Continue;
 
             if (status == DEBUG_STATUS.BREAK)

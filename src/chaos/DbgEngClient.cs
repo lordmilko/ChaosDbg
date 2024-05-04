@@ -2,6 +2,7 @@
 using System.Threading;
 using ChaosDbg;
 using ChaosDbg.DbgEng;
+using ClrDebug;
 using ClrDebug.DbgEng;
 
 namespace chaos
@@ -11,15 +12,26 @@ namespace chaos
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
         private DbgEngEngineProvider engineProvider;
+
+        public DbgEngClient(IConsole console, DbgEngEngineProvider engineProvider)
+        {
+            Console = console;
+            this.engineProvider = engineProvider;
+        }
+
         private DbgEngEngine engine => engineProvider.ActiveEngine;
+
+        protected IConsole Console { get; }
 
         public void Execute(string executable, bool minimized)
         {
-            Console.CancelKeyPress += Console_CancelKeyPress;
+            Console.RegisterInterruptHandler(Console_CancelKeyPress);
 
             engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
             engineProvider.EngineOutput += Engine_EngineOutput;
             engineProvider.EngineStatusChanged += Engine_EngineStatusChanged;
+
+            engineProvider.EngineFailure += (s, e) => Console.WriteColorLine($"FATAL: {e.Exception}", ConsoleColor.Red);
 
             engineProvider.CreateProcess(executable, minimized);
 

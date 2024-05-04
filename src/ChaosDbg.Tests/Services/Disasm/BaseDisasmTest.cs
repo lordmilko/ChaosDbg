@@ -4,7 +4,7 @@ using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.Tests
 {
-    public abstract class BaseDisasmTest
+    public abstract class BaseDisasmTest : BaseTest
     {
         protected INativeDisassembler CreateDisassembler(long ip, bool is32Bit, params byte[] bytes)
         {
@@ -17,6 +17,14 @@ namespace ChaosDbg.Tests
                     OptionalHeader = new ImageOptionalHeader
                     {
                         ImageBase = ip
+                    }
+                },
+                SectionHeaders = new[]
+                {
+                    new ImageSectionHeader
+                    {
+                        VirtualAddress = 0,
+                        VirtualSize = 10
                     }
                 }
             };

@@ -17,6 +17,19 @@ namespace ChaosDbg.Cordb
         private object moduleLock = new object();
 
         private Dictionary<CORDB_ADDRESS, CordbManagedModule> managedModules = new Dictionary<CORDB_ADDRESS, CordbManagedModule>();
+
+        private Dictionary<CORDB_ADDRESS, CordbManagedModule> ManagedModules
+        {
+            get
+            {
+                if (!process.IsV3)
+                    return managedModules;
+
+                return process.CorDebugProcess.AppDomains.SelectMany(a => a.Assemblies).SelectMany(a => a.Modules)
+                    .ToDictionary(m => m.BaseAddress, m => new CordbManagedModule(m, process, null));
+            }
+        }
+
         private Dictionary<CORDB_ADDRESS, CordbNativeModule> nativeModules = new Dictionary<CORDB_ADDRESS, CordbNativeModule>();
         private Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule> managedProcessModules = new Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule>();
         private Dictionary<int, CordbNativeModule> nativeProcessModules = new Dictionary<int, CordbNativeModule>();
@@ -99,7 +112,7 @@ namespace ChaosDbg.Cordb
                     module.NativeModule = native;
                 }
 
-                managedModules.Add(corDebugModule.BaseAddress, module);
+                ManagedModules.Add(corDebugModule.BaseAddress, module);
             }
 
             //We don't need to add a managed module to our symbol store; we only resolve managed symbols when we see them
@@ -144,7 +157,7 @@ namespace ChaosDbg.Cordb
 
                 nativeModules.Add(baseAddress, native);
 
-                if (managedModules.TryGetValue(baseAddress, out var managed))
+                if (ManagedModules.TryGetValue(baseAddress, out var managed))
                 {
                     if (managed.NativeModule != null)
                         throw new InvalidOperationException($"Cannot set native module: managed module '{managed}' already has a native module associated with it.");
@@ -205,9 +218,9 @@ namespace ChaosDbg.Cordb
         {
             lock (moduleLock)
             {
-                if (managedModules.TryGetValue(baseAddress, out var module))
+                if (ManagedModules.TryGetValue(baseAddress, out var module))
                 {
-                    managedModules.Remove(module.BaseAddress);
+                    ManagedModules.Remove(module.BaseAddress);
 
                     if (process.Session.IsInterop)
                     {
@@ -243,7 +256,7 @@ namespace ChaosDbg.Cordb
                 process.Symbols.RemoveNativeModule(baseAddress);
                 nativeModules.Remove(baseAddress);
 
-                if (managedModules.TryGetValue(baseAddress, out var managed))
+                if (ManagedModules.TryGetValue(baseAddress, out var managed))
                 {
                     managed.NativeModule = null;
                     native.ManagedModule = null;
@@ -291,7 +304,7 @@ namespace ChaosDbg.Cordb
         {
             lock (moduleLock)
             {
-                var match = managedModules[corDebugModule.BaseAddress];
+                var match = ManagedModules[corDebugModule.BaseAddress];
 
                 return match;
             }
@@ -324,7 +337,7 @@ namespace ChaosDbg.Cordb
                     }
                 }
 
-                foreach (var item in managedModules.Values)
+                foreach (var item in ManagedModules.Values)
                 {
                     if (address >= item.BaseAddress && address <= item.EndAddress)
                     {
@@ -361,7 +374,7 @@ namespace ChaosDbg.Cordb
         {
             lock (moduleLock)
             {
-                return managedModules.Values
+                return ManagedModules.Values
                     .Cast<CordbModule>()
                     .Concat(nativeModules.Values.Cast<CordbModule>())
                     .ToList()

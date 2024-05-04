@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using ChaosLib;
 using ClrDebug;
 
@@ -28,10 +28,13 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (UserPauseCount == 0)
-                    return EngineStatus.Continue;
+                lock (UserPauseCountLock)
+                {
+                    if (UserPauseCount == 0)
+                        return EngineStatus.Continue;
 
-                return EngineStatus.Break;
+                    return EngineStatus.Break;
+                }
             }
         }
 
@@ -54,16 +57,12 @@ namespace ChaosDbg.Cordb
             set => Interlocked.Exchange(ref currentStopCount, value);
         }
 
-        private int userPauseCount;
+        internal readonly object UserPauseCountLock = new object();
 
         /// <summary>
         /// Gets the number of times the engine has currently stopped to prompt for user input. This value should typically be either 0 or 1.
         /// </summary>
-        public int UserPauseCount
-        {
-            get => userPauseCount;
-            set => Interlocked.Exchange(ref userPauseCount, value);
-        }
+        public int UserPauseCount { get; set; }
 
         /// <summary>
         /// Gets the total number of times that Continue() has been called in the current debug session, ever,
@@ -113,7 +112,7 @@ namespace ChaosDbg.Cordb
 
         internal CordbEventHistoryStore EventHistory { get; } = new CordbEventHistoryStore();
 
-        public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
+        public TaskCompletionSource TargetCreated { get; } = new TaskCompletionSource();
 
         /// <summary>
         /// Gets or sets whether this process was launched directly by the debugger, or whether it was attached to.
@@ -126,15 +125,62 @@ namespace ChaosDbg.Cordb
         /// </summary>
         internal bool IsAttaching { get; set; }
 
+        /// <summary>
+        /// Specifies that the a critical error has occurred and that the engine is in the process of crashing. If the critical error occurred before the debug target was even fully initialized,
+        /// <see cref="StartupFailed"/> will additionally be set.
+        /// </summary>
+        internal bool IsCrashing { get; private set; }
+
+        /// <summary>
+        /// Specifies that the engine is not only crashing, but that it didn't even complete initialization properly, and that <see cref="Process"/> will be <see langword="null"/>.
+        /// </summary>
+        internal bool StartupFailed { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a call to <see cref="CorDebugProcess.Terminate"/> has been made and that the engine is now waiting
+        /// for a debugger callback to notify it that termination has completed.
+        /// </summary>
+        internal bool IsTerminating { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the process has been terminated. If the process exits unexpectedly, this may be <see langword="true"/> even if <see cref="IsTerminating"/>
+        /// is not set.
+        /// </summary>
+        internal bool IsTerminated { get; set; }
+
+        /// <summary>
+        /// Gets the <see cref="CorDebugProcess"/> that is currently is currently in the process of crashing. This property is only set when <see cref="IsCrashing"/> is <see langword="true"/>,
+        /// and is required for cases where <see cref="StartupFailed"/> and so we don't have a <see cref="Process"/> to use for continuing unmanaged events.
+        /// </summary>
+        internal CorDebugProcess CrashingProcess { get; private set; }
+
+        internal void SetCrashingProcess(CorDebugProcess process)
+        {
+            //We regularly null out our CordbProcess to signify it's been terminated, but in a critical failure where we couldn't even initialize
+            //our CordbProcess, we need to have a reference to a CorDebugProcess so that unmanaged events have something to call Continue() on
+
+            Debug.Assert(process != null);
+
+            CrashingProcess = process;
+            IsCrashing = true;
+        }
+
         public bool HaveLoaderBreakpoint { get; internal set; }
 
         public ManualResetEventSlim WaitExitProcess { get; } = new ManualResetEventSlim(false);
 
         public bool IsCLRLoaded => EventHistory.ManagedEventCount > 0;
 
+        public int EngineId { get; }
+
         public CordbEngineServices Services { get; }
 
+        private static int cordbEngineCount;
+        private Thread criticalFailureThread;
+        private object criticalFailureThreadLock = new object();
         private bool disposed;
+        private bool disposing;
+        private object disposeLock = new object();
 
         public CordbSessionInfo(CordbEngineServices services, ThreadStart threadProc, CancellationToken cancellationToken)
         {
@@ -143,7 +189,10 @@ namespace ChaosDbg.Cordb
 
             Services = services;
 
-            EngineThread = new DispatcherThread("Cordb Engine Thread", threadProc);
+            EngineId = Interlocked.Increment(ref cordbEngineCount);
+            Log.SetProperty("EngineId", EngineId);
+
+            EngineThread = new DispatcherThread($"Cordb Engine Thread {EngineId}", threadProc, enableLog: true);
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -156,15 +205,59 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public void Start() => EngineThread.Start();
 
+        internal void InitializeCriticalFailureThread(ThreadStart action)
+        {
+            Debug.Assert(disposed == false);
+
+            lock (criticalFailureThreadLock)
+            {
+                if (criticalFailureThread != null)
+                    return;
+
+                criticalFailureThread = new Thread(action);
+                Log.CopyContextTo(criticalFailureThread);
+                criticalFailureThread.Name = $"Fatal Shutdown Thread {EngineId}";
+                criticalFailureThread.Start();
+            }
+        }
+
         public void Dispose()
         {
+            if (!Monitor.TryEnter(disposeLock))
+                return; //Obviously somebody else is already in the process of disposing. e.g. we are the critical failure thread, and the engine thread is waiting for us to end, and the UI thread is waiting for the engine thread to end
+
+            try
+            {
+                if (disposed)
+                    return;
+
+                if (!WaitForCriticalFailureThread())
+                    return;
+
+                if (disposing)
+                    return;
+
+                disposing = true;
+            }
+            finally
+            {
+                Monitor.Exit(disposeLock);
+            }
+
+            //The critical failure thread may have already disposed everything
             if (disposed)
                 return;
 
-            TargetCreated.Dispose();
-
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();
+
+            //todo: currently not sure about whether the following statement is correct
+
+            //If we're the EngineThread, we need to give up immediately so that we don't accidentally double dispose the UnmanagedCallback,
+            //and so that we don't deadlock with us waiting for the critical failure thread to end, and it waiting for us to end.
+            //And in any case, if, upon returning from this method, we can see that the critical failure thread cleaned up everything, we're done
+            if (!WaitForCriticalFailureThread() || disposed)
+                return;
 
             //Wait for the engine thread to end. If we're going to terminate the target process, we need to do this
             //prior to disposing our callbacks (since after they're disposed, they won't accept new events, which means
@@ -174,20 +267,67 @@ namespace ChaosDbg.Cordb
             //The unmanaged callback has thread responsible for dispatching
             //in band callbacks that needs to be disposed
             UnmanagedCallback?.Dispose();
+            UnmanagedCallback = null;
+
             ManagedCallback?.Dispose();
+            ManagedCallback = null;
+
+            //Every callback/engine thread should be shutdown now, and there should no longer be the possibility for any more critical failures to occur. Wait for the critical failure thread to end (if we have one).
+            //If the critical failure thread is trying to dispose the session at the same time that the EngineThread is however, these threads will deadlock each other. In this case, the EngineThread will poll
+            //while waiting for the critical failure thread to complete, and if the critical failure thread says its in the middle of disposing, then we'll leave everything else to the critical failure thread to dispose of
+            if (!WaitForCriticalFailureThread() || disposed)
+                return;
 
             Process?.Dispose();
             WaitExitProcess.Dispose();
 
+            CrashingProcess = null;
+
             //Clear out essential debugger objects
 
-            //We should have already terminated and nullified our ICorDebug upon terminating the process, however
-            //we terminate it again here just in case we introduce a bug where we don't terminate it
-            CorDebug?.Terminate();
-            CorDebug = null;
+            /* We should have already terminated and nullified our ICorDebug upon terminating the process. Complex cleanup work is required
+             * to terminate an ICorDebug instance. Furthermore, we want to protect against races wherein we might be calling Cordb::Terminate() from
+             * our "normal" locations, and if we then try and do it here at the same time we'll exceptions that various OS handles have already been closed.
+             * Thus, we assert that it's not our responsibility to cleanup the ICorDebug instance; it should have been done by the engine */
+            Debug.Assert(CorDebug == null, $"Attempted to dispose {nameof(CordbSessionInfo)} while {nameof(CorDebug)} was not null");
             ManagedCallback = null;
 
             disposed = true;
+        }
+
+        private bool WaitForCriticalFailureThread()
+        {
+            Thread localCriticalFailureThread = null;
+
+            //If we've already started a critical failure thread, we must wait for that to end before we try and dispose
+            lock (criticalFailureThreadLock)
+            {
+                if (criticalFailureThread != null)
+                {
+                    //Don't wait for the thread to end if we _are_ the critical failure thread!
+                    if (Thread.CurrentThread.ManagedThreadId != criticalFailureThread.ManagedThreadId)
+                    {
+                        localCriticalFailureThread = criticalFailureThread;
+                    }
+                }
+            }
+
+            //We must do this outside of the lock, so that if the critical failure thread itself tries to call WaitForCriticalFailureThread we don't deadlock with us waiting for it and it waiting for us (so that it can enter the lock)
+            if (localCriticalFailureThread != null)
+            {
+                //todo: not sure why i commented this out
+
+                //If we're the engine thread, just leave it to the critical failure thread to cleanup
+                //if (Thread.CurrentThread.ManagedThreadId == EngineThread.ManagedThreadId)
+                //    return false;
+
+                localCriticalFailureThread.Join();
+
+                lock (criticalFailureThread)
+                    criticalFailureThread = null;
+            }
+
+            return true;
         }
     }
 }

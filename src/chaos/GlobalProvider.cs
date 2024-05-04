@@ -8,8 +8,11 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.IL;
 using ChaosDbg.Metadata;
+using ChaosLib;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace chaos
 {
@@ -50,22 +53,42 @@ namespace chaos
         {
             var services = new ServiceCollection
             {
+                //chaos
                 typeof(DbgEngClient),
                 typeof(CordbClient),
                 typeof(CommandBuilder),
 
+                //Debug Engines
                 typeof(DbgEngEngineProvider),
                 typeof(CordbEngineProvider),
-                typeof(NativeLibraryProvider),
 
+                //Debug Engine Service Collections
                 typeof(CordbEngineServices),
                 typeof(DbgEngEngineServices),
+
+                //Symbols
+                typeof(SymHelp),
+                typeof(MicrosoftPdbSourceFileProvider),
+
+                //NativeLibrary
+                typeof(NativeLibraryProvider),
+                { typeof(INativeLibraryBaseDirectoryProvider), typeof(SingleFileNativeLibraryBaseDirectoryProvider) },
+                { typeof(INativeLibraryLoadCallback[]), new[]
+                {
+                    typeof(DbgEngNativeLibraryLoadCallback),
+                    typeof(DbgHelpNativeLibraryLoadCallback),
+                    typeof(MSDiaNativeLibraryLoadCallback),
+                    typeof(SymSrvNativeLibraryLoadCallback)
+                }},
 
                 typeof(CordbMasmEvaluatorContext),
                 typeof(ILDisassemblerProvider),
 
+                //Console
                 typeof(ConsoleDisasmWriter),
                 { typeof(IConsole), typeof(PhysicalConsole) },
+
+                //Misc
 
                 { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
                 { typeof(IPEFileProvider), typeof(PEFileProvider) },

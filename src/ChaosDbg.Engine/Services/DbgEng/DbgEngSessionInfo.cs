@@ -71,6 +71,7 @@ namespace ChaosDbg.DbgEng
             //perform the work of waitng on and interacting with DbgEng, we need a new client for the engine thread from
             //our existing UiClient which was created initially from DebugCreate().
             engineClient = uiClient.CreateClient();
+            Log.Debug<DebugClient>("Created engine DebugClient {hashCode}", engineClient.GetHashCode());
         }
 
         #endregion
@@ -100,6 +101,7 @@ namespace ChaosDbg.DbgEng
         public void CreateBufferClient()
         {
             bufferClient = EngineClient.CreateClient();
+            Log.Debug<DebugClient>("Created buffer DebugClient {hashCode}", bufferClient.GetHashCode());
             BufferOutput = new BufferOutputCallbacks();
 
             //A variety of things are included in the default output mask. We only interested in output that we generate
@@ -147,9 +149,9 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         internal DispatcherThread EngineThread { get; }
 
-        public ManualResetEventSlim TargetCreated { get; } = new ManualResetEventSlim(false);
+        public TaskCompletionSource TargetCreated { get; } = new TaskCompletionSource();
 
-        public ManualResetEventSlim BreakEvent { get; } = new ManualResetEventSlim(false);
+        public TaskCompletionSource BreakEvent { get; } = new TaskCompletionSource();
 
         private bool disposed;
 
@@ -158,8 +160,9 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         /// <param name="threadProc">The procedure that should be executed inside of the engine thread.</param>
         /// <param name="uiClient">The <see cref="DebugClient"/> that should be invoked on the UI thread.</param>
+        /// <param name="dbgEngEngineId">An ID to be used to correlate the engine thread with other ChaosDbg engine threads</param>
         /// <param name="cancellationToken">A cancellation token that can be used to terminate the debugger engine.</param>
-        public DbgEngSessionInfo(ThreadStart threadProc, DebugClient uiClient, CancellationToken cancellationToken)
+        public DbgEngSessionInfo(ThreadStart threadProc, DebugClient uiClient, int? dbgEngEngineId, CancellationToken cancellationToken)
         {
             if (threadProc == null)
                 throw new ArgumentNullException(nameof(threadProc));
@@ -167,7 +170,13 @@ namespace ChaosDbg.DbgEng
             if (uiClient == null)
                 throw new ArgumentNullException(nameof(uiClient));
 
-            EngineThread = new DispatcherThread("DbgEng Engine Thread", threadProc);
+            Log.Debug<DebugClient>("Created UI DebugClient {hashCode}", uiClient.GetHashCode());
+
+            EngineThread = new DispatcherThread(
+                $"DbgEng Engine Thread" + (dbgEngEngineId == null ? null : $" {dbgEngEngineId}"),
+                threadProc,
+                enableLog: true);
+
             UiClient = uiClient;
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
@@ -218,8 +227,6 @@ namespace ChaosDbg.DbgEng
                 return;
 
             disposed = true;
-
-            TargetCreated.Dispose();
 
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();

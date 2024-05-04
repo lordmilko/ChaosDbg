@@ -65,29 +65,31 @@ namespace ChaosDbg.Tests
 
         private void WithProcess(Action<DebugClient> action)
         {
-            var libraryProvider = new NativeLibraryProvider();
+            var dbgEngProvider = GetService<DbgEngEngineProvider>();
 
-            var pfnDebugCreate = libraryProvider.GetExport<DebugCreateDelegate>(
-                WellKnownNativeLibrary.DbgEng,
-                "DebugCreate"
-            );
-
-            pfnDebugCreate(typeof(IDebugClient).GUID, out var iface).ThrowDbgEngNotOK();
-
-            var client = new DebugClient(iface);
-            client.Control.EngineOptions = DEBUG_ENGOPT.INITIAL_BREAK | DEBUG_ENGOPT.FINAL_BREAK;
-            client.CreateProcessAndAttach(0, "notepad", DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS, 0, DEBUG_ATTACH.DEFAULT);
-
-            try
+            //Protect g_Machine from other threads
+            dbgEngProvider.WithDbgEng(services =>
             {
-                client.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, -1);
+#pragma warning disable CS0618
+                using var client = services.SafeDebugCreate(false);
+#pragma warning restore CS0618
 
-                action(client);
-            }
-            finally
-            {
-                client.TerminateCurrentProcess();
-            }
+                try
+                {
+                    client.Control.EngineOptions = DEBUG_ENGOPT.INITIAL_BREAK | DEBUG_ENGOPT.FINAL_BREAK;
+                    client.CreateProcessAndAttach(0, "notepad", DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS, 0, DEBUG_ATTACH.DEFAULT);
+
+                    client.Control.WaitForEvent(DEBUG_WAIT.DEFAULT, -1);
+
+                    action(client);
+                }
+                finally
+                {
+                    client.TerminateCurrentProcess();
+
+                    client.TryEndSession(DEBUG_END.ACTIVE_TERMINATE);
+                }
+            });
         }
 
         //We need to test reading a file with no entrypoint. Until we encounter such a file, this scenario is unsupported

@@ -14,7 +14,7 @@
 
         protected override CordbEngine NewEngine()
         {
-            var engine = new CordbEngine(services);
+            var engine = new CordbEngine(services, this);
             engine.EventHandlers.AddHandlers(events);
             return engine;
         }

@@ -2,7 +2,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using ChaosLib;
 using ClrDebug;
 using static ChaosDbg.EventExtensions;
@@ -11,12 +10,16 @@ namespace ChaosDbg.Cordb
 {
     partial class CordbEngine
     {
-        private void RegisterCallbacks(CordbManagedCallback cb)
+        internal void RegisterCallbacks(CordbManagedCallback cb)
         {
+            cb.OnEngineFailure = CriticalFailure;
+
             cb.OnPreEvent += PreManagedEvent;
 
             cb.OnCreateProcess += CreateProcess;
             cb.OnExitProcess += ExitProcess;
+
+            cb.OnDebuggerError += DebuggerError;
 
             cb.OnCreateAppDomain += CreateAppDomain;
             cb.OnExitAppDomain += ExitAppDomain;
@@ -39,10 +42,12 @@ namespace ChaosDbg.Cordb
             cb.OnAnyEvent += AnyManagedEvent;
         }
 
-        private void RegisterUnmanagedCallbacks(CordbUnmanagedCallback ucb)
+        internal void RegisterUnmanagedCallbacks(CordbUnmanagedCallback ucb)
         {
             if (ucb == null)
                 return;
+
+            ucb.OnEngineFailure = CriticalFailure;
 
             ucb.OnPreEvent += PreUnmanagedEvent;
 
@@ -67,6 +72,9 @@ namespace ChaosDbg.Cordb
 
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
             HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineStatusChanged)], args);
+
+        private void RaiseEngineFailure(EngineFailureEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineFailure)], args);
 
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
             HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleLoad)], args);
@@ -110,7 +118,14 @@ namespace ChaosDbg.Cordb
 
         private void PreEventCommon()
         {
-            Debug.Assert(Session.Process != null, "Didn't have a process!");
+            var localStartupFailed = Session.StartupFailed;
+
+            if (!localStartupFailed)
+            {
+                var process = Session.Process;
+
+                Debug.Assert(process != null, $"{nameof(PreEventCommon)}: Didn't have a process! This indicates the process was not properly stored prior to the debuggee being resumed");
+            }
 
             Session.CallbackStopCount++;
         }
@@ -126,8 +141,8 @@ namespace ChaosDbg.Cordb
              * analytics against a partially managed process module, we need to be interop debugging. This is the
              * behavior of dnSpy, mdbg and Visual Studio. No, there isn't a CorDebugModule hanging off the
              * CorDebugProcess for us to extract either. */
-            //Called the "Runtime Controller" thread in ICorDebug
-            Thread.CurrentThread.Name = "Managed Callback Thread";
+
+            //Our thread logger context is initialized in CordbLauncher
 
             /* When attaching to a process, assuming that the attach isn't happening so early in the process' lifetime that a
              * real CreateProcess event hasn't even been fired yet, ShimProcess::QueueFakeAttachEvents will generate a number of "fake"
@@ -146,7 +161,22 @@ namespace ChaosDbg.Cordb
                 Session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
 
                 //Let's kick off a load for CLR symbols now so that they're ready for when we need them
-                Task.Run(() => Process.Symbols.TryRegisterCLR());
+                var thread = new Thread(() =>
+                {
+                    try
+                    {
+                        Session.EngineCancellationToken.ThrowIfCancellationRequested();
+
+                        Process.Symbols.TryRegisterCLR();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error<IDbgHelp>(ex, "Failed to eagerly load CLR symbols: {message}", ex.Message);
+                    }
+                });
+                Log.CopyContextTo(thread);
+                thread.Name = "Eager CLR Symbols Thread";
+                thread.Start();
             }
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
@@ -154,19 +184,27 @@ namespace ChaosDbg.Cordb
 
         private void ExitProcess(object sender, ExitProcessCorDebugManagedCallbackEventArgs e)
         {
-            var module = Process.Modules.Remove(e.Process);
+            //Don't have a Process if startup failed
+            if (!Session.StartupFailed)
+            {
+                var module = Process.Modules.Remove(e.Process);
 
-            if (module != null)
-                RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
+                if (module != null)
+                    RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
+            }
 
             /* On Windows, a process has not truly exited until we receive the EXIT_PROCESS_DEBUG_EVENT. My observation has been that, when interop debugging,
              * we always receive EXIT_PROCESS_DEBUG_EVENT prior to receiving the managed ExitProcess event. While I don't know whether a process handle
              * being signalled because it exited necessarily proves that EXIT_PROCESS_DEBUG_EVENT has also been fired. At this stage I don't see any
              * reason why this would even matter.
              *
-             * Even if the CLR hasn't been loaded, and we never received a managed CreateProcess event, we'll still receive a managed ExitProcess event */
+             * In any case, as far as mscordbi is concerned, even if the CLR hasn't been loaded, and we never received a managed CreateProcess event,
+             * we'll still receive a managed ExitProcess event, because a ExitProcessWorkItem is specially queued onto the CordbRCEventThread.
+             * In rare scenarios, its possible for */
 
             //Signal the wait as completed
+            Session.IsTerminated = true;
+            Log.Debug<CordbEngine>("Setting WaitExitProcess from ExitProcess");
             Session.WaitExitProcess.Set();
         }
 
@@ -175,8 +213,10 @@ namespace ChaosDbg.Cordb
             /* Events are dispatched to us from a Win32 Event Thread. CordbWin32EventThread::Start() creates
              * a new thread that executes CordbWin32EventThread::ThreadProc() -> Win32EventLoop(). Win32EventLoop()
              * loops around calling ::WaitForDebugEvent. When it gets an event it calls ShimProcess::HandleWin32DebugEvent()
-             * which in turn dispatches to CordbProcess::HandleDebugEventForInteropDebugging() */
-            Thread.CurrentThread.Name = "Win32 Callback Thread";
+             * which in turn dispatches to CordbProcess::HandleDebugEventForInteropDebugging().
+             * Our thread name is set inside CordbLauncher. */
+
+            //Our thread logger context is initialized in CordbLauncher
 
             /* When attaching, NtDebugActiveProcess will call DbgkpPostFakeProcessCreateMessages to send us a bunch of fake
              * CREATE_PROCESS_DEBUG_EVENT, CREATE_THREAD_DEBUG_EVENT and LOAD_DLL_DEBUG_EVENT messages, immediately bringing
@@ -191,14 +231,14 @@ namespace ChaosDbg.Cordb
              * debugger terminates */
             Kernel32.DebugSetProcessKillOnExit(true);
 
+            Session.EventHistory.Add(CordbNativeEventHistoryItem.CreateProcess());
+            Session.EventHistory.Add(CordbNativeEventHistoryItem.CreateThread(Session.CallbackContext.UnmanagedEventThreadId));
+
             /* Register the thread for the main thread. There won't be a separate CREATE_THREAD_DEBUG_EVENT event for this.
              * When interop debugging, due to the fact you have to let the process start running before you can actually attach
              * to it, there will already be like 5 other threads running by the time this CREATE_PROCESS_DEBUG_EVENT is dispatched.
              * Not to worry, CREATE_THREAD_DEBUG_EVENT notifications for those threads will soon be incoming. */
             Process.Threads.Add(Session.CallbackContext.UnmanagedEventThreadId, e.hThread);
-
-            Session.EventHistory.Add(CordbNativeEventHistoryItem.CreateProcess());
-            Session.EventHistory.Add(CordbNativeEventHistoryItem.CreateThread(Session.CallbackContext.UnmanagedEventThreadId));
 
             //Ensure the process gets registered as a module too. This will also add the module event history item
             UnmanagedLoadModule(sender, new LOAD_DLL_DEBUG_INFO
@@ -219,6 +259,54 @@ namespace ChaosDbg.Cordb
         private void UnmanagedExitProcess(object sender, EXIT_PROCESS_DEBUG_INFO e)
         {
             Process.Modules.RemoveProcessModule(Session.CallbackContext.UnmanagedEventProcessId);
+        }
+
+        #endregion
+        #region DebuggerError
+
+        private void DebuggerError(object sender, DebuggerErrorCorDebugManagedCallbackEventArgs e)
+        {
+            /* DebuggerError is exclusively called when mscordbi detects an unrecoverable error in the debugger engine.
+             * However, due to races that can occur during process termination, not all DebuggerError events are necessarily "issues"
+             * (See the notes in the Shutdown region of CordbEngine.cs for more information)
+             *
+             * Thus, we must attempt to make sense of any errors that we receive. */
+
+            //There's no continuing from an unrecoverable error (it'll just throw that there was an unrecoverable error)
+            e.Continue = false;
+
+            switch (e.ErrorHR)
+            {
+                case HRESULT.CORDBG_E_PROCESS_TERMINATED:
+                    //If we're expecting this event, all good (see CordbEngine.cs for info on when we may receive a DebuggerError event
+                    //instead of an ExitProcess event during shutdown)
+                    Session.IsTerminated = true;
+                    
+                    if (Session.IsTerminating)
+                    {
+                        /* We've now got an issue. The Win32 Event Thread is normally stopped in ShimProcess::Dispose(), which is called
+                         * from CordbProcess::Neuter(), which is itself exclusively called from ExitProcessWorkItem::Do(). But, as described in
+                         * CordbEngine.cs, the whole issue here is that, as a result of a race, the process was terminated while the fake attach events
+                         * were being calculated, prior to the event that would've been processed _before_ the ExitProcessWorkItem event. */
+
+                        Log.Debug<CordbEngine>("Setting WaitExitProcess from DebuggerError");
+
+                        Log.Warning<CordbEngine>("ShimProcess and Win32 Event Thread have been leaked");
+
+                        Debug.Assert(false, "ShimProcess and Win32 Event Thread have been leaked. If we attached to this process, we should try and ensure we only shutdown after we've received the initial fake attach events");
+
+                        Session.WaitExitProcess.Set();
+                    }
+                    else
+                        RaiseEngineFailure(new EngineFailureEventArgs(new DebugException(e.ErrorHR), EngineFailureStatus.BeginShutdown)); //Process unexpectedly shutdown! The user needs to know that their process was ripped out from under them!
+
+                    break;
+
+                default:
+                    //Don't know what happened, but it's not good!
+                    RaiseEngineFailure(new EngineFailureEventArgs(new DebugException(e.ErrorHR), EngineFailureStatus.BeginShutdown));
+                    break;
+            }
         }
 
         #endregion
@@ -257,11 +345,11 @@ namespace ChaosDbg.Cordb
         {
             //Don't log event history here; the default handler is sufficient
 
-            //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process
-            e.Module.TrySetJITCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
-
             //Will automatically link itself to its Assembly as well
             var module = Process.Modules.Add(e.Module);
+
+            //JIT gets in the way of stepping. Where at all possible, try and disable JIT when debugging a process
+            var hr = e.Module.TrySetJITCompilerFlags(CorDebugJITCompilerFlags.CORDEBUG_JIT_DISABLE_OPTIMIZATION);
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
         }
@@ -396,6 +484,8 @@ namespace ChaosDbg.Cordb
 
             if (thread != null)
                 RaiseThreadExit(new EngineThreadExitEventArgs(thread, Session.CallbackContext.UnmanagedOutOfBand));
+            else
+                Log.Debug<CordbEngine>("Received ExitThread notification for unknown thread {tid}", Session.CallbackContext.UnmanagedEventThreadId);
         }
 
         #endregion
@@ -493,21 +583,18 @@ namespace ChaosDbg.Cordb
             var thread = Session.CallbackContext.UnmanagedEventThread;
             thread.RegisterContext.IP--;
 
-            if (Session.DidCreateProcess)
+            if (!Session.HaveLoaderBreakpoint)
             {
-                if (!Session.HaveLoaderBreakpoint)
-                {
-                    //On attach, the "loader breakpoint" will be the "attach breakpoint" described under https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocess
+                //On attach, the "loader breakpoint" will be the "attach breakpoint" described under https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-debugactiveprocess
 
-                    Session.HaveLoaderBreakpoint = true;
+                Session.HaveLoaderBreakpoint = true;
 
-                    //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE to ContinueDebugEvent()
-                    Process.CorDebugProcess.ClearCurrentException(thread.Id);
+                //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE to ContinueDebugEvent()
+                Process.CorDebugProcess.ClearCurrentException(thread.Id);
 
-                    RaiseBreakpointHit(new EngineBreakpointHitEventArgs(new CordbSpecialBreakpoint(CordbSpecialBreakpointKind.Loader)));
-                    AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
-                    return;
-                }
+                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(new CordbSpecialBreakpoint(CordbSpecialBreakpointKind.Loader)));
+                AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+                return;
             }
 
             if (Process.Breakpoints.TryGetBreakpoint(exceptionAddress, out var breakpoint))
@@ -562,6 +649,57 @@ namespace ChaosDbg.Cordb
 
         #endregion
 
+        private void CriticalFailure(Exception ex, EngineFailureStatus status)
+        {
+            Log.Error<CordbEngine>(ex, "A critical failure occurred: {message}. ChaosDbg will now shutdown", ex.Message);
+
+            Debug.Assert(Session != null, "An event callback thread was allowed to run before the session was initialized, or after the session was cleared");
+
+            //When we crash during CordbLauncher, we won't have a Process yet, but we will have already stored the process to use ourselves
+            if (!Session.IsCrashing)
+                Session.SetCrashingProcess(Process.CorDebugProcess);
+
+            RaiseEngineFailure(new EngineFailureEventArgs(ex, status));
+
+            Session.EventHistory.Add(new CordbEngineFailureEventHistoryItem(ex, status));
+
+            //We can't request termination from here, as we're running on a callback thread. We can't trust that any of our other engine threads haven't exploded,
+            //so just spin up a new one and hope for the best
+
+            Session.InitializeCriticalFailureThread(() =>
+            {
+                /* Disposing the session will cause the engine cancellation token to be cancelled, which will cause the ChaosDbg engine thread
+                 * to stop and terminate the process. As this method also waits for the ChaosDbg engine thread to end before returning, we have to call
+                 * this in another thread so that we don't block the callback thread while waiting for this to return. If the ChaosDbg engine thread has
+                 * already terminated, then the ICorDebugProcess will have already been cleaned up, so either way we know everything will have been cleaned up */
+                try
+                {
+                    if (!Session.StartupFailed)
+                    {
+                        //If startup failed, leave it to CordbLauncher to cleanup everything
+
+                        //Depending on the code path that lead here, CorDebug may not have been terminated yet. Thus, we need to ensure that we terminate it so that it's already null when we call CordbSessionInfo.Dispose()
+                        StopAndTerminate();
+
+                        Session.Dispose();
+                    }
+
+                    /* If we get to this point, this means the ChaosDbg engine thread has ended. And when the ChaosDbg engine thread ends,
+                     * it stops and terminates our CordbProcess, which itself waits for the WaitExitProcess event. Every single aspect of ICorDebug
+                     * has now been cleaned up. Success! */
+                    RaiseEngineFailure(new EngineFailureEventArgs(null, EngineFailureStatus.ShutdownSuccess));
+                }
+                catch (Exception ex)
+                {
+                    Log.Fatal<CordbEngine>(ex, "A fatal error occurred while processing the critical failure thread: {message}", ex.Message);
+
+                    RaiseEngineFailure(new EngineFailureEventArgs(ex, EngineFailureStatus.ShutdownFailure));
+
+                    //No need to throw
+                }
+            });
+        }
+
         private void AnyManagedEvent(object sender, CorDebugManagedCallbackEventArgs e)
         {
             //If we're already disposed, no point trying to handle this incoming event.
@@ -575,7 +713,7 @@ namespace ChaosDbg.Cordb
 
             //Even when we call Stop() to break into the process, if we're in the middle of processing an event, we'll end up calling
             //Continue() again here.
-            if (Process.HasQueuedCallbacks)
+            if ((!Session.StartupFailed && Process.HasQueuedCallbacks) || (Session.StartupFailed && e.Controller is CorDebugProcess p && p.HasQueuedCallbacks(null)))
             {
                 /* Should we call continue here? Yes absolutely
                  *
@@ -605,8 +743,12 @@ namespace ChaosDbg.Cordb
                 //At this point, if we're attaching, there are no more queued callbacks remaining, and we can now say that we're ready to go
                 if (Session.IsAttaching)
                 {
-                    //Now that we're no longer in the process of attaching, let's finally identify all of our special threads
-                    Process.Threads.IdentifySpecialThreads(null);
+                    if (!Session.StartupFailed)
+                    {
+                        //Now that we're no longer in the process of attaching, let's finally identify all of our special threads
+                        Process.Threads.IdentifySpecialThreads(null);
+                    }
+                    
                     Session.IsAttaching = false;
                 }
             }
@@ -619,7 +761,9 @@ namespace ChaosDbg.Cordb
             }
             else
             {
-                OnStopping(false);
+                //We may not even have a Process if we crashed during CordbLauncher, and the user's EngineStatusChanged event handler may depend on that
+                if (!Session.IsCrashing)
+                    OnStopping(false);
             }
         }
 
@@ -629,12 +773,14 @@ namespace ChaosDbg.Cordb
             if (Session.CallbackContext.NeedHistory)
                 Session.EventHistory.Add(CordbNativeEventHistoryItem.New(e));
 
-            //If we're trying to do evil things like step through the CLR, we'll have modified the OOB status
-            var outOfBand = Session.CallbackContext.UnmanagedOutOfBand;
+            //If we're trying to do evil things like step through the CLR, we'll have modified the OOB status.
+            //But if we're in the middle of crashing, we may not have set the callback context's UnmanagedOutOfBand
+            //property properly, and since we won't be dispatching normal event callbacks anyway, just go with the "normal" OOB status
+            var outOfBand = Session.IsCrashing ? e.OutOfBand : Session.CallbackContext.UnmanagedOutOfBand;
 
-            if (Session.CallbackContext.UnmanagedContinue)
+            if (Session.IsCrashing || Session.CallbackContext.UnmanagedContinue)
             {
-                DoContinue(Process.CorDebugProcess, outOfBand, isUnmanaged: true);
+                DoContinue(Process?.CorDebugProcess ?? Session.CrashingProcess, outOfBand, isUnmanaged: true);
             }
             else
             {
@@ -655,23 +801,32 @@ namespace ChaosDbg.Cordb
 
         private void OnStopping(bool unmanaged)
         {
-            //We're not continuing. Update debugger state
-
-            if (Session.IsCLRLoaded)
+            lock (Session.UserPauseCountLock)
             {
-                //If we haven't had a single managed event yet, we can't refresh the DAC as attempting to
-                //create an SOSDacInterface will involve looking up the location of the clr loaded in the
-                //current process. By the time we've had a managed event, we know it's safe to start talking
-                //to the DAC.
-                Process.DAC.Threads.Refresh();
+                Log.Debug<CordbEngine>("Stopping");
+
+                //We're not continuing. Update debugger state
+
+                if (!Session.IsCrashing && Session.IsCLRLoaded)
+                {
+                    /* If we haven't had a single managed event yet, we can't refresh the DAC as attempting to
+                     * create an SOSDacInterface will involve looking up the location of the clr loaded in the
+                     * current process. By the time we've had a managed event, we know it's safe to start talking
+                     * to the DAC. */
+                    Process.DAC.Threads.Refresh();
+
+                    /* Regardless of how we try and stop the engine, we need to assert that we've added a reason that we're stopping.
+                     * When we ExitProcess and Continue, we get a CORDBG_E_PROCESS_TERMINATED response, which is OK. But when we get a DebuggerError
+                     * whose ErrorHR is CORDBG_E_PROCESS_TERMINATED, continuing will give an CORDBG_E_UNRECOVERABLE_ERROR, which we don't want */
+                    Session.CallbackContext.EnsureHasStopReason(unmanaged);
+                }
+
+                Log.Debug<CordbEngine>("Stop Reason: {reason}", Session.EventHistory.LastStopReason);
+
+                Session.UserPauseCount++;
+
+                NotifyEngineStatus();
             }
-
-            //Regardless of how we try and stop the engine, we need to assert that we've added a reason that we're stopping
-            Session.CallbackContext.EnsureHasStopReason(unmanaged);
-
-            Session.UserPauseCount++;
-
-            NotifyEngineStatus();
         }
 
         private void NotifyEngineStatus()
@@ -682,7 +837,7 @@ namespace ChaosDbg.Cordb
 
             if (oldlastStatus != currentStatus)
             {
-                Debug.WriteLine($"{oldlastStatus} -> {currentStatus}");
+                Log.Debug<CordbEngine>($"{oldlastStatus} -> {currentStatus}");
 
                 Session.LastStatus = currentStatus;
 

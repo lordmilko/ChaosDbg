@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Linq;
-using System.Windows;
 
 namespace ChaosDbg.Tests
 {

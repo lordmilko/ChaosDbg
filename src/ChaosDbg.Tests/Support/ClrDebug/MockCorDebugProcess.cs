@@ -9,15 +9,17 @@ namespace ChaosDbg.Tests
 {
     class MockCorDebugProcess : MockCorDebugController, ICorDebugProcess
     {
+        private Process process = Process.GetCurrentProcess();
+
         public HRESULT GetID(out int pdwProcessId)
         {
-            pdwProcessId = Process.GetCurrentProcess().Id;
+            pdwProcessId = process.Id;
             return S_OK;
         }
 
         public HRESULT GetHandle(out IntPtr phProcessHandle)
         {
-            phProcessHandle = Process.GetCurrentProcess().Handle;
+            phProcessHandle = process.Handle;
             return S_OK;
         }
 

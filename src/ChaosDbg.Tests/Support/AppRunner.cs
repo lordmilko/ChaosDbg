@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Markup;
+using System.Windows.Threading;
 using ChaosDbg.Engine;
 using ChaosLib;
 using FlaUI.Core.AutomationElements;
@@ -33,6 +34,8 @@ namespace ChaosDbg.Tests
         {
             var thread = new Thread(() =>
             {
+                Log.Debug<AppRunner>("Creating app");
+
                 typeof(Application).GetField("_appCreatedInThisAppDomain", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, false);
                 var app = new App();
                 app.InitializeComponent();
@@ -40,21 +43,32 @@ namespace ChaosDbg.Tests
                 using (new PreloadedPackageProtector())
                 {
                     if (createWindow == null)
+                    {
+                        Log.Debug<AppRunner>("Running app with default window");
+
                         app.Run();
+
+                        Log.Debug<AppRunner>("App completed successfully");
+                    }
                     else
                     {
                         //Don't start the default window. The StartupUri property won't let us clear its value,
                         //so we must use reflection
-                        typeof(Application).GetInternalFieldInfo("_startupUri").SetValue(app, null);
+                        typeof(Application).GetFieldInfo("_startupUri").SetValue(app, null);
+
+                        Log.Debug<AppRunner>("Running app with custom window");
 
                         //Our alternate window must be created on the same thread as the App
                         app.Run(createWindow());
+
+                        Log.Debug<AppRunner>("App completed successfully");
                     }
                 }
 
                 //Create a bew GlobalProvider for the next test
                 typeof(GlobalProvider).TypeInitializer.Invoke(null, null);
             });
+            Log.CopyContextTo(thread);
             thread.Name = "AppRunnerThread";
             thread.SetApartmentState(ApartmentState.STA);
 
@@ -89,20 +103,25 @@ namespace ChaosDbg.Tests
             {
                 try
                 {
+                    Log.Debug<AppRunner>("Executing action on dispatcher thread");
                     action(Application.Current);
                 }
                 catch (Exception ex)
                 {
                     outerEx = ex;
                 }
-            });
+            }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
 
             if (outerEx != null)
                 throw outerEx;
         }
 
         private static T Invoke<T>(Func<Application, T> func) =>
-            Application.Current.Dispatcher.Invoke(() => func(Application.Current));
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Log.Debug<AppRunner>("Executing func on dispatcher thread");
+                return func(Application.Current);
+            }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
 
         #region WPF
 

@@ -1,26 +1,24 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Linq;
-using System.Threading;
 using ChaosLib;
 using ClrDebug;
+using Win32Process = System.Diagnostics.Process;
 
 namespace ChaosDbg.Cordb
 {
-    class NetCoreProcess : NetInitCommon
+    class CordbCoreLauncher : CordbLauncher
     {
         #region Create
 
-        public static void Create(
-            CreateProcessOptions createProcessOptions,
-            InitCallback initCallback)
+        protected override void CreateInternal()
         {
             WithDbgShim(dbgShim =>
             {
-                CreateProcess(createProcessOptions, out var pi);
+                CreateProcess(out var pi);
 
-                var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
-                ValidateTargetArchitecture(pi.dwProcessId, is32Bit, false);
+                processId = pi.dwProcessId;
+                is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
+                ValidateTargetArchitecturePreAttach(false);
 
                 try
                 {
@@ -39,7 +37,7 @@ namespace ChaosDbg.Cordb
                         throw new InvalidOperationException($"Failed to get startup event. Is the target process a .NET Core application? Wait Result: {waitResult}");
 
                     //The CLR is now loaded and the process is now hung waiting for us to signal g_hContinueStartupEvent
-                    CreateFromCLR(createProcessOptions, pi, dbgShim, is32Bit, initCallback);
+                    CreateFromCLR(pi, dbgShim);
                 }
                 finally
                 {
@@ -52,12 +50,9 @@ namespace ChaosDbg.Cordb
             });
         }
 
-        private static void CreateFromCLR(
-            CreateProcessOptions createProcessOptions,
+        private void CreateFromCLR(
             PROCESS_INFORMATION pi,
-            DbgShim dbgShim,
-            bool is32Bit,
-            InitCallback initCallback)
+            DbgShim dbgShim)
         {
             var enumResult = dbgShim.EnumerateCLRs(pi.dwProcessId);
 
@@ -72,10 +67,11 @@ namespace ChaosDbg.Cordb
                  * and it says that if the version is 4, its major version 4. Version 4.5 is treated as an "unrecognized future version"
                  * and is assigned major version 5, which is wrong. Cordb::CheckCompatibility then calls CordbProcess::IsCompatibleWith
                  * which doesn't actually seem to do anything either, despite what all the docs in it would imply. */
-                var corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
+                corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
 
                 //Initialize ICorDebug, setup our managed callback and attach to the existing process. We attach while the CLR is blocked waiting for the "continue" event to be called
-                SetupCorDebug(createProcessOptions.CommandLine, corDebug, pi.dwProcessId, is32Bit, createProcessOptions.UseInterop, initCallback);
+                corDebug.Initialize();
+                AttachCommon(true);
 
                 /* There exists a structure CLR_ENGINE_METRICS within in coreclr.dll which is exported at ordinal 2. This structure indicates the RVA of the actual continue event that should be signalled
                  * to indicate the CLR can continue starting. But how does the CLR know to wait on this event at all? In debugger.cpp!NotifyDebuggerOfStartup() it calls
@@ -92,108 +88,92 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        private static void CreateProcess(CreateProcessOptions createProcessOptions, out PROCESS_INFORMATION pi)
+        private unsafe void CreateProcess(out PROCESS_INFORMATION pi)
         {
-            GetCreateProcessArgs(createProcessOptions, out var creationFlags, out var si);
+            GetCreateProcessArgs(out var creationFlags, out var si);
 
-            Kernel32.CreateProcessW(
-                createProcessOptions.CommandLine,
-                creationFlags,
-                IntPtr.Zero,
-                Environment.CurrentDirectory,
-                ref si,
-                out pi
-            );
+            //Disable the use of R2R images so that we can step through them properly
+            options.EnvironmentVariables["COMPlus_ReadyToRun"] = "0";
+
+            var environment = GetEnvironmentBytes();
+
+            fixed (byte* pEnvironment = environment)
+            {
+                Kernel32.CreateProcessW(
+                    options.CommandLine,
+                    creationFlags,
+                    (IntPtr) pEnvironment,
+                    Environment.CurrentDirectory,
+                    ref si,
+                    out pi
+                );
+            }
+
+            Log.Debug<CordbProcess>("Launched process {debuggeePid}", pi.dwProcessId);
         }
 
         #endregion
-        #region Attach
 
-        public static void Attach(
-            AttachProcessOptions attachProcessOptions,
-            InitCallback initCallback)
+        protected override void AttachInternal()
         {
-            var pid = attachProcessOptions.ProcessId;
-
-            var process = Process.GetProcessById(pid);
-            var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
-            ValidateTargetArchitecture(pid, is32Bit, true);
+            var process = Win32Process.GetProcessById(options.ProcessId);
+            is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+            ValidateTargetArchitecturePreAttach(didCreateProcess: false);
 
             //It's either a .NET Core process, or a purely unmanaged process. Check if coreclr is loaded
             WithDbgShim(dbgShim =>
             {
-                var clrs = dbgShim.EnumerateCLRs(pid);
+                var clrs = dbgShim.EnumerateCLRs(processId.Value);
 
                 if (clrs.Items.Length == 0)
-                    throw new DebuggerInitializationException($"Cannot attach to process {pid}: target is not a managed process", HRESULT.E_FAIL);
+                    throw new DebuggerInitializationException($"Cannot attach to process {processId.Value}: target is not a managed process", HRESULT.E_FAIL);
 
                 var runtime = clrs.Items.Single();
 
-                var versionStr = dbgShim.CreateVersionStringFromModule(pid, runtime.Path);
+                var versionStr = dbgShim.CreateVersionStringFromModule(processId.Value, runtime.Path);
 
-                var corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
+                corDebug = dbgShim.CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion.CorDebugVersion_4_0, versionStr);
+                LogNativeCorDebugInfo(corDebug);
 
                 //Now do the rest of the normal setup that we normally do in the CreateProcess pathway
-                SetupCorDebug(null, corDebug, pid, is32Bit, attachProcessOptions.UseInterop, initCallback);
+                corDebug.Initialize();
+                AttachCommon(false);
             });
         }
 
-        #endregion
-
-        private static void SetupCorDebug(
-            string commandLine,
-            CorDebug corDebug,
-            int processId,
-            bool is32Bit,
-            bool useInterop,
-            InitCallback initCallback)
+        private void WithDbgShim(Action<DbgShim> action)
         {
-            corDebug.Initialize();
+            //Locate dbgshim, which should be in our output directory
+            var dbgShimPath = DbgShimResolver.Resolve();
 
-            var cb = new CordbManagedCallback();
-            corDebug.SetManagedHandler(cb);
+            //Load dbgshim, do something with it, then unload
 
-            CordbUnmanagedCallback ucb = null;
+            var hDbgShim = Kernel32.LoadLibrary(dbgShimPath);
 
-            ManualResetEventSlim wait = null;
-
-            if (useInterop)
+            try
             {
-                ucb = new CordbUnmanagedCallback();
+                var dbgShim = new DbgShim(hDbgShim);
 
-                //Don't let unmanaged callbacks run free until we've signalled we're ready!
-                InstallInteropStartupHook(ref wait, ucb);
-
-                corDebug.SetUnmanagedHandler(ucb);
+                action(dbgShim);
             }
-
-            var process = corDebug.DebugActiveProcess(processId, useInterop);
-
-            initCallback(
-                corDebug,
-                process,
-                cb,
-                ucb,
-                is32Bit,
-                commandLine,
-                useInterop
-            );
-
-            wait?.Set();
+            finally
+            {
+                Kernel32.FreeLibrary(hDbgShim);
+            }
         }
 
-        private static void ValidateTargetArchitecture(int pid, bool is32Bit, bool attach)
+        private void ValidateTargetArchitecturePreAttach(bool didCreateProcess)
         {
             void KillProcess()
             {
-                if (attach)
+                if (!didCreateProcess)
                     return;
 
                 //If we can't attach to the process we created, terminate the process
 
                 try
                 {
-                    Process.GetProcessById(pid).Kill();
+                    Win32Process.GetProcessById(processId.Value).Kill();
                 }
                 catch
                 {
@@ -203,18 +183,18 @@ namespace ChaosDbg.Cordb
 
             if (IntPtr.Size == 4)
             {
-                if (!is32Bit)
+                if (!is32Bit.Value)
                 {
                     KillProcess();
-                    throw new DebuggerInitializationException($"Failed to attach to process {pid}: target process is 64-bit however debugger process is 32-bit.", HRESULT.E_FAIL);
+                    throw new DebuggerInitializationException($"Failed to attach to process {processId.Value}: target process is 64-bit however debugger process is 32-bit.", HRESULT.E_FAIL);
                 }
             }
             else
             {
-                if (is32Bit)
+                if (is32Bit.Value)
                 {
                     KillProcess();
-                    throw new DebuggerInitializationException($"Failed to attach to process {pid}: target process is 32-bit however debugger process is 64-bit.", HRESULT.E_FAIL);
+                    throw new DebuggerInitializationException($"Failed to attach to process {processId.Value}: target process is 32-bit however debugger process is 64-bit.", HRESULT.E_FAIL);
                 }
             }
         }

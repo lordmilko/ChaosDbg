@@ -1,5 +1,4 @@
-﻿using System;
-using ChaosLib.PortableExecutable;
+﻿using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 #nullable enable

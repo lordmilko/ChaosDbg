@@ -8,6 +8,8 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Graph;
 using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
+using ClrDebug;
 using ClrDebug.DIA;
 using Iced.Intel;
 using static ClrDebug.HRESULT;
@@ -458,32 +460,37 @@ namespace ChaosDbg.Analysis
             {
                 InstructionDiscoverySource searchData;
 
-                if (IsApparentCodeSymbol(symbol.DiaSymbol))
+                if (symbol is IHasDiaSymbol m)
                 {
-                    searchData = AddFunctionCandidate(symbol.Address, FoundBy.Symbol, DiscoveryTrustLevel.Trusted, false);
-                    searchData.Symbol = symbol;
-
-                    symbolAddresses.Add(searchData.Address);
-                }
-                else if (IsDataSymbol(symbol.DiaSymbol))
-                {
-                    //If we've already added this item as a function (e.g. because there was an Export for it)
-                    //change it to a data item
-
-                    if (FunctionCandidates.TryGetValue(symbol.Address, out var existing))
+                    if (IsApparentCodeSymbol(m.DiaSymbol))
                     {
-                        FunctionCandidates.Remove(symbol.Address);
+                        searchData = AddFunctionCandidate(symbol.Address, FoundBy.Symbol, DiscoveryTrustLevel.Trusted, false);
+                        searchData.Symbol = symbol;
 
-                        //We want to assert that we're the first person adding this, so that we ensure we keep
-                        //any existing metadata stored on the candidate
-                        DataCandidates.Add(symbol.Address, existing);
+                        symbolAddresses.Add(searchData.Address);
                     }
+                    else if (IsDataSymbol(m.DiaSymbol))
+                    {
+                        //If we've already added this item as a function (e.g. because there was an Export for it)
+                        //change it to a data item
 
-                    searchData = (InstructionDiscoverySource) AddCandidate(DataCandidates, null, symbol.Address, FoundBy.Symbol, DiscoveryTrustLevel.Trusted);
-                    searchData.Symbol = symbol;
+                        if (FunctionCandidates.TryGetValue(symbol.Address, out var existing))
+                        {
+                            FunctionCandidates.Remove(symbol.Address);
 
-                    symbolAddresses.Add(searchData.Address);
+                            //We want to assert that we're the first person adding this, so that we ensure we keep
+                            //any existing metadata stored on the candidate
+                            DataCandidates.Add(symbol.Address, existing);
+                        }
+
+                        searchData = (InstructionDiscoverySource) AddCandidate(DataCandidates, null, symbol.Address, FoundBy.Symbol, DiscoveryTrustLevel.Trusted);
+                        searchData.Symbol = symbol;
+
+                        symbolAddresses.Add(searchData.Address);
+                    }
                 }
+                else
+                    throw new NotImplementedException();
             }
 
             OrderedSymbolAddresses = symbolAddresses.OrderBy(v => v).ToArray();
@@ -1823,15 +1830,20 @@ namespace ChaosDbg.Analysis
 
                     if (item.Symbol != null)
                     {
-                        //Things that are called are definitely functions (see SplitChunkGraphByCallees). Things
-                        //with symbols may or may not be functions (ntdll!RtlInterlockedPopEntrySList is a function
-                        //but ExpInterlockedPopEntrySListResume is code)
-                        if (item.Symbol.DiaSymbol.TryGetFunction(out var isFunction) == S_OK && isFunction)
-                            return true;
+                        if (item.Symbol is IHasDiaSymbol m)
+                        {
+                            //Things that are called are definitely functions (see SplitChunkGraphByCallees). Things
+                            //with symbols may or may not be functions (ntdll!RtlInterlockedPopEntrySList is a function
+                            //but ExpInterlockedPopEntrySListResume is code)
+                            if (m.DiaSymbol.TryGetFunction(out var isFunction) == S_OK && isFunction)
+                                return true;
 
-                        //EtwNotificationUnregister is neither a Function, nor Code, but IS tagged as a function
-                        if (item.Symbol.DiaSymbol.SymTag == SymTagEnum.Function)
-                            return true;
+                            //EtwNotificationUnregister is neither a Function, nor Code, but IS tagged as a function
+                            if (m.DiaSymbol.SymTag == SymTagEnum.Function)
+                                return true;
+                        }
+                        else
+                            throw new NotImplementedException();
                     }
 
                     return false;

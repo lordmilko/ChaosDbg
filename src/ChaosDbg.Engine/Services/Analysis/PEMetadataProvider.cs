@@ -3,8 +3,9 @@ using System.IO;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosLib;
-using ChaosLib.Metadata;
+using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using Iced.Intel;
 
 namespace ChaosDbg.Analysis

@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using ChaosLib.PortableExecutable;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -21,13 +20,37 @@ namespace ChaosDbg.Cordb
         public CordbThread[] Items => store.ToArray();
     }
 
-    [DebuggerDisplay("Count = {threads.Count}")]
+    [DebuggerDisplay("Count = {Threads.Count}")]
     [DebuggerTypeProxy(typeof(CordbThreadStoreDebugView))]
     public class CordbThreadStore : IEnumerable<CordbThread>
     {
         private object threadLock = new object();
 
+        [Obsolete]
         private Dictionary<int, CordbThread> threads = new Dictionary<int, CordbThread>();
+
+        private Dictionary<int, CordbThread> Threads
+        {
+            get
+            {
+                if (!process.IsV3)
+                    return threads;
+
+                //In V3, the process is always live. Any time we ask for the threads, synthesize a new dictionary
+                //from the current threads of the process.
+                var rawThreads = process.CorDebugProcess.Threads;
+
+                var dict = new Dictionary<int, CordbThread>();
+
+                for (var i = 0; i < rawThreads.Length; i++)
+                {
+                    dict[rawThreads[i].Id] = new CordbThread(i, new CordbThread.ManagedAccessor(rawThreads[i]), process);
+                }
+
+                return dict;
+            }
+        }
+
         private CordbProcess process;
         private int nextUserId;
 
@@ -51,20 +74,20 @@ namespace ChaosDbg.Cordb
 
                 lock (threadLock)
                 {
-                    var managed = threads.Values.FirstOrDefault(t => t.IsManaged && t.SpecialType == null);
+                    var managed = Threads.Values.FirstOrDefault(t => t.IsManaged && t.SpecialType == null);
 
                     //Prefer any managed threads we have?
                     if (managed != null)
                         return managed;
 
-                    var native = threads.Values.FirstOrDefault(t => !t.IsManaged && t.SpecialType == null);
+                    var native = Threads.Values.FirstOrDefault(t => !t.IsManaged && t.SpecialType == null);
 
                     //Prefer any normal native threads?
                     if (native != null)
                         return native;
 
                     //Return any thread we have then, special or not
-                    return threads.Values.FirstOrDefault();
+                    return Threads.Values.FirstOrDefault();
                 }
             }
             set => explicitActiveThread = value;
@@ -115,7 +138,7 @@ namespace ChaosDbg.Cordb
                  * threads outside of interop debugging when a CordbProcess is created where a bunch of threads already exist,
                  * which we'll probably only see in attach scenarios (.NET Core CreateProcess scenarios don't seen to apply,
                  * as we do get a bunch of native/managed CreateThread events shortly after attaching to the newly created process). */
-                threads.Add(corDebugThread.Id, thread);
+                Threads.Add(corDebugThread.Id, thread);
             }
 
             //Must be outside of the lock
@@ -143,7 +166,7 @@ namespace ChaosDbg.Cordb
 
                 var thread = new CordbThread(userId, new CordbThread.NativeAccessor(id, hThread), process);
 
-                threads.Add(id, thread);
+                Threads.Add(id, thread);
 
                 return thread;
             }
@@ -169,7 +192,7 @@ namespace ChaosDbg.Cordb
             get
             {
                 lock (threadLock)
-                    return threads[id];
+                    return Threads[id];
             }
         }
 
@@ -177,14 +200,14 @@ namespace ChaosDbg.Cordb
         {
             lock (threadLock)
             {
-                if (threads.TryGetValue(id, out var thread))
+                if (Threads.TryGetValue(id, out var thread))
                 {
                     /* Ideally we would like to assert whether our VolatileOSThreadID still matches the thread's
                      * unique ID at this point. Unfortunately, mscordbi will block you from accessing the VolatileOSThreadID
                      * from the Win32 event thread, preventing us from doing this check. See the comments on
                      * ManagedAccessor.VolatileOSThreadID for more information */
 
-                    threads.Remove(thread.Id);
+                    Threads.Remove(thread.Id);
 
                     thread.Exited = true;
 
@@ -209,7 +232,7 @@ namespace ChaosDbg.Cordb
                 if (localThreads == null)
                 {
                     lock (threadLock)
-                        localThreads = threads.Values.ToArray();
+                        localThreads = Threads.Values.ToArray();
                 }
             }
 
@@ -348,7 +371,7 @@ namespace ChaosDbg.Cordb
         {
             lock (threadLock)
             {
-                foreach (var candidate in threads.Values)
+                foreach (var candidate in Threads.Values)
                 {
                     if (candidate.UserId == userId)
                     {
@@ -366,7 +389,7 @@ namespace ChaosDbg.Cordb
         {
             lock (threadLock)
             {
-                foreach (var thread in threads.Values)
+                foreach (var thread in Threads.Values)
                     thread.TrySaveRegisterContext(true);
             }
         }
@@ -375,7 +398,7 @@ namespace ChaosDbg.Cordb
         {
             lock (threadLock)
             {
-                return threads.Values.ToArray().AsEnumerable().GetEnumerator();
+                return Threads.Values.ToArray().AsEnumerable().GetEnumerator();
             }
         }
 

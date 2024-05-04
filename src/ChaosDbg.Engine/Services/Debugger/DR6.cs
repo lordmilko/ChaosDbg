@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
-using Iced.Intel;
+using ChaosLib.Memory;
 
-namespace ChaosDbg.Cordb
+namespace ChaosDbg
 {
     /// <summary>
     /// Represents, and provides access to manipulating the individual bits inside the DR6 debug register.

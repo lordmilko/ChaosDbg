@@ -4,7 +4,8 @@
     {
         ManagedEvent,
         NativeEvent,
-        UserEvent
+        UserEvent,
+        Engine
     }
 
     interface ICordbEventHistoryItem

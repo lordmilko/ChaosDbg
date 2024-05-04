@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
+using ChaosLib;
 using ClrDebug;
 using Win32Process = System.Diagnostics.Process;
 
@@ -9,13 +9,33 @@ namespace ChaosDbg.Cordb
 {
     partial class CordbEngine
     {
-        private void ThreadProc(object launchInfo)
+        private void ThreadProc(LaunchTargetOptions options)
         {
-            CreateDebugTarget(launchInfo);
+            try
+            {
+                CreateDebugTarget(options, Session.EngineCancellationToken);
+            }
+            catch (Exception ex)
+            {
+                //We can't assert that we must be terminating if we get to this point; the startup failure could have been as something as simple
+                //as a bad image path was specified
+
+                Log.Error<CordbEngine>(ex, "Failed to create debug target: {message}", ex.Message);
+
+                Session.TargetCreated.SetException(ex);
+
+                //The UI thread is waiting for TargetCreated to be set. Cancel our CTS and shutdown the thread
+
+                StopAndTerminate();
+
+                Session.Dispose();
+
+                throw;
+            }
 
             try
             {
-                Session.TargetCreated.Set();
+                Session.TargetCreated.SetResult();
 
                 while (!Session.IsEngineCancellationRequested) //temp
                 {
@@ -24,66 +44,73 @@ namespace ChaosDbg.Cordb
                     Thread.Sleep(100); //temp
                 }
             }
+            catch (Exception ex)
+            {
+                RaiseEngineFailure(new EngineFailureEventArgs(ex, EngineFailureStatus.BeginShutdown));
+
+                throw;
+            }
             finally
             {
-                //If we haven't already detached from the target process, terminate it now
-                var localProcess = Process;
-
-                if (localProcess != null)
-                {
-                    localProcess.CorDebugProcess.TryStop(0);
-
-                    //When we get our ExitProcess event, we'll terminate our ICorDebug
-                    Terminate();
-                }
+                StopAndTerminate();
             }
         }
 
-        private void CreateDebugTarget(object launchInfo)
+        private void StopAndTerminate()
         {
-            if (launchInfo is CreateProcessOptions c)
+            //If we haven't already detached from the target process, terminate it now
+            var localProcess = Process;
+
+            if (localProcess != null)
             {
-                //Is the target executable a .NET Framework or .NET Core process?
+                var hr = localProcess.CorDebugProcess.TryStop(0);
 
-                var kind = c.FrameworkKind ?? services.FrameworkTypeDetector.Detect(c.CommandLine);
+                switch (hr)
+                {
+                    case HRESULT.S_OK:
+                        break;
 
-                Session.DidCreateProcess = true;
+                    case HRESULT.CORDBG_E_PROCESS_TERMINATED:
+                        Session.IsTerminated = true;
+                        break;
 
-                NetInitCommon.Create(c, kind, InitCallback);
+                    default:
+                        hr.ThrowOnNotOK();
+                        break;
+                }
+
+                //When we get our ExitProcess event, we'll terminate our ICorDebug
+                Terminate();
             }
             else
-            {
-                //Attach to an existing process
-                var a = (AttachProcessOptions) launchInfo;
+                Terminate(); //If we crashed during early startup, we might have a CorDebug but not a CorDebugProcess
+        }
 
-                var process = Win32Process.GetProcessById(a.ProcessId);
+        private void CreateDebugTarget(LaunchTargetOptions options, CancellationToken token)
+        {
+            if (options.IsAttach)
+            {
+                Log.Information<CordbEngine>("Attaching to target process {targetPID} (interop: {interop})", options.ProcessId, options.UseInterop);
 
                 Session.IsAttaching = true;
 
-                if (process.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals("clr.dll", StringComparison.OrdinalIgnoreCase)))
-                    NetFrameworkProcess.Attach(a, InitCallback);
-                else
-                    NetCoreProcess.Attach(a, InitCallback);
+                CordbLauncher.Attach(options, this, token);
             }
-        }
+            else
+            {
+                Log.Information<CordbEngine>("Launching process {commandLine} (interop: {interop})", options.CommandLine, options.UseInterop);
 
-        private void InitCallback(
-            CorDebug corDebug,
-            CorDebugProcess process,
-            CordbManagedCallback cb,
-            CordbUnmanagedCallback ucb,
-            bool is32Bit,
-            string commandLine,
-            bool isInterop)
-        {
-            RegisterCallbacks(cb);
-            RegisterUnmanagedCallbacks(ucb);
+                //Is the target executable a .NET Framework or .NET Core process?
 
-            Session.CorDebug = corDebug;
-            Session.ManagedCallback = cb;
-            Session.UnmanagedCallback = ucb;
-            Session.Process = new CordbProcess(process, Session, is32Bit, commandLine);
-            Session.IsInterop = isInterop;
+                //We need to modify the environment variables too, so may as well just clone it
+                options = options.Clone();
+
+                options.FrameworkKind ??= services.FrameworkTypeDetector.Detect(options.CommandLine);
+
+                Session.DidCreateProcess = true;
+
+                CordbLauncher.Create(options, this, token);
+            }
         }
     }
 }

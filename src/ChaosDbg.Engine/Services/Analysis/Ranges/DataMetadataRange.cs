@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using ChaosLib.Symbols;
 
 namespace ChaosDbg.Analysis
 {
@@ -23,7 +25,12 @@ namespace ChaosDbg.Analysis
             if (metadata.FoundBy.HasFlag(FoundBy.ExternalJmp))
                 length = is32Bit ? 4 : 8;
             else if (metadata.FoundBy.HasFlag(FoundBy.Symbol))
-                length = metadata.Symbol.DiaSymbol.Length;
+            {
+                if (metadata.Symbol is IHasDiaSymbol m)
+                    length = m.DiaSymbol.Length;
+                else
+                    throw new NotImplementedException();
+            }
             else
                 length = 1;
 

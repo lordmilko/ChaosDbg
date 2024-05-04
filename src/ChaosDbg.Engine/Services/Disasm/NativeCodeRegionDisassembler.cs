@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Analysis;
-using ChaosLib.Metadata;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm

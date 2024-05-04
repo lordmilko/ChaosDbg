@@ -69,20 +69,21 @@ namespace ChaosDbg.Tests
             var expected = thread.Process.Is32Bit ? x86Expected : x64Expected;
 
             var frame = thread.StackTrace.OfType<CordbILFrame>().First();
-
             var function = frame.Function;
 
             Assert.AreEqual(methodName, function.ToString());
 
+            //First, compare our disassembly against SOS
+
             var disasm = function.Disassembly;
-
             var fnAddr = function.CorDebugFunction.NativeCode.CodeChunks.Single().startAddr;
-
             var sosDisasm = dbgEngEngine.ExecuteBufferedCommand($"!u -n {fnAddr}");
 
             CompareAgainstSOS(sosDisasm, disasm);
 
             var disasmStrs = CleanDisasm(disasm);
+
+            //Now, compare our expected assembly vs what we actually got
 
             if (expected.Length != disasmStrs.Length)
             {
@@ -105,6 +106,13 @@ namespace ChaosDbg.Tests
                     case Mnemonic.Call:
                         expectedItem = expectedItem.Substring(expectedItem.IndexOf(' ')).TrimStart();
                         actualItem = actualItem.Substring(actualItem.IndexOf(' ')).TrimStart();
+                        break;
+
+                    default:
+                        //If there's a specific memory address referenced, the bytes might be different also
+                        if (expectedItem.Contains("[<memory>]"))
+                            goto case Mnemonic.Call;
+
                         break;
                 }
 
@@ -177,11 +185,19 @@ namespace ChaosDbg.Tests
 
                 if (dis.Contains(sym))
                     return true;
+
+                //If we don't contain the symbol (e.g. Thread.SleepInternal) but do contain a CLR internal symbol (clr!ThreadNative::Sleep) that's acceptable
+                if (dis.Contains("clr!"))
+                    return true;
             }
 
             //If we have a symbol and SOS doesn't, we did better
 
             if (dis.Contains("System"))
+                return true;
+
+            //If neither had symbols, but we resolved the indirect pointer to something, we did better
+            if (dis.StartsWith(sos.Replace("_", ".") + " ds:"))
                 return true;
 
             return false;

@@ -83,34 +83,45 @@ namespace ChaosDbg.Disasm
 
             if (symbolResolver is IIndirectSymbolResolver r)
             {
+                var icedInstr = instruction.Instruction;
+
                 //If it's an indirect call, try and list a symbol for the address the address points to
-                if (instruction.Instruction.MemoryBase is Register.EIP or Register.RIP)
-                    TryFormatIndirect(instruction.Instruction, formatWriter);
+                TryFormatIndirect(icedInstr, formatWriter);
             }
         }
 
         private void TryFormatIndirect(in Instruction instr, FormatterOutput formatWriter)
         {
-            if (instr.OpCount != 1)
-                return;
+            ulong target = 0;
 
-            ulong target;
-
-            switch (instr.Op0Kind)
+            switch (instr.MemoryBase)
             {
-                case OpKind.Memory:
-                    target = instr.MemoryDisplacement64;
+                case Register.None:
+                case Register.EIP:
+                case Register.RIP:
                     break;
 
                 default:
-                    throw new NotImplementedException($"Don't know how to handle operand of type {instr.Op0Kind}");
+                    return;
             }
 
-#pragma warning disable CS8509
-            var ptrSize = instr.MemoryBase switch
+            for (var i = 0; i < instr.OpCount; i++)
             {
-                Register.EIP => 4,
-                Register.RIP => 8
+                if (instr.GetOpKind(i) == OpKind.Memory)
+                {
+                    target = instr.MemoryDisplacement64;
+                    break;
+                }
+            }
+
+            if (target == 0)
+                return;
+
+#pragma warning disable CS8509
+            var ptrSize = instr.CodeSize switch
+            {
+                CodeSize.Code32 => 4,
+                CodeSize.Code64 => 8
             };
 #pragma warning restore CS8509
 

@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using ChaosLib.Symbols;
 
 namespace ChaosDbg.Symbol
 {

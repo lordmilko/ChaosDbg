@@ -23,16 +23,21 @@ namespace ChaosDbg.Cordb
         public event EventHandler<RIP_INFO> OnRipInfo;
 
         private bool disposed;
+        private bool crashing;
         private CountdownEvent entranceCount = new CountdownEvent(1);
+
+        public Action<Exception, EngineFailureStatus> OnEngineFailure { get; set; }
 
         public CordbUnmanagedCallback()
         {
-            InBandThread = new DispatcherThread($"{nameof(CordbUnmanagedCallback)} In Band Thread");
+            InBandThread = new DispatcherThread($"{nameof(CordbUnmanagedCallback)} In Band Thread", enableLog: true);
             InBandThread.Start();
         }
 
         HRESULT ICorDebugUnmanagedCallback.DebugEvent(ref DEBUG_EVENT pDebugEvent, bool fOutOfBand)
         {
+            Log.Debug<CordbUnmanagedCallback>("Got {kind}", pDebugEvent.dwDebugEventCode);
+
             /* Sometimes the debugger might be stopped and we might be trying to interact with a native thread,
              * when suddenly we might receive an out of band event informing us that the thread has now terminated!
              * This can be very annoying when trying to do things such as interact with the TEB. So should we just
@@ -51,7 +56,20 @@ namespace ChaosDbg.Cordb
 
             var unmanagedEventArgs = new DebugEventCorDebugUnmanagedCallbackEventArgs(pDebugEvent, fOutOfBand);
 
-            OnPreEvent?.Invoke(this, unmanagedEventArgs);
+            try
+            {
+                //This can throw
+                OnPreEvent?.Invoke(this, unmanagedEventArgs);
+            }
+            catch (Exception ex)
+            {
+                //We've encountered an unhandled exception. Raise a fatal error.
+                //We swallow this error so we can still pump events, and have CordbEngine_Events request that we perform an engine stop
+
+                OnEngineFailure?.Invoke(ex, EngineFailureStatus.BeginShutdown);
+
+                crashing = true;
+            }
 
             try
             {
@@ -121,10 +139,41 @@ namespace ChaosDbg.Cordb
 
         private void HandleEvent<T>(EventHandler<T> handler, T handlerEventArgs, DebugEventCorDebugUnmanagedCallbackEventArgs eventArgs)
         {
-            handler?.Invoke(this, handlerEventArgs);
+            //If we've had an unhandled exception, just call Continue until we get the _managed_ ExitProcess event. We don't need to care about
+            //the _unmanaged_ ExitProcess event. We don't care about the unmanaged CreateProcess event either: our thread name/logging context
+            //is initialized inside CordbLauncher
+            if (!crashing)
+            {
+                try
+                {
+                    handler?.Invoke(this, handlerEventArgs);
+                }
+                catch (Exception ex)
+                {
+                    //We've encountered an unhandled exception. Raise a fatal error.
+                    //We swallow this error so we can still pump events, and have CordbEngine_Events request that we perform an engine stop
 
-            OnAnyEvent?.Invoke(this, eventArgs);
+                    OnEngineFailure?.Invoke(ex, EngineFailureStatus.BeginShutdown);
+
+                    crashing = true;
+                }
+            }
+            else
+                Log.Debug<CordbUnmanagedCallback>("Not handling event {eventType} because unmanaged callback is crashing", eventArgs.DebugEvent.dwDebugEventCode);
+
+            try
+            {
+                OnAnyEvent?.Invoke(this, eventArgs);
+            }
+            catch (Exception ex)
+            {
+                //We're in big trouble now. Most likely Continue() failed. All we can do is inform the UI and hope they can deal with it
+
+                OnEngineFailure?.Invoke(ex, EngineFailureStatus.ShutdownFailure);
+            }
         }
+
+        internal void SetHadStartupFailure() => crashing = true;
 
         public void Dispose()
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using ChaosLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -52,11 +53,29 @@ namespace ChaosDbg.Tests
 
         private TestResult[] Invoke(ITestMethod testMethod)
         {
-            if (attrib != null)
-                return attrib.Execute(testMethod);
+            TestResult[] DoInvoke()
+            {
+                if (attrib != null)
+                    return attrib.Execute(testMethod);
 
-            //Invoke the test method. We will be invoked on an MTA thread if the current thread was STA
-            return new[] { testMethod.Invoke(testMethod.Arguments) };
+                //Invoke the test method. We will be invoked on an MTA thread if the current thread was STA
+                return new[] { testMethod.Invoke(testMethod.Arguments) };
+            }
+
+            var result = DoInvoke();
+
+            foreach (var item in result)
+            {
+                if (item.TestFailureException != null)
+                {
+                    if (item.TestFailureException.InnerException != null)
+                        Log.Error<TestResult>(item.TestFailureException.InnerException, "Test '{testName}' failed: {message}", testMethod.TestMethodName, item.TestFailureException.InnerException.Message);
+                    else
+                        Log.Error<TestResult>(item.TestFailureException, item.TestFailureException.Message);
+                }
+            }
+
+            return result;
         }
     }
 }

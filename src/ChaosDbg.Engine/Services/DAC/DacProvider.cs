@@ -17,6 +17,8 @@ namespace ChaosDbg.DAC
     {
         private object objLock = new object();
 
+        private bool disposed;
+
         public DacThreadStore Threads { get; }
 
         private SOSDacInterface sos;
@@ -24,6 +26,9 @@ namespace ChaosDbg.DAC
         {
             get
             {
+                if (disposed)
+                    throw new ObjectDisposedException(nameof(DacProvider));
+
                 if (sos == null)
                 {
                     lock (objLock)
@@ -117,5 +122,20 @@ namespace ChaosDbg.DAC
         }
 
         #endregion
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            //We observed a memory issue wherein we were caching our DbgHelpSymbolCallback in our DbgHelpSession,
+            //but the entire CordbProcess was being kept alive by both that and a COM ref count on our CordbDataTarget.
+            //As such, for good measure lets clear out any references immediately so that we aren't keeping anything alive
+            sos = null;
+            DataTarget.SetFlushCallback(null);
+            cdbProcess = null;
+
+            disposed = true;
+        }
     }
 }

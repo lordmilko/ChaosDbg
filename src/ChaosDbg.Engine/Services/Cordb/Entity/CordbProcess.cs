@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using ChaosDbg.DAC;
 using ChaosDbg.Disasm;
 using ChaosDbg.Evaluator.Masm;
 using ChaosDbg.Symbol;
 using ChaosLib;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -30,7 +32,8 @@ namespace ChaosDbg.Cordb
      * This method is called in one of two places. Upon processing a native debug event, ShimProcess::HandleWin32DebugEvent will either:
      *
      * - call CordbProcess::HandleDebugEventForInteropDebugging which, after dispatching our DebugEvent callback, will call
-     *   CordbWin32EventThread::UnmanagedContinue -> CordbWin32EventThread::DoDbgContinue -> queue the pending attach
+     *   CordbWin32EventThread::UnmanagedContinue -> CordbWin32EventThread::DoDbgContinue -> which will call QueueManagedAttachIfNeededWorker
+     *   after the loader breakpoint is received.
      *
      * - call ShimProcess::DefaultEventHandler -> queue the pending attach
      *
@@ -61,7 +64,7 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Encapsulates a <see cref="ClrDebug.CorDebugProcess"/> being debugged by a <see cref="CordbEngine"/>.
     /// </summary>
-    public class CordbProcess : IDisposable
+    public class CordbProcess : ICLRDebuggingLibraryProvider, IDisposable
     {
         #region Overview
 
@@ -75,12 +78,17 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the handle of the process.
         /// </summary>
-        public IntPtr Handle => CorDebugProcess.Handle;
+        public IntPtr Handle { get; }
 
         /// <summary>
         /// Gets whether the target is a 32-bit process.
         /// </summary>
         public bool Is32Bit { get; }
+
+        /// <summary>
+        /// Gets whether this process encapsulates a V3 <see cref="CorDebugProcess"/>, indicating there is no managed callback and that the process is always "live".
+        /// </summary>
+        public bool IsV3 { get; }
 
         /// <summary>
         /// Gets the <see cref="IMAGE_FILE_MACHINE"/> type of this process.
@@ -170,24 +178,114 @@ namespace ChaosDbg.Cordb
 
         private bool disposed;
 
+        #region V2
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CordbProcess"/> class for a V2 debugger pipeline.
+        /// </summary>
+        /// <param name="corDebugProcess">The <see cref="CorDebugProcess"/> to encapsulate.</param>
+        /// <param name="session">The debugger session state that is associated with this process.</param>
+        /// <param name="is32Bit">Whether the target process is 32-bit.</param>
+        /// <param name="commandLine">If the operating system process was newly created, the command line arguments that were used to launch the process.</param>
         public CordbProcess(
             CorDebugProcess corDebugProcess,
             CordbSessionInfo session,
             bool is32Bit,
-            string commandLine)
+            string commandLine) : this(corDebugProcess.Id, corDebugProcess.Handle, is32Bit, false)
         {
             if (corDebugProcess == null)
                 throw new ArgumentNullException(nameof(corDebugProcess));
 
+            CorDebugProcess = corDebugProcess;
+
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
 
-            CorDebugProcess = corDebugProcess;
-            Id = CorDebugProcess.Id; //When interop debugging, you often can't request this from the Win32EventThread (most likely due to marshalling issues)
-            Win32Process = Process.GetProcessById(corDebugProcess.Id);
             Session = session;
-            Is32Bit = is32Bit;
             CommandLine = Shell32.CommandLineToArgvW(commandLine);
+
+            DAC = new DacProvider(this);
+
+            //DbgHelp.Native.SymSetOptions(ClrDebug.DbgEng.SYMOPT.DEFERRED_LOADS); //temp
+
+            //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
+            Symbols = new DebuggerSymbolProvider(
+                corDebugProcess.Handle,
+                Session.EngineId,
+                new CordbDebuggerSymbolProviderExtension(this),
+                Session.Services.MicrosoftPdbSourceFileProvider
+            );
+
+            using var dbgHelpHolder = new DisposeHolder(Symbols);
+
+            var resolver = new CordbDisasmSymbolResolver(this);
+            ProcessDisassembler = session.Services.NativeDisasmProvider.CreateDisassembler(this, resolver);
+            resolver.ProcessDisassembler = ProcessDisassembler;
+
+            dbgHelpHolder.SuppressDispose();
+        }
+
+        #endregion
+        #region V3
+
+        public unsafe CordbProcess(Process process) : this(process.Id, process.Handle, Kernel32.IsWow64Process(process.Handle), true)
+        {
+            DAC = new DacProvider(this);
+
+            //Force load mscordacwks
+            _ = DAC.SOS;
+
+            //Currently only .NET Framework is supported
+            var clrDebugging = Extensions.CLRCreateInstance().CLRDebugging;
+
+            var maxDebuggerSupportedVersion = new CLR_DEBUGGING_VERSION { wMajor = 4 };
+            var version = new CLR_DEBUGGING_VERSION();
+
+            var result = clrDebugging.OpenVirtualProcess(
+                (long) (void*) Kernel32.GetModuleHandleW("clr.dll"),
+                DAC.DataTarget,
+                this,
+                maxDebuggerSupportedVersion,
+                typeof(ICorDebugProcess).GUID,
+                ref version
+            );
+
+            CorDebugProcess = new CorDebugProcess((ICorDebugProcess) result.ppProcess);
+        }
+
+        HRESULT ICLRDebuggingLibraryProvider.ProvideLibrary(string pwszFileName, int dwTimestamp, int dwSizeOfImage, out IntPtr phModule)
+        {
+            if (Kernel32.TryGetModuleHandleW(pwszFileName, out phModule) == HRESULT.S_OK)
+                return HRESULT.S_OK;
+
+            //We expect that mscordacwks should be loaded, but mscordbi might not yet be
+            var dbiPath = Path.Combine(Path.GetDirectoryName(DAC.CLR.FileName), pwszFileName);
+
+            phModule = Kernel32.LoadLibrary(dbiPath);
+            return HRESULT.S_OK;
+        }
+
+        #endregion
+        #region V2 / V3
+
+        private CordbProcess(
+            int processId,
+            IntPtr hProcess,
+            bool is32Bit,
+            bool isV3)
+        {
+            IsV3 = isV3;
+
+            //When interop debugging, you often can't request this from the Win32EventThread (most likely due to marshalling issues), and
+            //when using the V3 API you can't request this property at all
+            Id = processId;
+
+            //Can't request this from the CorDebugProcess in V3
+            Handle = hProcess;
+
+            Win32Process = Process.GetProcessById(processId);
+            
+            Is32Bit = is32Bit;
 
             Threads = new CordbThreadStore(this);
             AppDomains = new CordbAppDomainStore(this);
@@ -195,17 +293,10 @@ namespace ChaosDbg.Cordb
             Modules = new CordbModuleStore(this);
             Breakpoints = new CordbBreakpointStore(this);
 
-            DAC = new DacProvider(this);
             Evaluator = new MasmEvaluator(new CordbMasmEvaluatorContext(this));
-
-            //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
-            Symbols = new DebuggerSymbolProvider(corDebugProcess.Handle, new CordbDebuggerSymbolProviderExtension(this));
-
-            var resolver = new CordbDisasmSymbolResolver(this);
-            ProcessDisassembler = session.Services.NativeDisasmProvider.CreateDisassembler(this, resolver);
-            resolver.ProcessDisassembler = ProcessDisassembler;
         }
 
+        #endregion
         #region ReadManagedMemory
 
         //Prefer CorDebugProcess.ReadMemory so that any internal breakpoints are hidden, falling back to an ICLRDataTarget as required
@@ -233,6 +324,12 @@ namespace ChaosDbg.Cordb
         [Obsolete("Do not call this method directly. Call CordbEngine.Terminate() instead")]
         internal void Terminate()
         {
+            //See the notes under the CordbEngine.cs: Shutdown section for information on how ICorDebug shutdown logic works, and how ChaosDbg
+            //has been designed to interoperate with that.
+
+            //As soon as we call terminate it's going to dispatch to the Win32 event thread an event requesting termination; thus, we want to ensure
+            //we have our bookkeeping done first
+            Session.IsTerminating = true;
             var hr = CorDebugProcess.TryTerminate(0);
 
             switch (hr)
@@ -241,6 +338,7 @@ namespace ChaosDbg.Cordb
                 //it will terminate and neuter the object, and we'll get this response back
                 case HRESULT.CORDBG_E_PROCESS_TERMINATED:
                 case HRESULT.CORDBG_E_OBJECT_NEUTERED:
+                    //It's not our responsibility to claim that the process has terminated; only the ExitProcess event can do that
                     break;
 
                 default:
@@ -248,7 +346,10 @@ namespace ChaosDbg.Cordb
                     break;
             }
 
-            //We need to ensure the debugger is running in order to receive the exit process event.
+            /* We need to ensure the debugger is running in order to receive the exit process event.
+             * If the process has already terminated, I believe we still need to wait for the ExitProcess event anyway; if we let this method
+             * return without having received it, we may end up receiving it after we've already set our Process object to null, and we assert
+             * that we must always have a Process object in our pre-event handler */
             if (Session.EventHistory.LastStopReason is CordbNativeEventPauseReason { OutOfBand: true })
                 CorDebugProcess.TryContinue(true);
             else
@@ -262,6 +363,7 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
+            DAC.Dispose();
             Symbols.Dispose();
 
             disposed = true;
