@@ -213,11 +213,12 @@ https://github.com/NationalSecurityAgency/ghidra
 
 -------------------------------------------------------------------
 License notice for
-    dotnet/diagnostics (https://github.com/dotnet/diagnostics)
-    dotnet/roslyn      (https://github.com/dotnet/roslyn)
-    dotnet/runtime     (https://github.com/dotnet/runtime)
-    dotnet/symstore    (https://github.com/dotnet/symstore)
-    microsoft/perfview (https://github.com/microsoft/perfview)
+    dotnet/diagnostics    (https://github.com/dotnet/diagnostics)
+    dotnet/roslyn         (https://github.com/dotnet/roslyn)
+    dotnet/runtime        (https://github.com/dotnet/runtime)
+    dotnet/symstore       (https://github.com/dotnet/symstore)
+    microsoft/perfview    (https://github.com/microsoft/perfview)
+    PowerShell/PowerShell (https://github.com/PowerShell/PowerShell)
 -------------------------------------------------------------------
 
 The MIT License (MIT)
@@ -245,10 +246,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -------------------------------------------------------------------
-License notice for dnSpy
+License notice for
+    dnSpy (https://github.com/dnSpy/dnSpy)
+    richheader (https://github.com/kirschju/richheader)
 -------------------------------------------------------------------
-
-https://github.com/dnSpy/dnSpy
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
