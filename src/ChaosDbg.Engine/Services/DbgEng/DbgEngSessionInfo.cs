@@ -8,8 +8,21 @@ namespace ChaosDbg.DbgEng
     /// <summary>
     /// Stores debugger entities used to manage the current <see cref="DbgEngEngine"/> session.
     /// </summary>
-    public class DbgEngSessionInfo : IDisposable
+    public class DbgEngSessionInfo : IDbgSessionInfo, IDisposable
     {
+        public DbgEngProcess ActiveProcess
+        {
+            get => Processes.ActiveProcess;
+            set => Processes.ActiveProcess = value;
+        }
+
+        public DbgEngProcessStore Processes { get; private set; }
+
+        /// <inheritdoc cref="IDbgSessionInfo.EventFilters" />
+        public DbgEngEventFilterStore EventFilters { get; }
+
+        public EngineStatus Status { get; set; }
+
         #region UiClient
 
         private DebugClient uiClient;
@@ -181,6 +194,9 @@ namespace ChaosDbg.DbgEng
 
             //Allow either the user to request cancellation via their token, or our session to request cancellation upon being disposed
             EngineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            Processes = new DbgEngProcessStore(this);
+            EventFilters = new DbgEngEventFilterStore(this);
         }
 
         /// <summary>
@@ -208,7 +224,7 @@ namespace ChaosDbg.DbgEng
         /// Executes a command using <see cref="BufferClient"/> that emits output to
         /// a clients' output callbacks.
         /// </summary>
-        /// <param name="action">The action to perform using the <see cref="BuferClient"/>.</param>
+        /// <param name="action">The action to perform using the <see cref="BufferClient"/>.</param>
         /// <returns>The output that was emitted to the output callbacks of the <see cref="BufferClient"/>.</returns>
         public string[] ExecuteBufferedCommand(Action<DebugClient> action)
         {
@@ -216,6 +232,19 @@ namespace ChaosDbg.DbgEng
                 () => action(BufferClient)
             );
         }
+
+        #region IDbgSessionInfo
+
+        private ExternalDbgProcessStore externalProcessStore;
+
+        IDbgProcessStore IDbgSessionInfo.Processes => externalProcessStore ??= new ExternalDbgProcessStore(Processes);
+
+        private ExternalDbgEventFilterStore externalEventFilterStore;
+
+        /// <inheritdoc />
+        IDbgEventFilterStore IDbgSessionInfo.EventFilters => externalEventFilterStore ??= new ExternalDbgEventFilterStore(EventFilters);
+
+        #endregion
 
         /// <summary>
         /// Terminates the debugger session, sending notifications to DbgEng that it should wake up (if stuck inside of an internal wait)
@@ -263,6 +292,9 @@ namespace ChaosDbg.DbgEng
             engineClient = null;
             bufferClient = null;
             BufferOutput = null;
+
+            Processes = null;
+            externalProcessStore = null;
         }
     }
 }

@@ -118,7 +118,7 @@ namespace ChaosDbg.Cordb
 
         public bool HasUnmanagedContinue => unmanagedContinue != null;
 
-        public CordbThread UnmanagedEventThread => session.Process.Threads[UnmanagedEventThreadId];
+        public CordbThread UnmanagedEventThread => session.ActiveProcess.Threads[UnmanagedEventThreadId];
 
         #endregion
 

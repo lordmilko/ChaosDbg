@@ -19,6 +19,7 @@ namespace ChaosDbg.Debugger
         public Action<DeferrableOperation> OnCompleted { get; set; }
 
         private object objLock = new object();
+        private int incompleteChildren;
 
         public DeferrableOperation(long key, params DeferrableSubOperation[] children)
         {
@@ -26,11 +27,30 @@ namespace ChaosDbg.Debugger
             Children = children;
 
             foreach (var child in children)
+            {
                 child.ParentOperation = this;
+                child.OnComplete += (s, e) =>
+                {
+                    lock (objLock)
+                    {
+                        incompleteChildren--;
+
+                        if (incompleteChildren == 0)
+                        {
+                            Status = DeferrableOperationStatus.Completed;
+                            OnCompleted.Invoke(this);
+                        }
+                    }
+                };
+            }
+
+            incompleteChildren = children.Length;
         }
 
         public void Execute(bool forceSynchronous)
         {
+            Log.Debug<DeferrableOperation>("Executing {key} (forceSynchronous: {forceSynchronous})", Key.ToString("X"), forceSynchronous);
+
             Debug.Assert(OnCompleted != null);
 
             //See the comments in DeferrableSubOperation for info on why we do this two stage check
@@ -45,23 +65,31 @@ namespace ChaosDbg.Debugger
                         try
                         {
                             foreach (var child in Children)
+                            {
+                                Log.Debug<DeferrableOperation>("Executing {type} subtask of {key}", child.GetType().Name, Key.ToString("X"));
                                 child.Execute(forceSynchronous);
+                            }
 
-                            Status = DeferrableOperationStatus.Completed;
+                            if (incompleteChildren == 0)
+                            {
+                                Status = DeferrableOperationStatus.Completed;
+                                OnCompleted.Invoke(this);
+                            }
                         }
                         catch
                         {
                             Status = DeferrableOperationStatus.Failed;
+                            OnCompleted.Invoke(this);
 
                             throw;
                         }
-                        finally
-                        {
-                            OnCompleted.Invoke(this);
-                        }
                     }
+                    else
+                        Log.Debug<DeferrableOperation>("After entering lock, {key} had already completed", Key.ToString("X"));
                 }
             }
+            else
+                Log.Debug<DeferrableOperation>("{key} has already completed", Key.ToString("X"));
         }
     }
 }

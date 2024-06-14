@@ -68,28 +68,31 @@ namespace ChaosDbg.Cordb
         internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
 
         private void RaiseEngineOutput(EngineOutputEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineOutput)], args);
+            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineOutput)], this, args);
 
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineStatusChanged)], args);
+            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineStatusChanged)], this, args);
 
         private void RaiseEngineFailure(EngineFailureEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineFailure)], args);
+            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineFailure)], this, args);
 
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleLoad)], args);
+            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleLoad)], this, args);
 
         private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleUnload)], args);
+            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleUnload)], this, args);
 
         private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadCreate)], args);
+            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadCreate)], this, args);
 
         private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadExit)], args);
+            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadExit)], this, args);
 
         private void RaiseBreakpointHit(EngineBreakpointHitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.BreakpointHit)], args);
+            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.BreakpointHit)], this, args);
+
+        private void RaiseExceptionHit(EngineExceptionHitEventArgs args) =>
+            HandleUIEvent((EventHandler<EngineExceptionHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ExceptionHit)], this, args);
 
         #endregion
         #region PreEvent
@@ -122,7 +125,7 @@ namespace ChaosDbg.Cordb
 
             if (!localStartupFailed)
             {
-                var process = Session.Process;
+                var process = Session.ActiveProcess;
 
                 Debug.Assert(process != null, $"{nameof(PreEventCommon)}: Didn't have a process! This indicates the process was not properly stored prior to the debuggee being resumed");
             }
@@ -373,6 +376,8 @@ namespace ChaosDbg.Cordb
 
         private void UnmanagedUnloadModule(object sender, UNLOAD_DLL_DEBUG_INFO e)
         {
+            //At the point we receive this notification, the module has already been unloaded from the target process.
+            //If we're in the middle of trying to read the PE Headers of the target module, we will fail and throw an exception
             var module = Process.Modules.Remove(e);
 
             if (module != null)
@@ -552,11 +557,11 @@ namespace ChaosDbg.Cordb
             switch (e.ExceptionRecord.ExceptionCode)
             {
                 case NTSTATUS.STATUS_BREAKPOINT:
-                    ProcessStatusBreakpoint(e.ExceptionRecord.ExceptionAddress);
+                    ProcessStatusBreakpoint(e);
                     break;
 
                 case NTSTATUS.STATUS_SINGLE_STEP:
-                    ProcessSingleStep();
+                    ProcessSingleStep(e);
                     break;
 
                 default:
@@ -564,7 +569,7 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        private unsafe void ProcessStatusBreakpoint(IntPtr exceptionAddress)
+        private unsafe void ProcessStatusBreakpoint(in EXCEPTION_DEBUG_INFO exception)
         {
             /* When debugging .NET Framework, the first breakpoint we receive will be the loader breakpoint, because
              * we call ICorDebug.CreateProcess() using DEBUG_ONLY_THIS_PROCESS. However, when debugging .NET Core,
@@ -592,12 +597,13 @@ namespace ChaosDbg.Cordb
                 //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE to ContinueDebugEvent()
                 Process.CorDebugProcess.ClearCurrentException(thread.Id);
 
-                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(new CordbSpecialBreakpoint(CordbSpecialBreakpointKind.Loader)));
+                //Add the pause before raising the event
                 AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(new CordbSpecialBreakpoint(CordbSpecialBreakpointKind.Loader, exception)));
                 return;
             }
 
-            if (Process.Breakpoints.TryGetBreakpoint(exceptionAddress, out var breakpoint))
+            if (Process.Breakpoints.TryGetBreakpoint(exception.ExceptionRecord.ExceptionAddress, out var breakpoint))
             {
                 if (breakpoint.IsOneShot)
                 {
@@ -617,8 +623,9 @@ namespace ChaosDbg.Cordb
                 //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE (DBG_FORCE_CONTINUE in Longhorn) to ContinueDebugEvent()
                 Process.CorDebugProcess.ClearCurrentException(thread.Id);
 
-                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(breakpoint));
+                //Add the pause before raising the event
                 AddUnmanagedPause(new CordbNativeBreakpointEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+                RaiseBreakpointHit(new EngineBreakpointHitEventArgs(breakpoint));
 
                 //It's important that we do this _after_ we record the pause state above. We'll now lie and say that
                 //the event wasn't an OOB event so that we don't automatically continue. When the user resumes, we'll
@@ -630,19 +637,20 @@ namespace ChaosDbg.Cordb
             {
                 //It's an unhandled exception then!
 
-                Process.Symbols.TrySymFromAddr((long) (void*) exceptionAddress, Symbol.SymFromAddrOption.Safe, out var unhandledTarget);
+                Process.Symbols.TrySymFromAddr((long) (void*) exception.ExceptionRecord.ExceptionAddress, Symbol.SymFromAddrOption.Safe, out var unhandledTarget);
 
                 throw new NotImplementedException("Processing unhandled exceptions is not implemented");
             }
         }
 
-        private void ProcessSingleStep()
+        private void ProcessSingleStep(in EXCEPTION_DEBUG_INFO exception)
         {
             var tid = Session.CallbackContext.UnmanagedEventThreadId;
 
             //Set CUES_ExceptionCleared so that mscordbi!DoDbgContinue() passes DBG_CONTINUE (DBG_FORCE_CONTINUE in Longhorn) to ContinueDebugEvent()
             Process.CorDebugProcess.ClearCurrentException(tid);
 
+            AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand, exception));
             RaiseBreakpointHit(new EngineBreakpointHitEventArgs(null)); //temp
             AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
         }

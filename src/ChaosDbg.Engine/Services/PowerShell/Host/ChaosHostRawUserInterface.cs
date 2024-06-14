@@ -2,6 +2,7 @@
 using System.Management.Automation.Host;
 using System.Management.Automation.Runspaces;
 using ChaosDbg.Terminal;
+using ChaosLib;
 
 namespace ChaosDbg.PowerShell.Host
 {
@@ -25,7 +26,19 @@ namespace ChaosDbg.PowerShell.Host
 
                 return color;
             }
-            set => throw new NotImplementedException();
+            set
+            {
+                var bufferInfo = terminal.GetConsoleScreenBufferInfo();
+
+                var attribs = bufferInfo.wAttributes;
+
+                attribs &= (ConsoleBufferAttributes) ~0xf0;
+
+                // C#'s bitwise-or sign-extends to 32 bits.
+                attribs = (ConsoleBufferAttributes) (((uint) (ushort) attribs) | ((uint) (ushort) ((short) value << 4)));
+
+                terminal.SetConsoleTextAttribute(attribs);
+            }
         }
 
         /// <summary>
@@ -83,7 +96,19 @@ namespace ChaosDbg.PowerShell.Host
 
                 return color;
             }
-            set => throw new NotImplementedException();
+            set
+            {
+                var bufferInfo = terminal.GetConsoleScreenBufferInfo();
+
+                var attribs = bufferInfo.wAttributes;
+
+                attribs &= (ConsoleBufferAttributes) ~0x0f;
+
+                // C#'s bitwise-or sign-extends to 32 bits.
+                attribs = (ConsoleBufferAttributes) (((uint) (ushort) attribs) | ((uint) (ushort) value));
+
+                terminal.SetConsoleTextAttribute(attribs);
+            }
         }
 
         /// <summary>

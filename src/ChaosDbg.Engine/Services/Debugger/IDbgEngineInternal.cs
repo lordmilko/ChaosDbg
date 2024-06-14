@@ -5,9 +5,11 @@ namespace ChaosDbg
 {
     internal interface IDbgEngineInternal : IDbgEngine
     {
-        void CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken = default);
+        void CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken = default);
 
-        void Attach(LaunchTargetOptions options, CancellationToken cancellationToken = default);
+        void Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken = default);
+        
+        void OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken = default);
 
         EventHandlerList EventHandlers { get; }
     }

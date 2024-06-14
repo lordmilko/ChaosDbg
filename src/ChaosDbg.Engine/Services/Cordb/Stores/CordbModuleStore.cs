@@ -12,7 +12,7 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Represents a store used to manage and provide access to the native and managed modules that have been loaded into the current process.
     /// </summary>
-    public class CordbModuleStore : IEnumerable<CordbModule>
+    public class CordbModuleStore : IDbgModuleStoreInternal, IEnumerable<CordbModule>
     {
         private object moduleLock = new object();
 
@@ -220,6 +220,7 @@ namespace ChaosDbg.Cordb
             {
                 if (ManagedModules.TryGetValue(baseAddress, out var module))
                 {
+                    module.IsLoaded = false;
                     ManagedModules.Remove(module.BaseAddress);
 
                     if (process.Session.IsInterop)
@@ -253,6 +254,7 @@ namespace ChaosDbg.Cordb
         {
             if (nativeModules.TryGetValue(baseAddress, out var native))
             {
+                native.IsLoaded = false;
                 process.Symbols.RemoveNativeModule(baseAddress);
                 nativeModules.Remove(baseAddress);
 
@@ -285,6 +287,11 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        /// <summary>
+        /// Removes the special <see cref="CordbNativeModule"/> that is associated with the process EXE.
+        /// </summary>
+        /// <param name="processId">The process ID of the executable.</param>
+        /// <returns>The <see cref="CordbNativeModule"/> that was associated with the process, or <see langword="null"/> if an associated module could not be found.</returns>
         internal CordbNativeModule RemoveProcessModule(int processId)
         {
             lock (moduleLock)
@@ -382,6 +389,7 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        IEnumerator<IDbgModule> IDbgModuleStoreInternal.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

@@ -109,6 +109,12 @@ namespace ChaosDbg.Cordb
 
                         return Array.Empty<CordbFrame>();
 
+                    case CORDBG_E_CANT_CALL_ON_THIS_THREAD:
+                        if (!process.IsV3 && process.Session.IsInterop)
+                            return ResolveNativeFrames(process, accessor, process.DataTarget, process.Symbols);
+
+                        return Array.Empty<CordbFrame>();
+
                     default:
                         return Array.Empty<CordbFrame>();
                 }
@@ -165,12 +171,12 @@ namespace ChaosDbg.Cordb
                 }
 
                 if (!process.IsV3 && process.Session.IsInterop)
-                    return ResolveNativeFrames(process, accessor, process.DataTarget, process.Symbols, results);
+                    return ResolveAndMergeNativeFrames(process, accessor, process.DataTarget, process.Symbols, results);
 
                 return results.ToArray();
             }
 
-            private static CordbFrame[] ResolveNativeFrames(
+            private static CordbFrame[] ResolveAndMergeNativeFrames(
                 CordbProcess process,
                 CordbThread.ManagedAccessor accessor,
                 ICLRDataTarget dataTarget,
@@ -239,6 +245,30 @@ namespace ChaosDbg.Cordb
                 }
 
                 return newFrames.ToArray();
+            }
+
+            private static CordbFrame[] ResolveNativeFrames(
+                CordbProcess process,
+                CordbThread.ManagedAccessor accessor,
+                ICLRDataTarget dataTarget,
+                DebuggerSymbolProvider symbolProvider)
+            {
+                using var walker = new NativeStackWalker(
+                    dataTarget,
+                    symbolProvider,
+                    process.Session.PauseContext.DynamicFunctionTableCache,
+                    (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
+                );
+
+                //First, let's get all native frames starting from the top of the stack
+                var nativeFrames = walker.Walk(symbolProvider.hProcess, accessor.Handle, accessor.Thread.RegisterContext).ToArray();
+
+                return nativeFrames.Select(v =>
+                {
+                    process.Modules.TryGetModuleForAddress(v.FrameIP, out var module);
+
+                    return (CordbFrame) new CordbNativeFrame(v, accessor.Thread, module);
+                }).ToArray();
             }
 
             private static CordbFrame GetRuntimeNativeFrame(CordbProcess process, CordbThread thread, CorDebugNativeFrame corDebugNativeFrame, CrossPlatformContext context)

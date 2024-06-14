@@ -9,7 +9,7 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Stores debugger entities used to manage the current <see cref="CordbEngine"/> session.
     /// </summary>
-    public class CordbSessionInfo : IDisposable
+    public class CordbSessionInfo : IDbgSessionInfo, IDisposable
     {
         public CorDebug CorDebug { get; set; }
 
@@ -17,7 +17,27 @@ namespace ChaosDbg.Cordb
 
         public CordbUnmanagedCallback UnmanagedCallback { get; set; }
 
-        public CordbProcess Process { get; set; }
+        public CordbProcess ActiveProcess
+        {
+            get => Processes.ActiveProcess;
+            set
+            {
+                if (value == null)
+                    Processes.Remove(value);
+                else
+                {
+                    if (Processes == null)
+                        Processes = new CordbProcessStore(value);
+                    else
+                        throw new InvalidOperationException("Only a single process is supported per engine");
+                }
+            }
+        }
+
+        public CordbProcessStore Processes { get; private set; }
+
+        /// <inheritdoc cref="IDbgSessionInfo.EventFilters" />
+        public CordbEventFilterStore EventFilters { get; } = new CordbEventFilterStore();
 
         public EngineStatus LastStatus { get; set; }
 
@@ -221,6 +241,19 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        #region IDbgSessionInfo
+
+        private ExternalDbgProcessStore externalProcessStore;
+
+        IDbgProcessStore IDbgSessionInfo.Processes => externalProcessStore ??= new ExternalDbgProcessStore(Processes);
+
+        private ExternalDbgEventFilterStore externalEventFilterStore;
+
+        /// <inheritdoc />
+        IDbgEventFilterStore IDbgSessionInfo.EventFilters => externalEventFilterStore ??= new ExternalDbgEventFilterStore(EventFilters);
+
+        #endregion
+
         public void Dispose()
         {
             if (!Monitor.TryEnter(disposeLock))
@@ -278,7 +311,8 @@ namespace ChaosDbg.Cordb
             if (!WaitForCriticalFailureThread() || disposed)
                 return;
 
-            Process?.Dispose();
+            ActiveProcess?.Dispose();
+            ActiveProcess = null;
             WaitExitProcess.Dispose();
 
             CrashingProcess = null;

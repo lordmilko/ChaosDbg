@@ -1,4 +1,5 @@
 ﻿using System;
+using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
@@ -14,9 +15,12 @@ namespace ChaosDbg.Cordb
     {
         public CordbSpecialBreakpointKind Kind { get; }
 
-        public CordbSpecialBreakpoint(CordbSpecialBreakpointKind kind) : base(false)
+        public EXCEPTION_DEBUG_INFO Exception { get; }
+
+        public CordbSpecialBreakpoint(CordbSpecialBreakpointKind kind, in EXCEPTION_DEBUG_INFO exception) : base(false)
         {
             Kind = kind;
+            Exception = exception;
         }
 
         protected override void Activate(bool activate)

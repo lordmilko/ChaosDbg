@@ -6,6 +6,9 @@ using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /// <summary>
+    /// Represents a store used to manage and provide access to AppDomains that have been loaded into the current process.
+    /// </summary>
     public class CordbAppDomainStore : IEnumerable<CordbAppDomain>
     {
         private object appDomainLock = new object();
@@ -48,6 +51,10 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        /// <summary>
+        /// Associates a given <see cref="CordbAssembly"/> with a <see cref="CordbAppDomain"/> via its parent <see cref="CorDebugAppDomain"/>.
+        /// </summary>
+        /// <param name="assembly">The assembly that should be associated.</param>
         public void LinkAssembly(CordbAssembly assembly)
         {
             var appDomain = GetAppDomain(assembly.CorDebugAssembly.AppDomain);
@@ -55,9 +62,18 @@ namespace ChaosDbg.Cordb
             appDomain.AddAssembly(assembly);
         }
 
+        /// <summary>
+        /// Disassociates a given <see cref="CordbAssembly"/> with its parent <see cref="CordbAppDomain"/>.
+        /// </summary>
+        /// <param name="assembly">The assembly that should be dissociated.</param>
         public void UnlinkAssembly(CordbAssembly assembly) =>
             assembly.AppDomain?.RemoveAssembly(assembly);
 
+        /// <summary>
+        /// Gets the <see cref="CordbAppDomain"/> that wraps a given <see cref="CorDebugAppDomain"/>.
+        /// </summary>
+        /// <param name="corDebugAppDomain">The underlying <see cref="CorDebugAppDomain"/> to lookup.</param>
+        /// <returns>The <see cref="CordbAppDomain"/> that wraps the given <see cref="CorDebugAppDomain"/>.</returns>
         internal CordbAppDomain GetAppDomain(CorDebugAppDomain corDebugAppDomain)
         {
             lock (appDomainLock)

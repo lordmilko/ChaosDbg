@@ -1,12 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
-using ChaosDbg.DbgEng;
-using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
-using ChaosLib;
-using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg
 {
@@ -15,22 +11,12 @@ namespace ChaosDbg
     /// </summary>
     public class GlobalProvider
     {
-        //The service probider is lazily loaded on first access
-        private static Lazy<IServiceProvider> serviceProvider;
-
         /// <summary>
         /// Gets the global <see cref="IServiceProvider"/> of the application.
         /// </summary>
-        public static IServiceProvider ServiceProvider
-        {
-            get
-            {
-                if (serviceProvider == null)
-                    throw new ObjectDisposedException(nameof(ServiceProvider));
-
-                return serviceProvider.Value;
-            }
-        }
+#pragma warning disable CS0618
+        public static IServiceProvider ServiceProvider => InternalGlobalProvider.ServiceProvider;
+#pragma warning restore CS0618
 
         /// <summary>
         /// An optional hook that allows modifying services.
@@ -40,40 +26,25 @@ namespace ChaosDbg
 
         static GlobalProvider()
         {
-            serviceProvider = new Lazy<IServiceProvider>(CreateServiceProvider);
-        }
-
-        private static IServiceProvider CreateServiceProvider()
-        {
-            var services = new ServiceCollection
+#pragma warning disable CS0618
+            InternalGlobalProvider.ConfigureServices = services =>
+#pragma warning restore CS0618
             {
-                typeof(DbgEngEngineProvider),
-                typeof(NativeLibraryProvider),
+                var appServices = new ServiceCollection
+                {
+                    { typeof(IThemeProvider), typeof(ThemeProvider) },
+                    { typeof(ITextBufferProvider), typeof(TextBufferProvider) }
+                };
 
-                typeof(DbgEngEngineServices),
+                foreach (var serviceEntry in appServices)
+                    services.Add(serviceEntry);
 
-                { typeof(IPEFileProvider), typeof(PEFileProvider) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
-                { typeof(IThemeProvider), typeof(ThemeProvider) },
-                { typeof(ITextBufferProvider), typeof(TextBufferProvider) }
+                ConfigureServices?.Invoke(services);
             };
-
-            ConfigureServices?.Invoke(services);
-
-            var provider = services.Build();
-
-            return provider;
         }
 
-        public static void Dispose()
-        {
-            if (serviceProvider.IsValueCreated)
-            {
-                if (serviceProvider.Value is IDisposable d)
-                    d.Dispose();
-            }
-
-            serviceProvider = null;
-        }
+#pragma warning disable CS0618
+        public static void Dispose() => InternalGlobalProvider.Dispose();
+#pragma warning restore CS0618
     }
 }

@@ -10,7 +10,7 @@ namespace ChaosDbg.DbgEng
             bool startMinimized = false,
             Action<DbgEngEngine> initCallback = null)
         {
-            return engineProvider.CreateProcess(new LaunchTargetOptions(commandLine)
+            return engineProvider.CreateProcess(new CreateProcessTargetOptions(commandLine)
             {
                 StartMinimized = startMinimized
             }, initCallback: initCallback);
@@ -24,13 +24,20 @@ namespace ChaosDbg.DbgEng
             bool useDbgEngSymOpts = true,
             int? dbgEngEngineId = null)
         {
-            return engineProvider.Attach(new LaunchTargetOptions(processId)
+            return engineProvider.Attach(new AttachProcessTargetOptions(processId)
             {
                 NonInvasive = nonInvasive,
                 NoSuspend = noSuspend,
                 UseDbgEngSymOpts = useDbgEngSymOpts,
                 DbgEngEngineId = dbgEngEngineId
             });
+        }
+
+        public static DbgEngEngine OpenDump(
+            this DbgEngEngineProvider engineProvider,
+            string dumpFile)
+        {
+            return engineProvider.OpenDump(new OpenDumpTargetOptions(dumpFile));
         }
     }
 }

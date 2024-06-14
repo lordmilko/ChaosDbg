@@ -5,6 +5,7 @@ using System.Management.Automation.Host;
 using System.Management.Automation.Runspaces;
 using System.Reflection;
 using ChaosDbg.Terminal;
+using ChaosLib;
 
 namespace ChaosDbg.PowerShell.Host
 {
@@ -21,6 +22,7 @@ namespace ChaosDbg.PowerShell.Host
     {
         private bool hasTriedRawPSReadLine;
         private MethodInfo rawPSReadLine;
+        private PrivateField<int> initialY;
         private PSReadLineType psReadLineType;
         protected string commandOverride;
 
@@ -105,11 +107,22 @@ namespace ChaosDbg.PowerShell.Host
             else
                 psReadLineType = PSReadLineType.v2_0;
 
+            var instanceField = psConsoleReadLineType.GetFieldInfo("_singleton");
+
+            var instance = instanceField.GetValue(null);
+
+            initialY = new PrivateField<int>(instance, "_initialY");
+
+            terminal.OnProtectedWrite = inc =>
+            {
+                initialY.Value += inc;
+            };
+
             //ReadLine() is the only mandatory member; if we can set key handlers too, that's an added bonus
-            TryInstallPSReadLineShortcuts(psConsoleReadLineType);
+            TryInstallPSReadLineShortcuts(instance);
             return true;
         }
 
-        protected abstract void TryInstallPSReadLineShortcuts(Type psConsoleReadLineType);
+        protected abstract void TryInstallPSReadLineShortcuts(object psConsoleReadLineInstance);
     }
 }

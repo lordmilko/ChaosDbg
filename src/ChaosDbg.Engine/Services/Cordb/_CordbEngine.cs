@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using ChaosDbg.DbgEng;
 using ChaosLib;
 
 namespace ChaosDbg.Cordb
@@ -11,7 +12,11 @@ namespace ChaosDbg.Cordb
     {
         #region State
 
-        public CordbProcess Process => Session?.Process;
+        /// <summary>
+        /// Gets the <see cref="CordbProcess"/> that is associated with this <see cref="CordbEngine"/>.<para/>
+        /// Unlike <see cref="DbgEngEngine"/>, each <see cref="CordbEngine"/> can only be associated with a singular <see cref="CordbProcess"/>.
+        /// </summary>
+        public CordbProcess Process => Session?.ActiveProcess;
 
         /// <summary>
         /// Gets the container containing the entities used to manage the current <see cref="CordbEngine"/> session.
@@ -35,12 +40,16 @@ namespace ChaosDbg.Cordb
         }
 
         [Obsolete("Do not call this method. Use CordbEngineProvider.CreateProcess() instead")]
-        void IDbgEngineInternal.CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         [Obsolete("Do not call this method. Use CordbEngineProvider.Attach() instead")]
-        void IDbgEngineInternal.Attach(LaunchTargetOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
+
+        [Obsolete("Do not call this method. Use CordbEngineProvider.OpenDump() instead")]
+        void IDbgEngineInternal.OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         private void CreateSession(LaunchTargetOptions options, CancellationToken cancellationToken)
         {
@@ -232,8 +241,8 @@ namespace ChaosDbg.Cordb
                         Process.CorDebugProcess.Detach();
 
                         //Now clear out the process so we don't attempt to kill it when this engine is destroyed
-                        Session.Process.Dispose();
-                        Session.Process = null;
+                        Session.ActiveProcess.Dispose();
+                        Session.ActiveProcess = null;
 
                         //We want to now assert that there are no special timing rules we need to adhere to, and that it is safe for us to shutdown ICorDebug ASAP. There's
                         //nothing left for this engine to do once we no longer have a process, anyway.
@@ -263,8 +272,8 @@ namespace ChaosDbg.Cordb
 #pragma warning restore CS0618 // Type or member is obsolete
 
                     //Now clear out the process so we don't attempt to kill it when this engine is destroyed
-                    Session.Process.Dispose();
-                    Session.Process = null;
+                    Session.ActiveProcess.Dispose();
+                    Session.ActiveProcess = null;
                 }
 
                 //CordbProcess.Terminate() should wait for the ExitProcess event to be emitted, and so we now want to assert that it is safe for us to shutdown ICorDebug ASAP.
@@ -288,6 +297,14 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 throw new ObjectDisposedException(nameof(CordbEngineProvider));
         }
+
+        #region IDbgEngine
+
+        IDbgProcess IDbgEngine.ActiveProcess => Process;
+
+        IDbgSessionInfo IDbgEngine.Session => Session;
+
+        #endregion
 
         public void Dispose()
         {

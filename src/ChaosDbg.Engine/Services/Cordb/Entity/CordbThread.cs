@@ -40,10 +40,10 @@ namespace ChaosDbg.Cordb
 
                     var accessor = (ManagedAccessor) Accessor;
 
-                    if (accessor.Id == accessor.VolatileOSThreadID)
+                    if (accessor.CorDebugThread.TryGetVolatileOSThreadID(out var volatileOSThreadId) != S_OK || accessor.Id == volatileOSThreadId)
                         builder.Append(accessor.Id);
                     else
-                        builder.Append($"Runtime Id = {accessor.Id}, VolatileOSThreadID = {accessor.VolatileOSThreadID}");
+                        builder.Append($"Runtime Id = {accessor.Id}, VolatileOSThreadID = {volatileOSThreadId}");
 
                     builder.Append(activeStr);
                 }

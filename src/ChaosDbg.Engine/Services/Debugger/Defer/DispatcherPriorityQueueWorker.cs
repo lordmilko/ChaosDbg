@@ -84,6 +84,17 @@ namespace ChaosDbg.Debugger
 
         public void ForceExecute(DeferrableSubOperation subOperation) => subOperation.Execute(true);
 
+        public bool TryGetOperation(long key, out DeferrableOperation operation)
+        {
+            lock (pendingOperationLock)
+            {
+                if (pendingOperations.TryGetValue(key, out operation))
+                    return true;
+
+                return false;
+            }
+        }
+
         /// <summary>
         /// Waits for the specified <see cref="DeferrableOperation"/> to naturally be executed on the dispatcher queue, and for any <see cref="AsyncDeferrableSubOperation"/> children to have completed as well.<para/>
         /// If the dispatcher queue is currently blocked, this method will hang until it gets to processing this operation.
@@ -117,6 +128,16 @@ namespace ChaosDbg.Debugger
 
                 Thread.Sleep(100);
             } while (true);
+        }
+
+        public void Abort(DeferrableOperation parentOperation)
+        {
+            parentOperation.DispatcherOperation.Abort();
+
+            foreach (var child in parentOperation.Children)
+                child.Abort();
+
+            WaitForOperation(parentOperation);
         }
 
         public void Dispose()

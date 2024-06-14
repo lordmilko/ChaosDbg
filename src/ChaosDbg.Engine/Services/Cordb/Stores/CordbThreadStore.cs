@@ -22,7 +22,7 @@ namespace ChaosDbg.Cordb
 
     [DebuggerDisplay("Count = {Threads.Count}")]
     [DebuggerTypeProxy(typeof(CordbThreadStoreDebugView))]
-    public class CordbThreadStore : IEnumerable<CordbThread>
+    public class CordbThreadStore : IDbgThreadStoreInternal, IEnumerable<CordbThread>
     {
         private object threadLock = new object();
 
@@ -394,6 +394,12 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        #region IDbgThreadStore
+
+        IDbgThread IDbgThreadStoreInternal.ActiveThread => ActiveThread;
+
+        #endregion
+
         public IEnumerator<CordbThread> GetEnumerator()
         {
             lock (threadLock)
@@ -402,6 +408,7 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        IEnumerator<IDbgThread> IDbgThreadStoreInternal.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

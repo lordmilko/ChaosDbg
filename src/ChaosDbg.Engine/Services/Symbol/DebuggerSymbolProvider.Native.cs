@@ -1,15 +1,17 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ChaosDbg.Analysis;
+using ChaosDbg.Debugger;
 using ChaosDbg.SymStore;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Symbol
@@ -82,12 +84,17 @@ namespace ChaosDbg.Symbol
         /// </summary>
         private object pendingNativeOperationsLock = new object();
 
+        private DispatcherPriorityQueueWorker worker;
+        private SymbolDeferrableOperationContext workerContext;
+
         private object frameContextLock = new object();
 
         /// <summary>
         /// The underlying DbgHelp session that is used to provide access to native symbols
         /// </summary>
-        private DbgHelpSession dbgHelp;
+        private IDbgHelp dbgHelp;
+
+        private NativeSymbolProvider nativeSymbolProvider;
 
         /// <summary>
         /// Used by the SymbolThread to asynchronously download multiple symbols in parallel to pre-download any symbols,
@@ -202,22 +209,14 @@ start:
 
         public T WithFrameContext<T>(long ip, Func<DebuggerSymbolProvider, T> func)
         {
-            //If two people try and modify the context at once, they'll overwrite each other
-            lock (frameContextLock)
-            {
-                //As far as I can see, all it actually needs is the current IP
-                var stackFrame = new IMAGEHLP_STACK_FRAME
-                {
-                    InstructionOffset = ip
-                };
+            if (TryGetPendingModule(ip, out var moduleBase))
+                EnsureModuleLoaded(moduleBase, true);
 
-                //There's no point trying to revert this afterwards; dbghelp!diaSetModFromIP will ignore
-                //the IP when its 0
-                dbgHelp.SymSetContext(stackFrame);
-
-                return func(this);
+            return dbgHelp.WithFrameContext(ip, () => func(this));
             }
-        }
+
+        internal bool TryGetSymbolModule(long baseOfDll, out IUnmanagedSymbolModule symbolModule) =>
+            loadedNativeModules.TryGetValue(baseOfDll, out symbolModule);
 
         public IUnmanagedSymbolModule GetOrAddNativeModule(string imageName, long baseOfDll, int dllSize)
         {
@@ -236,9 +235,12 @@ start:
 
         public IUnmanagedSymbolModule AddNativeModule(string imageName, long baseOfDll, int dllSize, ModuleSymFlag flags = default)
         {
-            dbgHelp.AddVirtualModule(imageName, baseOfDll, dllSize, flags, HookLock);
+            ((LegacyDbgHelp) dbgHelp).AddVirtualModule(imageName, baseOfDll, dllSize, flags, HookLock);
 
-            var module = new DbgHelpSymbolModule(dbgHelp, imageName, baseOfDll, dllSize);
+            var localOptions = dbgHelp.GlobalOptions;
+
+            //Debug.Assert(!localOptions.HasFlag(ClrDebug.DbgEng.SYMOPT.DEFERRED_LOADS), "Attempted to add a module while deferred loads is set. This is not allowed");
+            var module = CreateModule(imageName, baseOfDll, dllSize);
 
             TryRegisterCLR(module);
 
@@ -264,7 +266,7 @@ start:
                     //Apparently, as long as the key is still present, TryRemove will always succeed
                     loadedNativeModules.TryRemove(baseOfDll, out _);
 
-                    dbgHelp.RemoveModule(baseOfDll);
+                    dbgHelp.SymUnloadModule64(baseOfDll);
                 }
             }
 
@@ -323,10 +325,16 @@ start:
                 lock (pendingNativeOperationsLock)
                 {
                     var op = symbolThread.InvokeAsync(
-                        () => ReadExtraDataDirectories(baseOfDll, peFile, symbolModule, true, PEFileDirectoryFlags.All),
+                        () =>
+                        {
+                            ReadExtraDataDirectories(baseOfDll, peFile, symbolModule, true, PEFileDirectoryFlags.All);
+
+                            ClearPendingOperation(baseOfDll, false);
+                        },
                         priority: 1
                     );
 
+                    Log.Debug<DebuggerSymbolProvider>("Modifying pendingNativeOperations (DeferCalculateModuleInfoAsync {dll})", name);
                     pendingNativeOperations.Add(baseOfDll, new PendingOp(op, name, peFile.OptionalHeader.SizeOfImage, true));
                 }
             }
@@ -339,6 +347,7 @@ start:
                         priority: 1
                     );
 
+                    Log.Debug<DebuggerSymbolProvider>("Modifying pendingNativeOperations (DeferCalculateModuleInfoAsync {dll})", name);
                     pendingNativeOperations.Add(baseOfDll, new PendingOp(op, name, peFile.OptionalHeader.SizeOfImage, false));
                 }
             }
@@ -397,15 +406,7 @@ start:
                 }
                 else
                 {
-                    //Create the module from the original file path however
-                    var module = new DbgHelpSymbolModule(dbgHelp, filePath, baseOfDll, dllSize);
-
-                    //If this is the CLR (clr.dll / coreclr.dll) record the fact we've loaded symbols for it now. In non-interop debugging
-                    //we'll force load symbols for the CLR if we don't have them, so for interop debugging we need to record the fact we have
-                    //the CLR's symbols already
-                    TryRegisterCLR(module);
-
-                    loadedNativeModules[baseOfDll] = module;
+                    var module = RegisterFullSymbolModule(filePath, baseOfDll, dllSize);
 
                     lock (pendingNativeOperationsLock)
                     {
@@ -425,23 +426,40 @@ start:
             }
         }
 
+        public ISymbolModule RegisterFullSymbolModule(string filePath, long baseOfDll, int dllSize)
+        {
+            //Create the module from the original file path however
+            var module = CreateModule(filePath, baseOfDll, dllSize);
+
+            //If this is the CLR (clr.dll / coreclr.dll) record the fact we've loaded symbols for it now. In non-interop debugging
+            //we'll force load symbols for the CLR if we don't have them, so for interop debugging we need to record the fact we have
+            //the CLR's symbols already
+            TryRegisterCLR(module);
+
+            loadedNativeModules[baseOfDll] = module;
+
+            return module;
+        }
+
         void HookLock(object sender, DbgHelpSymbolCallback.XmlEvent e)
         {
             if (e is DbgHelpSymbolCallback.XmlActivityStartEvent)
             {
-                dbgHelp.ExitDbgHelp();
+                Log.Debug<IDbgHelp>($"HookLock: calling {nameof(LegacyDbgHelp.ExitDbgHelp)} ({{message}})", e.ToString());
+                ((LegacyDbgHelp) dbgHelp).ExitDbgHelp();
             }
 
             if (e is DbgHelpSymbolCallback.XmlActivityEndEvent)
             {
-                dbgHelp.EnterDbgHelp();
+                Log.Debug<IDbgHelp>($"HookLock: calling {nameof(LegacyDbgHelp.EnterDbgHelp)} ({{message}})", e.ToString());
+                ((LegacyDbgHelp) dbgHelp).EnterDbgHelp();
             }
         }
 
         private DispatcherOperation LoadNativeSymbolsLowPriorityAsync(
             string filePath,
             long baseOfDll,
-            IPEFile peFile,
+            PEFile peFile,
             bool resolvePESymbols,
             PendingOp pendingOp)
         {
@@ -489,6 +507,7 @@ start:
                     //We want to remove the item from the queue, but not abort the task source inside the operation itself, so that it can still be marked as completed
                     symbolThread.Dispatcher.Abort(opInfo.Op);
 
+                    Log.Debug<DebuggerSymbolProvider>("Modifying pendingNativeOperations (ClearPendingOperation {dll})", opInfo.Name);
                     pendingNativeOperations.Remove(baseOfDll);
 
                     return opInfo.Op;
@@ -553,7 +572,7 @@ start:
                     //Try and find a pending matching module
                     long match = 0;
 
-                    lock (pendingNativeOperations)
+                    lock (pendingNativeOperationsLock)
                     {
                         foreach (var pendingOp in pendingNativeOperations)
                         {
@@ -591,16 +610,16 @@ start:
             return false;
         }
 
-        private void ReadExtraDataDirectories(long baseOfDll, IPEFile peFile, ISymbolModule symbolModule, bool resolvePESymbols, PEFileDirectoryFlags flags)
+        private void ReadExtraDataDirectories(long baseOfDll, PEFile peFile, ISymbolModule symbolModule, bool resolvePESymbols, PEFileDirectoryFlags flags)
         {
             //All of the hopping around reading various bits of memory for the PEFile data directories is kind of slow, while reading the whole thing at once is quite fast. However, sometimes
             //we can fail to read the entire image. In that scenario, fallback to reading directly from memory
             Stream dataDirBuffer = new MemoryStream(peFile.OptionalHeader.SizeOfImage);
 
-            lock (processMemoryStreamLock)
+            lock (workerContext.ProcessMemoryStreamLock)
             {
-                processMemoryStream.Seek(baseOfDll, SeekOrigin.Begin);
-                processMemoryStream.CopyTo(dataDirBuffer);
+                workerContext.ProcessMemoryStream.Seek(baseOfDll, SeekOrigin.Begin);
+                workerContext.ProcessMemoryStream.CopyTo(dataDirBuffer);
             }
 
             var needLock = false;
@@ -608,7 +627,7 @@ start:
             //Fortunately this only rarely happens
             if (dataDirBuffer.Length != peFile.OptionalHeader.SizeOfImage)
             {
-                dataDirBuffer = new RelativeToAbsoluteStream(processMemoryStream, baseOfDll);
+                dataDirBuffer = new RelativeToAbsoluteStream(workerContext.ProcessMemoryStream, baseOfDll);
                 needLock = true;
             }
 
@@ -629,17 +648,53 @@ start:
             try
             {
                 if (needLock)
-                    Monitor.Enter(processMemoryStreamLock);
+                    Monitor.Enter(workerContext.ProcessMemoryStreamLock);
 
                 peFile.ReadDataDirectories(dataDirBuffer, flags, symbolResolver);
             }
             finally
             {
                 if (needLock)
-                    Monitor.Exit(processMemoryStreamLock);
+                    Monitor.Exit(workerContext.ProcessMemoryStreamLock);
             }
         }
 
         #endregion
+
+        public void SetNativeGlobalValue<T>(string name, T value)
+        {
+            if (!TryNativeSymFromName(name, out var symbolInfo))
+                throw new NotImplementedException();
+
+            if (value is bool b)
+                extension.WriteVirtual(symbolInfo.Address, b ? (byte) 1 : (byte) 0);
+            else
+                throw new NotImplementedException();
+        }
+
+        public IntPtr GetFunctionTableEntry(long address)
+        {
+            if (TryGetPendingModule(address, out var moduleBase))
+                EnsureModuleLoaded(moduleBase, true);
+
+            return DbgHelp.Native.SymFunctionTableAccess64(hProcess, address);
+        }
+
+        private IUnmanagedSymbolModule CreateModule(string filePath, long baseOfDll, int dllSize)
+        {
+            /*if (dbgHelp.TrySymGetDiaSession(baseOfDll, out var session) == S_OK)
+            {
+                return new MicrosoftPdbSymbolModule(
+                    session,
+                    dbgHelp,
+                    sourceFileProvider,
+                    filePath,
+                    baseOfDll,
+                    dllSize
+                );
+            }*/
+
+            return new DbgHelpSymbolModule(dbgHelp, filePath, baseOfDll, dllSize);
+        }
     }
 }

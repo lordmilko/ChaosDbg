@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using ChaosLib;
 using ClrDebug;
@@ -26,17 +27,26 @@ namespace ChaosDbg.Cordb
         private bool crashing;
         private CountdownEvent entranceCount = new CountdownEvent(1);
 
+        private Stopwatch waitForEventTimer = new Stopwatch();
+        private Stopwatch processEventTimer = new Stopwatch();
+
         public Action<Exception, EngineFailureStatus> OnEngineFailure { get; set; }
 
         public CordbUnmanagedCallback()
         {
             InBandThread = new DispatcherThread($"{nameof(CordbUnmanagedCallback)} In Band Thread", enableLog: true);
             InBandThread.Start();
+
+            waitForEventTimer.Start();
         }
 
         HRESULT ICorDebugUnmanagedCallback.DebugEvent(ref DEBUG_EVENT pDebugEvent, bool fOutOfBand)
         {
             Log.Debug<CordbUnmanagedCallback>("Got {kind}", pDebugEvent.dwDebugEventCode);
+
+            waitForEventTimer.Stop();
+            Log.Debug<CordbUnmanagedCallback, Stopwatch>("Waited {elapsed} to get {eventType}", waitForEventTimer.Elapsed, pDebugEvent.dwDebugEventCode);
+            processEventTimer.Restart();
 
             /* Sometimes the debugger might be stopped and we might be trying to interact with a native thread,
              * when suddenly we might receive an out of band event informing us that the thread has now terminated!
@@ -133,6 +143,10 @@ namespace ChaosDbg.Cordb
 
                 entranceCount.Signal();
             }
+
+            processEventTimer.Stop();
+            Log.Debug<CordbUnmanagedCallback, Stopwatch>("{eventType} completed in {elapsed}", pDebugEvent.dwDebugEventCode, processEventTimer.Elapsed);
+            waitForEventTimer.Restart();
 
             return HRESULT.S_OK;
         }

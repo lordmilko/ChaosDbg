@@ -2,17 +2,8 @@
 using System.ComponentModel;
 using chaos.Cordb.Commands;
 using ChaosDbg;
-using ChaosDbg.Cordb;
-using ChaosDbg.DbgEng;
-using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
-using ChaosDbg.IL;
-using ChaosDbg.Metadata;
-using ChaosLib;
-using ChaosLib.Metadata;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb;
+using ChaosDbg.Terminal;
 
 namespace chaos
 {
@@ -21,22 +12,12 @@ namespace chaos
     /// </summary>
     public class GlobalProvider
     {
-        //The service probider is lazily loaded on first access
-        private static Lazy<IServiceProvider> serviceProvider;
-
         /// <summary>
         /// Gets the global <see cref="IServiceProvider"/> of the application.
         /// </summary>
-        public static IServiceProvider ServiceProvider
-        {
-            get
-            {
-                if (serviceProvider == null)
-                    throw new ObjectDisposedException(nameof(ServiceProvider));
-
-                return serviceProvider.Value;
-            }
-        }
+#pragma warning disable CS0618
+        public static IServiceProvider ServiceProvider => InternalGlobalProvider.ServiceProvider;
+#pragma warning restore CS0618
 
         /// <summary>
         /// An optional hook that allows modifying services.
@@ -46,74 +27,32 @@ namespace chaos
 
         static GlobalProvider()
         {
-            serviceProvider = new Lazy<IServiceProvider>(CreateServiceProvider);
-        }
-
-        private static IServiceProvider CreateServiceProvider()
-        {
-            var services = new ServiceCollection
+#pragma warning disable CS0618
+            InternalGlobalProvider.ConfigureServices = services =>
+#pragma warning restore CS0618
             {
-                //chaos
-                typeof(DbgEngClient),
-                typeof(CordbClient),
-                typeof(CommandBuilder),
-
-                //Debug Engines
-                typeof(DbgEngEngineProvider),
-                typeof(CordbEngineProvider),
-
-                //Debug Engine Service Collections
-                typeof(CordbEngineServices),
-                typeof(DbgEngEngineServices),
-
-                //Symbols
-                typeof(SymHelp),
-                typeof(MicrosoftPdbSourceFileProvider),
-
-                //NativeLibrary
-                typeof(NativeLibraryProvider),
-                { typeof(INativeLibraryBaseDirectoryProvider), typeof(SingleFileNativeLibraryBaseDirectoryProvider) },
-                { typeof(INativeLibraryLoadCallback[]), new[]
+                var appServices = new ServiceCollection
                 {
-                    typeof(DbgEngNativeLibraryLoadCallback),
-                    typeof(DbgHelpNativeLibraryLoadCallback),
-                    typeof(MSDiaNativeLibraryLoadCallback),
-                    typeof(SymSrvNativeLibraryLoadCallback)
-                }},
+                    //chaos
+                    typeof(DbgEngClient),
+                    typeof(CordbClient),
+                    typeof(CommandBuilder),
+                    { typeof(ITerminal), typeof(ConsoleTerminal) },
 
-                typeof(CordbMasmEvaluatorContext),
-                typeof(ILDisassemblerProvider),
+                    //Console
+                    typeof(ConsoleDisasmWriter),
+                    { typeof(IConsole), typeof(PhysicalConsole) }
+                };
 
-                //Console
-                typeof(ConsoleDisasmWriter),
-                { typeof(IConsole), typeof(PhysicalConsole) },
+                foreach (var serviceEntry in appServices)
+                    services.Add(serviceEntry);
 
-                //Misc
-
-                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
-                { typeof(IPEFileProvider), typeof(PEFileProvider) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
-                { typeof(ISigReader), typeof(SigReader) }
+                ConfigureServices?.Invoke(services);
             };
-
-            ConfigureServices?.Invoke(services);
-
-            var provider = services.Build();
-
-            return provider;
         }
 
-        public static void Dispose()
-        {
-            if (serviceProvider.IsValueCreated)
-            {
-                if (serviceProvider.Value is IDisposable d)
-                    d.Dispose();
-            }
-
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-            serviceProvider = null;
-#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
-        }
+#pragma warning disable CS0618
+        public static void Dispose() => InternalGlobalProvider.Dispose();
+#pragma warning restore CS0618
     }
 }

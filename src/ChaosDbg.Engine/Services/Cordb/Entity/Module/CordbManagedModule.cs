@@ -59,6 +59,8 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CorDebugModule CorDebugModule { get; }
 
+        public CordbAssembly? Assembly { get; internal set; }
+
         private MetaDataProvider? metaDataProvider;
 
         /// <summary>

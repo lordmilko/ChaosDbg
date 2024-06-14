@@ -64,15 +64,13 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Encapsulates a <see cref="ClrDebug.CorDebugProcess"/> being debugged by a <see cref="CordbEngine"/>.
     /// </summary>
-    public class CordbProcess : ICLRDebuggingLibraryProvider, IDisposable
+    public class CordbProcess : IDbgProcess, ICLRDebuggingLibraryProvider, IDisposable
     {
         #region Overview
 
         //High level information about the target process
 
-        /// <summary>
-        /// Gets the ID of this process.
-        /// </summary>
+        /// <inheritdoc />
         public int Id { get; }
 
         /// <summary>
@@ -80,9 +78,7 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public IntPtr Handle { get; }
 
-        /// <summary>
-        /// Gets whether the target is a 32-bit process.
-        /// </summary>
+        /// <inheritdoc />
         public bool Is32Bit { get; }
 
         /// <summary>
@@ -95,13 +91,11 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public IMAGE_FILE_MACHINE MachineType => Is32Bit ? IMAGE_FILE_MACHINE.I386 : IMAGE_FILE_MACHINE.AMD64;
 
-        /// <summary>
-        /// Gets the command line that was used to launch the process.
-        /// </summary>
+        /// <inheritdoc />
         public string[] CommandLine { get; }
 
         #endregion
-        #region Related Entities
+        #region Stores / Related Entities
 
         //Objects that store additionl information about the process
 
@@ -112,18 +106,14 @@ namespace ChaosDbg.Cordb
 
         public Process Win32Process { get; }
 
-        /// <summary>
-        /// Gets the container containing the threads that have been loaded into the current process.
-        /// </summary>
+        /// <inheritdoc cref="IDbgProcess.Threads" />
         public CordbThreadStore Threads { get; }
 
         public CordbAppDomainStore AppDomains { get; }
 
         public CordbAssemblyStore Assemblies { get; }
 
-        /// <summary>
-        /// Gets the container containing the modules that have been loaded into the current process.
-        /// </summary>
+        /// <inheritdoc cref="IDbgProcess.Modules" />
         public CordbModuleStore Modules { get; }
 
         public CordbBreakpointStore Breakpoints { get; }
@@ -202,7 +192,9 @@ namespace ChaosDbg.Cordb
                 throw new ArgumentNullException(nameof(session));
 
             Session = session;
-            CommandLine = Shell32.CommandLineToArgvW(commandLine);
+
+            if (commandLine != null)
+                CommandLine = Shell32.CommandLineToArgvW(commandLine);
 
             DAC = new DacProvider(this);
 
@@ -357,6 +349,20 @@ namespace ChaosDbg.Cordb
 
             Session.WaitExitProcess.Wait();
         }
+
+        #region IDbgProcess
+
+        private ExternalDbgThreadStore externalThreadStore;
+
+        /// <inheritdoc />
+        IDbgThreadStore IDbgProcess.Threads => externalThreadStore ??= new ExternalDbgThreadStore(Threads);
+
+        private ExternalDbgModuleStore externalModuleStore;
+
+        /// <inheritdoc />
+        IDbgModuleStore IDbgProcess.Modules => externalModuleStore ??= new ExternalDbgModuleStore(Modules);
+
+        #endregion
 
         public void Dispose()
         {

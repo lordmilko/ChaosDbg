@@ -117,6 +117,12 @@ namespace ChaosDbg
             remove => RemoveEvent(nameof(BreakpointHit), value);
         }
 
+        public event EventHandler<EngineExceptionHitEventArgs> ExceptionHit
+        {
+            add => AddEvent(nameof(ExceptionHit), value);
+            remove => RemoveEvent(nameof(ExceptionHit), value);
+        }
+
         private void AddEvent(string key, Delegate value)
         {
             events.AddHandler(key, value);
@@ -148,10 +154,10 @@ namespace ChaosDbg
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to shutdown the engine thread.</param>
         /// <param name="initCallback">A callback that is used to initialize the newly created engine prior to launching the target process.</param>
         /// <returns>An <see cref="ICordbEngine"/> for debugging the specified process.</returns>
-        public TEngine CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken = default, Action<TEngine> initCallback = null)
+        public TEngine CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken = default, Action<TEngine> initCallback = null)
         {
-            CheckRequiredEventHandlers();
             CheckIfDisposed();
+            CheckRequiredEventHandlers();
 
             var engine = CreateEngine();
 
@@ -162,7 +168,7 @@ namespace ChaosDbg
             return engine;
         }
 
-        public TEngine Attach(LaunchTargetOptions options, CancellationToken cancellationToken = default)
+        public TEngine Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken = default)
         {
             CheckIfDisposed();
             CheckRequiredEventHandlers();
@@ -170,6 +176,18 @@ namespace ChaosDbg
             var engine = CreateEngine();
 
             ((IDbgEngineInternal) engine).Attach(options, cancellationToken);
+
+            return engine;
+        }
+
+        public TEngine OpenDumpInternal(OpenDumpTargetOptions options, CancellationToken cancellationToken = default)
+        {
+            CheckIfDisposed();
+            CheckRequiredEventHandlers();
+
+            var engine = CreateEngine();
+
+            ((IDbgEngineInternal) engine).OpenDump(options, cancellationToken);
 
             return engine;
         }
@@ -208,7 +226,7 @@ namespace ChaosDbg
         private void CheckIfDisposed()
         {
             if (disposed)
-                throw new ObjectDisposedException(nameof(CordbEngineProvider));
+                throw new ObjectDisposedException(GetType().Name);
         }
 
         public void Dispose()

@@ -39,25 +39,20 @@ namespace ChaosDbg.DbgEng
                     SYMOPT.UNDNAME              | //Undecorate symbols when they are displayed/ignore decorations in symbol searches
                     SYMOPT.DEFERRED_LOADS       | //Don't load symbols for modules until the debugger actually requires them
                     SYMOPT.OMAP_FIND_NEAREST    | //Standard default setting. Use the nearest symbol when optimization causes an expected symbol to not exist at a given location
+                    SYMOPT.NO_UNQUALIFIED_LOADS | //While the documentation doesn't say it, this is included by default. This ensures that typing a random command like "foo" doesn't cause the debugger to try and resolve it as a symbol
                     SYMOPT.LOAD_LINES           | //Read line information from source files for use in source level debugging
                     SYMOPT.FAIL_CRITICAL_ERRORS | //Don't display a dialog box if an error occurs during symbol loading. Not sure why one would though
                     SYMOPT.AUTO_PUBLICS         | //Fallback to using public symbols in the PDB as a last resort
-                    SYMOPT.NO_IMAGE_SEARCH      |  //Don't search the disk for a copy of the image when symbols are loaded
+                    SYMOPT.NO_IMAGE_SEARCH      | //Don't search the disk for a copy of the image when symbols are loaded
 
                     //Custom ChaosDbg default settings
                     0; //None
 
-                var attachFlags = DEBUG_ATTACH.DEFAULT;
-
-                if (options.IsAttach && options.NonInvasive)
-                {
-                    //dbgeng!InvalidAttachFlags() will prevent specifying NONINVASIVE and EXISTING at the same time
-
-                    attachFlags |= DEBUG_ATTACH.NONINVASIVE;
-
-                    if (options.NoSuspend)
-                        attachFlags |= DEBUG_ATTACH.NONINVASIVE_NO_SUSPEND;
-                }
+                //DbgEng will emit a "Path validation summary" twice if g_SymbolSearchPathExpanded is not set.
+                //It will be set to the "real" symbol path by dbgeng!ProcessInfo::ProcessInfo. From my quick investigation,
+                //not sure if it's possible to suppress the entire "Path validation summary" by setting the correct symbol path
+                //to begin with
+                EngineClient.Symbols.SymbolPath = string.Empty;
 
                 //Hook up callbacks last. If multiple engines are running simultaneously, a broadcast to all clients may result in us receiving notifications that don't belong to us.
                 //We don't want to trip over such alerts when we're not ready to receive them yet
@@ -75,21 +70,22 @@ namespace ChaosDbg.DbgEng
 
                 HRESULT hr;
 
-                if (options.IsAttach)
+                switch (options.Kind)
                 {
-                    var process = Process.GetProcessById(options.ProcessId);
+                    case LaunchTargetKind.CreateProcess:
+                        hr = TryCreateProcess(options);
+                        break;
 
-                    var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+                    case LaunchTargetKind.AttachProcess:
+                        hr = TryAttachProcess(options);
+                        break;
 
-                    Target = new DbgEngTargetInfo(null, options.ProcessId, is32Bit);
+                    case LaunchTargetKind.OpenDump:
+                        hr = TryOpenDump(options);
+                        break;
 
-                    //There's no need to suspend threads prior to attaching. Debug events won't be dispatched until we start calling
-                    //WaitForEvent
-                    hr = EngineClient.TryAttachProcess(0, Target.ProcessId, attachFlags);
-                }
-                else
-                {
-                    hr = TryCreateProcess(options);
+                    default:
+                        throw new UnknownEnumValueException(options.Kind);
                 }
 
                 switch (hr)
@@ -180,7 +176,11 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private void InputLoop()
         {
-            while (!IsEngineCancellationRequested && Target.Status == EngineStatus.Break)
+            //We signal the break event here, rather than in the event callback, so that we can signify that we're 100% input
+            //for events and have emitted out current state as well
+            Session.BreakEvent.SetResult();
+
+            while (!IsEngineCancellationRequested && Session.Status == EngineStatus.Break)
             {
                 //Go to sleep and wait for a command to be enqueued on the UI thread. We will wake up
                 //when the UiClient calls DebugClient.ExitDispatch()
@@ -194,6 +194,8 @@ namespace ChaosDbg.DbgEng
                 //Process any commands that were dispatched to the engine thread
                 Session.EngineThread.Dispatcher.DrainQueue();
             }
+
+            Session.BreakEvent.Reset();
         }
 
         private unsafe HRESULT TryCreateProcess(LaunchTargetOptions options)
@@ -230,25 +232,73 @@ namespace ChaosDbg.DbgEng
 
                         var is32Bit = Kernel32.IsWow64ProcessOrDefault(pi.hProcess);
 
-                        Target = new DbgEngTargetInfo(options.CommandLine, pi.dwProcessId, is32Bit);
+                        Session.Processes.Add(new DbgEngProcess(Session, services, pi.dwProcessId, is32Bit, options.CommandLine));
                     }
 
                     return result;
                 };
 
-                //There's no need to create the process suspended. Debug events won't be dispatched until we start calling
-                //WaitForEvent. There is a 500ms delay the first time this is called, which seems to be related to the DbgEng Extension Gallery
-                return EngineClient.TryCreateProcessAndAttachWide(
+                /* There's no need to create the process suspended. Debug events won't be dispatched until we start calling WaitForEvent.
+                 *
+                 * There is a 500ms delay the first time this is called, which seems to be related to the DbgEng Extension Gallery.
+                 * Debugger::ExtensionGallery::Internal::BackEndRepositoryCache::Connect creates a thread whose thread proc is
+                 * Debugger::ExtensionGallery::Internal::BackEndRepositoryCache::ReadLocalDataThreadProc. And then, some genius decided it would be
+                 * a good idea to wait 500ms each time it polls to see if the thread has completed.
+                 *
+                 * This 500ms delay seems to occur each time we launch a new debug target. We fix this by hooking
+                 * kernel32!Sleep and reducing the sleep amount */
+                var result = EngineClient.TryCreateProcessAndAttachWide(
                     0, options.CommandLine,
                     DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS,
                     0,
                     DEBUG_ATTACH.DEFAULT
                 );
+
+                return result;
             }
             finally
             {
                 services.DbgEngNativeLibraryLoadCallback.HookCreateProcess = null;
             }
+        }
+
+        private HRESULT TryAttachProcess(LaunchTargetOptions options)
+        {
+            var attachFlags = DEBUG_ATTACH.DEFAULT;
+
+            if (options.IsAttach && options.NonInvasive)
+            {
+                //dbgeng!InvalidAttachFlags() will prevent specifying NONINVASIVE and EXISTING at the same time
+
+                attachFlags |= DEBUG_ATTACH.NONINVASIVE;
+
+                if (options.NoSuspend)
+                    attachFlags |= DEBUG_ATTACH.NONINVASIVE_NO_SUSPEND;
+            }
+
+            var process = Process.GetProcessById(options.ProcessId);
+
+            var is32Bit = Kernel32.IsWow64ProcessOrDefault(process.Handle);
+
+            Session.Processes.Add(new DbgEngProcess(Session, services, options.ProcessId, is32Bit, null));
+
+            //There's no need to suspend threads prior to attaching. Debug events won't be dispatched until we start calling
+            //WaitForEvent
+            var hr = EngineClient.TryAttachProcess(0, options.ProcessId, attachFlags);
+
+            return hr;
+        }
+
+        private HRESULT TryOpenDump(LaunchTargetOptions options)
+        {
+            //Not sure how to determine whether a dump is 32-bit or not in a way that would work for any kind of dump file + TTD traces.
+            //DbgEng looks at the headers of the dump to determine this, but I don't know what those headers are, so for now let's just assume
+            //it matches the bitness of whatever our process is. Note sure how, when we open a given dump, we'll know if it was for x86 or x64 though
+            Session.Processes.Add(new DbgEngProcess(Session, services, default, IntPtr.Size == 4, null));
+
+            var hr = EngineClient.TryOpenDumpFile(options.DumpFile);
+
+            return hr;
         }
     }
 }

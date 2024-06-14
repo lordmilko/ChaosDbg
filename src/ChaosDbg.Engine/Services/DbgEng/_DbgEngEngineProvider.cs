@@ -21,6 +21,9 @@ namespace ChaosDbg.DbgEng
             this.services = services;
         }
 
+        public DbgEngEngine OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken = default) =>
+            OpenDumpInternal(options, cancellationToken);
+
         protected override DbgEngEngine CreateEngine()
         {
             if (Monitor.TryEnter(instanceLock))

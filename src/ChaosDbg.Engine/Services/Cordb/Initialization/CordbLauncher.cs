@@ -313,7 +313,7 @@ namespace ChaosDbg.Cordb
                 engine.Session.CorDebug = corDebug;
                 engine.Session.ManagedCallback = cb;
                 engine.Session.UnmanagedCallback = ucb;
-                engine.Session.Process = new CordbProcess(
+                engine.Session.ActiveProcess = new CordbProcess(
                     corDebugProcess,
                     engine.Session,
                     is32Bit.Value,
@@ -483,7 +483,7 @@ namespace ChaosDbg.Cordb
         {
             try
             {
-                var native = (DiaRemoteObject) NativeReflector.GetTypedData(corDebug);
+                var native = NativeReflector.GetTypedData(corDebug);
                 var rcEventThreadId = (uint) native["m_rcEventThread"]["m_threadId"].Value;
                 Log.Debug<CordbLauncher>("Cordb created RC Event Thread {rcEventThreadId}", rcEventThreadId);
             }
@@ -499,7 +499,7 @@ namespace ChaosDbg.Cordb
         {
             try
             {
-                var native = (DiaRemoteObject) NativeReflector.GetTypedData(corDebugProcess);
+                var native = NativeReflector.GetTypedData(corDebugProcess);
 
                 var pShim = native["m_pShim"];
                 var ptr = pShim["m_ptr"];

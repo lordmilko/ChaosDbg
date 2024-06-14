@@ -1,3 +1,4 @@
+﻿using System;
 ﻿using System.Diagnostics;
 using System.Threading;
 
@@ -18,6 +19,10 @@ namespace ChaosDbg.Debugger
         internal DeferrableOperation ParentOperation { get; set; }
 
         public DeferrableSubOperation NextOperation { get; set; }
+
+        public event EventHandler OnComplete;
+
+        protected void RaiseOnComplete() => OnComplete?.Invoke(this, EventArgs.Empty);
 
         protected DeferrableSubOperation(int priority)
         {
@@ -53,6 +58,8 @@ namespace ChaosDbg.Debugger
 
                                     //If we're not marked as completed now, we messed up our bookkeeping somehow
                                     Debug.Assert(IsCompleted);
+
+                                    RaiseOnComplete();
                                 }
                             }
                             else
@@ -61,6 +68,7 @@ namespace ChaosDbg.Debugger
 
                                 DoExecute(forceSynchronous);
 
+                                //If we're an async operation, we'll raise OnComplete in our Task
                                 if (this is not AsyncDeferrableSubOperation)
                                 {
                                     wait.Set();
@@ -69,6 +77,8 @@ namespace ChaosDbg.Debugger
                                     //we depend on, so are still pending) don't mark the operation as completed
                                     if (Status == DeferrableOperationStatus.Executing)
                                         Status = DeferrableOperationStatus.Completed;
+                                        RaiseOnComplete();
+                                }
                                 }
 
                                 //Some sub-operations may dispatch an async operation (such as symbol loading) and then return immediately, so that we can get multiple symbol loads
@@ -79,12 +89,14 @@ namespace ChaosDbg.Debugger
 
                                     //If we're not marked as completed now, we messed up our bookkeeping somehow
                                     Debug.Assert(IsCompleted);
+                                    RaiseOnComplete();
                                 }
                             }
                         }
                         catch
                         {
                             Status = DeferrableOperationStatus.Failed;
+                            RaiseOnComplete();
 
                             wait.Set();
 
@@ -101,6 +113,23 @@ namespace ChaosDbg.Debugger
         }
 
         protected abstract void DoExecute(bool forceSynchronous);
+
+        public virtual void Abort()
+        {
+            if (!IsCompleted)
+            {
+                //If the operation is in the process of executing, we will block here
+                lock (objLock)
+                {
+                    if (!IsCompleted)
+                    {
+                        Status = DeferrableOperationStatus.Aborted;
+                        RaiseOnComplete();
+                        wait.Set();
+                    }
+                }
+            }
+        }
 
         public void Wait() => wait.Wait();
 

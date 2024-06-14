@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.SymStore
 {
@@ -27,11 +28,11 @@ namespace ChaosDbg.SymStore
         /// </summary>
         public CacheSymbolStore CacheStore { get; }
 
-        public SymbolClient(ISymStoreLogger logger)
+        public SymbolClient(ISymStoreLogger logger, string ntSymbolPath = null)
         {
             this.logger = logger;
 
-            StoreChain = BuildSymbolStore();
+            StoreChain = BuildSymbolStore(ntSymbolPath ?? Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH"));
             CacheStore = GetCacheStore();
         }
 
@@ -60,7 +61,10 @@ namespace ChaosDbg.SymStore
             return result;
         }
 
-        public async Task<string> GetPdbAsync(string modulePath, CancellationToken token)
+        public Task<string> GetPdbAsync(string modulePath, bool pdbOnly, CancellationToken token) =>
+            GetPdbAsync(modulePath, pdbOnly, null, token);
+
+        public async Task<string> GetPdbAsync(string modulePath, bool pdbOnly, PEFile existingPEFile, CancellationToken token)
         {
             using (var fileStream = File.Open(modulePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {

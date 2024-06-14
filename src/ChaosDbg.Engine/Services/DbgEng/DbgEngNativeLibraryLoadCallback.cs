@@ -97,6 +97,14 @@ namespace ChaosDbg.DbgEng
                         Kernel32Hook,
                         include: new[] { "QueueUserAPC", "CreateProcessW" }
                     );
+
+                    ImportPatcher.Patch(
+                        peFile: dbgEngPE,
+                        importedModule: null,
+                        typeof(Kernel32.Native),
+                        Kernel32Hook,
+                        include: new[] { "Sleep" }
+                    );
                 }
 
                 isDbgHelpHooked = true;
@@ -217,6 +225,77 @@ namespace ChaosDbg.DbgEng
                         return true;
                     }
 
+#if DEBUG && DEBUG_STACKWALK
+                case "StackWalk2":
+                {
+                    var frame = (STACKFRAME_EX*) ctx.Arg<IntPtr>("StackFrame");
+                    var context = (CROSS_PLATFORM_CONTEXT*) ctx.Arg<IntPtr>("ContextRecord");
+
+                    LogStack(
+                        "[Begin] AddrPC: {0:X}, AddrFrame: {1:X}, AddrStack: {2:X}, AddrReturn: {3:X}, RIP: {4:X}, RSP: {5:X}, RBP: {6:X}",
+                        frame->AddrPC.Offset,
+                        frame->AddrFrame.Offset,
+                        frame->AddrStack.Offset,
+                        frame->AddrReturn.Offset,
+                        context->Amd64Context.Rip,
+                        context->Amd64Context.Rsp,
+                        context->Amd64Context.Rbp
+                    );
+
+                    PGET_MODULE_BASE_ROUTINE64 getModuleBase = (a, b) =>
+                    {
+                        var original = ctx.Arg<PGET_MODULE_BASE_ROUTINE64>("GetModuleBaseRoutine");
+
+                        var result = original(a, b);
+
+                        LogStack("    [ModuleBase]    Resolved {0:X} to {1:X}", b, result);
+
+                        return result;
+                    };
+
+                    result = LegacyDbgHelp.WithExternalLock(() => ctx.InvokeOriginal(
+                        ctx.Args[0].Value,
+                        ctx.Args[1].Value,
+                        ctx.Args[2].Value,
+                        ctx.Args[3].Value,
+                        ctx.Args[4].Value,
+                        ctx.Args[5].Value,
+                        ctx.Args[6].Value,
+                        //ctx.Args[7].Value,
+                        getModuleBase,
+                        ctx.Args[8].Value,
+                        ctx.Args[9].Value,
+                        ctx.Args[10].Value
+                    ));
+
+                    LogStack(
+                        "[End]   AddrPC: {0:X}, AddrFrame: {1:X}, AddrStack: {2:X}, AddrReturn: {3:X}, RIP: {4:X}, RSP: {5:X}, RBP: {6:X}",
+                        frame->AddrPC.Offset,
+                        frame->AddrFrame.Offset,
+                        frame->AddrStack.Offset,
+                        frame->AddrReturn.Offset,
+                        context->Amd64Context.Rip,
+                        context->Amd64Context.Rsp,
+                        context->Amd64Context.Rbp
+                    );
+
+                    return true;
+                }
+
+                case "SymFunctionTableAccess64":
+                {
+                    var addrBase = ctx.Arg<long>("AddrBase");
+                    result = LegacyDbgHelp.WithExternalLock(ctx.InvokeOriginal);
+
+                    if ((IntPtr) result == IntPtr.Zero)
+                        LogStack("    [FunctionTable] Failed to resolve {0:X}", addrBase);
+                    else
+                        LogStack("    [FunctionTable] Resolved {0:X} to {1:X}", addrBase, ((RUNTIME_FUNCTION*)(IntPtr)result)->BeginAddress);
+
+                    return false;
+                }
+#endif
+
                 default:
                     return false;
             }
@@ -242,6 +321,17 @@ namespace ChaosDbg.DbgEng
 
                 return ctx.InvokeOriginal();
             }
+            if (ctx.Name == "Sleep")
+            {
+                //Fix DbgEng sleeping for 500ms when launching a process while it processes all repository items (which does not take anywhere near 500ms)
+
+                var ms = ctx.Arg<int>("dwMilliseconds");
+
+                if (ms == 500)
+                    return ctx.InvokeOriginal(1);
+
+                return ctx.InvokeOriginal();
+            }
 
             Debug.Assert(false, $"Don't know how to handle {ctx.Name}");
             return ctx.InvokeOriginal();
@@ -249,6 +339,12 @@ namespace ChaosDbg.DbgEng
 
         public void NotifyUnload(IntPtr hModule)
         {
+        }
+
+        private void LogStack(string messageTemplate, params object[] propertyValues)
+        {
+            //ChaosLib.Log.Debug<NativeStackWalker>(messageTemplate, propertyValues);
+            //Debug.WriteLine(messageTemplate, propertyValues);
         }
     }
 }

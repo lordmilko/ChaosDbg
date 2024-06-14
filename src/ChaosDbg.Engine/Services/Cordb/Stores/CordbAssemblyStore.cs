@@ -6,6 +6,9 @@ using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /// <summary>
+    /// Represents a store used to manage and provide access to managed assemblies that have been loaded into the current process.
+    /// </summary>
     public class CordbAssemblyStore : IEnumerable<CordbAssembly>
     {
         private object assemblyLock = new object();
@@ -51,6 +54,10 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        /// <summary>
+        /// Associates a given <see cref="CordbManagedModule"/> with a <see cref="CordbAssembly"/> via its parent <see cref="CorDebugAssembly"/>.
+        /// </summary>
+        /// <param name="module">The module that should be associated.</param>
         public void LinkModule(CordbManagedModule module)
         {
             var assembly = GetAssembly(module.CorDebugModule.Assembly);
@@ -62,6 +69,10 @@ namespace ChaosDbg.Cordb
             assembly.Module = module;
         }
 
+        /// <summary>
+        /// Disassociates a given <see cref="CordbManagedModule"/> with its parent <see cref="CordbAssembly"/>.
+        /// </summary>
+        /// <param name="module">The module that should be dissociated.</param>
         public void UnlinkModule(CordbManagedModule module)
         {
             if (module.Assembly != null)

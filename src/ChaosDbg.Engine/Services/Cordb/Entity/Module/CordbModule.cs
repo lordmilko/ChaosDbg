@@ -21,8 +21,6 @@ namespace ChaosDbg.Cordb
 
         public CORDB_ADDRESS EndAddress { get; }
 
-        public CordbAssembly? Assembly { get; internal set; }
-
         /// <summary>
         /// Gets the <see cref="CordbProcess"/> associated with this module.
         /// </summary>
@@ -47,6 +45,14 @@ namespace ChaosDbg.Cordb
         }
 
         public bool IsExe => peFile != null && !peFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll);
+
+        /// <summary>
+        /// Gets or sets whether this module is currently loaded in the target process.<para/>
+        /// This value is set to <see langword="false"/> when the debugger receives the event that the module has unloaded. Note that the debugger is notified
+        /// that a module is unloaded after it has already been removed from the memory of the target process.<para/>As such, this value may still be <see langword="true"/>
+        /// if the debugger has yet to receive a module's unload event.
+        /// </summary>
+        public bool IsLoaded { get; internal set; } = true;
 
         protected CordbModule(string name, long baseAddress, int size, CordbProcess process, PEFile? peFile)
         {

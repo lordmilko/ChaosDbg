@@ -63,8 +63,8 @@ namespace ChaosDbg
         private IntPtr DynamicFunctionCallback(IntPtr hProcess, long AddrBase, long UserContext)
         {
             /* When attempting to resolve function table addresses (required for unwinding dynamically generated 64-bit
-             * code in Windows) for some insane reason you're expected to return a _pointer_ to  RUNTIME_FUNCTION object.
-             * So how are you suppose to handle releasing the entity! DbgEng handles this by declaring static variables
+             * code in Windows) for some insane reason you're expected to return a _pointer_ to a RUNTIME_FUNCTION object.
+             * So how are you supposed to handle releasing the entity! DbgEng handles this by declaring static variables
              * that can then hang around (I suppose still on the stack) after the function returns. That is not a valid
              * solution for us; so we must take care of managing a reusable block of memory that eventually gets disposed
              * ourselves. */

@@ -87,6 +87,7 @@ namespace ChaosDbg.Cordb
             return fileHandle.Name;
         }
 
+#if DEBUG
         //This method demonstrates the supposed "proper" way of getting a module name that DbgEng uses.
         //As stated above however, if we can get the name from the hFile, why not just do that?
         private static string AlternateModuleNameStrategies(
@@ -207,6 +208,7 @@ namespace ChaosDbg.Cordb
 
             return null;
         }
+#endif
 
         #endregion
     }

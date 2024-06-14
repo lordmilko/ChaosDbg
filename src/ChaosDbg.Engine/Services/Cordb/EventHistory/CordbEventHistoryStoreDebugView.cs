@@ -25,6 +25,8 @@ namespace ChaosDbg.Cordb
 
         public CordbPauseReason[] PauseEvents => store.OfType<CordbPauseReason>().ToArray();
 
+        public CordbPauseReason LastStopReason => store.LastStopReason;
+
         private CordbEventHistoryStore store;
 
         public CordbEventHistoryStoreDebugView(CordbEventHistoryStore store)

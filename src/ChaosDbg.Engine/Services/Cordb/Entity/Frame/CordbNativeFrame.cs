@@ -43,6 +43,12 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public override long FrameBP { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CordbNativeFrame"/> class.
+        /// </summary>
+        /// <param name="nativeFrame">The raw native frame that underpins this <see cref="CordbNativeFrame"/>.</param>
+        /// <param name="thread">The thread that the frame was retrieved from.</param>
+        /// <param name="module">The module that the frame's symbol belongs to. If no symbol could be found, this value may be <see langword="null"/>.</param>
         internal CordbNativeFrame(NativeFrame nativeFrame, CordbThread thread, CordbModule module) : base(null, thread, module, nativeFrame.Context)
         {
             string name;

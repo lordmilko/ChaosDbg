@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using ChaosLib;
 using ClrDebug;
@@ -15,11 +16,23 @@ namespace ChaosDbg.Cordb
         private CountdownEvent entranceCount = new CountdownEvent(1);
         private ManualResetEventSlim gotCrashOnAttachEvent = new ManualResetEventSlim(false);
 
+        private Stopwatch waitForEventTimer = new Stopwatch();
+        private Stopwatch processEventTimer = new Stopwatch();
+
         public Action<Exception, EngineFailureStatus> OnEngineFailure { get; set; }
+
+        public CordbManagedCallback()
+        {
+            waitForEventTimer.Start();
+        }
 
         protected override HRESULT HandleEvent<T>(EventHandler<T> handler, CorDebugManagedCallbackEventArgs args)
         {
             Log.Debug<CordbManagedCallback>("Got {kind}", args.Kind);
+
+            waitForEventTimer.Stop();
+            Log.Debug<CordbUnmanagedCallback, Stopwatch>("Waited {elapsed} to get {eventType}", waitForEventTimer.Elapsed, args.Kind);
+            processEventTimer.Restart();
 
             if (disposed)
                 return HRESULT.E_FAIL;
@@ -82,6 +95,10 @@ namespace ChaosDbg.Cordb
             {
                 entranceCount.Signal();
             }
+
+            processEventTimer.Stop();
+            Log.Debug<CordbManagedCallback, Stopwatch>("{eventType} completed in {elapsed}", args.Kind, processEventTimer.Elapsed);
+            waitForEventTimer.Restart();
 
             return HRESULT.S_OK;
         }

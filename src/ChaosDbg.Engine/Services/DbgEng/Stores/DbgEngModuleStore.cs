@@ -9,17 +9,19 @@ namespace ChaosDbg.DbgEng
     /// <summary>
     /// Stores modules that have been loaded into a process under a DbgEng debugger.
     /// </summary>
-    public class DbgEngModuleStore : IEnumerable<DbgEngModule>
+    public class DbgEngModuleStore : IDbgModuleStoreInternal, IEnumerable<DbgEngModule>
     {
         private object moduleLock = new object();
 
         private Dictionary<long, DbgEngModule> modules = new Dictionary<long, DbgEngModule>();
 
+        private DbgEngProcess process;
         private DbgEngSessionInfo session;
         private DbgEngEngineServices services;
 
-        public DbgEngModuleStore(DbgEngSessionInfo session, DbgEngEngineServices services)
+        public DbgEngModuleStore(DbgEngProcess process, DbgEngSessionInfo session, DbgEngEngineServices services)
         {
+            this.process = process;
             this.session = session;
             this.services = services;
         }
@@ -74,6 +76,7 @@ namespace ChaosDbg.DbgEng
             }
         }
 
+        IEnumerator<IDbgModule> IDbgModuleStoreInternal.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

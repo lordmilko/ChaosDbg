@@ -9,6 +9,8 @@ namespace ChaosDbg.DbgEng
 
     public partial class DbgEngEngine : IDbgEngineInternal, IDisposable
     {
+        public DbgEngProcess ActiveProcess => Session.ActiveProcess;
+
         /// <summary>
         /// Gets the current <see cref="EngineClient"/>. This property should only be accessed on the engine thread.
         /// </summary>
@@ -28,31 +30,45 @@ namespace ChaosDbg.DbgEng
                 if (tid == Session.EngineThreadId)
                     return Session.EngineClient;
 
+                //If this isn't the UI Thread, UiClient will throw
                 return Session.UiClient;
             }
         }
 
+        #region Services
+
+        private DbgEngTtdServices ttd;
+
+        /// <summary>
+        /// Gets services used for interacting with Time Travel Debugging traces.<para/>
+        /// If the current debug target is not <see cref="DEBUG_CLASS_QUALIFIER.USER_WINDOWS_IDNA"/>,
+        /// this property will throw.
+        /// </summary>
+        public DbgEngTtdServices TTD
+        {
+            get
+            {
+                if (ttd == null)
+                {
+                    var debuggeeType = ActiveClient.Control.DebuggeeType;
+
+                    if (debuggeeType.Qualifier == DEBUG_CLASS_QUALIFIER.USER_WINDOWS_IDNA)
+                        ttd = new DbgEngTtdServices(this);
+                    else
+                        throw new InvalidOperationException($"TTD services cannot be used with a debuggee of type '{debuggeeType.Qualifier}'");
+                }
+
+                return ttd;
+            }
+        }
+
+        #endregion
         #region State
 
         /// <summary>
         /// Gets the container containing the entities used to manage the current <see cref="DbgEngEngine"/> session.
         /// </summary>
         public DbgEngSessionInfo Session { get; private set; }
-
-        /// <summary>
-        /// Gets the current debug target. This property is set by the engine thread.
-        /// </summary>
-        public DbgEngTargetInfo Target { get; private set; }
-
-        /// <summary>
-        /// Gets the container containing the modules that have been loaded into the current process.
-        /// </summary>
-        public DbgEngModuleStore Modules { get; private set; }
-
-        /// <summary>
-        /// Gets the container containing the threads that have been loaded into the current process.
-        /// </summary>
-        public DbgEngThreadStore Threads { get; private set; }
 
         #endregion
 
@@ -64,8 +80,6 @@ namespace ChaosDbg.DbgEng
         {
             this.services = services;
             this.engineProvider = engineProvider;
-
-            Threads = new DbgEngThreadStore();
         }
 
         /// <summary>
@@ -74,11 +88,15 @@ namespace ChaosDbg.DbgEng
         internal void WakeEngineForInput() => Session.UiClient.ExitDispatch(Session.EngineClientRaw);
 
         [Obsolete("Do not call this method. Use DbgEngEngineProvider.CreateProcess() instead")]
-        void IDbgEngineInternal.CreateProcess(LaunchTargetOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         [Obsolete("Do not call this method. Use DbgEngEngineProvider.Attach() instead")]
-        void IDbgEngineInternal.Attach(LaunchTargetOptions options, CancellationToken cancellationToken) =>
+        void IDbgEngineInternal.Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken) =>
+            CreateSession(options, cancellationToken);
+
+        [Obsolete("Do not call this method. Use DbgEngEngineProvider.OpenDump() instead")]
+        void IDbgEngineInternal.OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         private void CreateSession(LaunchTargetOptions options, CancellationToken cancellationToken)
@@ -95,8 +113,6 @@ namespace ChaosDbg.DbgEng
                 cancellationToken
             );
 
-            Modules = new DbgEngModuleStore(Session, services);
-
             //We must start the debugger thread AFTER the Session variable has been assigned to
             Session.Start();
 
@@ -112,6 +128,14 @@ namespace ChaosDbg.DbgEng
             }
         }
 
+        #region IDbgEngine
+
+        IDbgProcess IDbgEngine.ActiveProcess => ActiveProcess;
+
+        IDbgSessionInfo IDbgEngine.Session => Session;
+
+        #endregion
+
         public void Dispose()
         {
             if (disposed)
@@ -121,8 +145,6 @@ namespace ChaosDbg.DbgEng
 
             Session?.Dispose();
             Session = null;
-            Modules = null;
-            Threads = null;
         }
     }
 }

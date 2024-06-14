@@ -51,7 +51,7 @@ namespace ChaosDbg.Cordb
 
         public CordbAppDomain AppDomain { get; internal set; }
 
-        public CordbModule Module { get; internal set; }
+        public CordbManagedModule Module { get; internal set; }
 
         public CorDebugAssembly CorDebugAssembly { get; }
 

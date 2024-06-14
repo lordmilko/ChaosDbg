@@ -9,8 +9,6 @@ namespace chaos
 {
     class DbgEngClient : IDisposable
     {
-        private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
-
         private DbgEngEngineProvider engineProvider;
 
         public DbgEngClient(IConsole console, DbgEngEngineProvider engineProvider)
@@ -29,7 +27,6 @@ namespace chaos
 
             engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
             engineProvider.EngineOutput += Engine_EngineOutput;
-            engineProvider.EngineStatusChanged += Engine_EngineStatusChanged;
 
             engineProvider.EngineFailure += (s, e) => Console.WriteColorLine($"FATAL: {e.Exception}", ConsoleColor.Red);
 
@@ -38,24 +35,16 @@ namespace chaos
             EngineLoop();
         }
 
-        private void Engine_EngineStatusChanged(object sender, EngineStatusChangedEventArgs e)
-        {
-            if (e.NewStatus == EngineStatus.Break)
-                wakeEvent.Set();
-        }
-
         private void EngineLoop()
         {
             while (true)
             {
-                wakeEvent.Wait();
+                engine.WaitForBreak();
 
                 //An event was received! Output our current state and prompt for user input
                 //client.Control.OutputCurrentState(DEBUG_OUTCTL.ALL_CLIENTS, DEBUG_CURRENT.DEFAULT);
 
                 InputLoop();
-
-                wakeEvent.Reset();
             }
         }
 
@@ -63,7 +52,7 @@ namespace chaos
         {
             var client = engine.Session.UiClient;
 
-            while (engine.Target.Status == EngineStatus.Break)
+            while (engine.ActiveProcess.Status == EngineStatus.Break)
             {
                 client.Control.OutputPrompt(DEBUG_OUTCTL.ALL_CLIENTS | DEBUG_OUTCTL.NOT_LOGGED, " ");
 
@@ -93,7 +82,6 @@ namespace chaos
         public void Dispose()
         {
             engineProvider?.Dispose();
-            wakeEvent.Dispose();
         }
     }
 }

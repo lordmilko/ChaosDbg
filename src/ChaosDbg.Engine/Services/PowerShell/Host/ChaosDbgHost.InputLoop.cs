@@ -7,6 +7,7 @@ using System.Management.Automation.Runspaces;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using ChaosLib;
 
 namespace ChaosDbg.PowerShell.Host
 {
@@ -89,9 +90,23 @@ namespace ChaosDbg.PowerShell.Host
                 {
                     try
                     {
-                        WritePrompt(ui, inBlockMode);
+                        string line;
 
-                        var line = ui.ReadLineWithTabCompletion();
+                        try
+                        {
+                            host.terminal.LockProtection(() =>
+                            {
+                                WritePrompt(ui, inBlockMode);
+
+                                host.terminal.EnterWriteProtection();
+                            });
+
+                            line = ui.ReadLineWithTabCompletion();
+                        }
+                        finally
+                        {
+                            host.terminal.ExitWriteProtection();
+                        }
 
                         if (host.TryExecuteDbgCommand(line))
                             continue;
@@ -165,7 +180,27 @@ namespace ChaosDbg.PowerShell.Host
                         }
                         else
                         {
-                            exec.ExecuteCommand(line, out var e, Executor.ExecutionOptions.AddOutDefault | Executor.ExecutionOptions.AddToHistory);
+                            //If we disabled ENABLE_PROCESSED_INPUT to allow F11 stepping, we need to re-enable it for the duration of the pipeline
+                            //so we can Ctrl+C cancel it
+
+                            var oldMode = host.terminal.GetInputConsoleMode();
+
+                            var newMode = oldMode | ConsoleMode.ENABLE_PROCESSED_INPUT;
+
+                            if (oldMode != newMode)
+                                host.terminal.SetInputConsoleMode(newMode);
+
+                            Exception e;
+
+                            try
+                            {
+                                exec.ExecuteCommand(line, out e, Executor.ExecutionOptions.AddOutDefault | Executor.ExecutionOptions.AddToHistory);
+                            }
+                            finally
+                            {
+                                if (oldMode != newMode)
+                                    host.terminal.SetInputConsoleMode(oldMode);
+                            }
 
                             Thread bht = null;
 

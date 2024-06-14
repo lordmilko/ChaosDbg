@@ -29,11 +29,14 @@ namespace ChaosDbg.DbgEng
 
         public long SP { get; }
 
+        private DEBUG_STACK_FRAME frame;
+
         public DbgEngFrame(string name, DEBUG_STACK_FRAME frame)
         {
             Name = name;
             IP = frame.InstructionOffset;
             SP = frame.StackOffset;
+            this.frame = frame;
         }
 
         public override string ToString()

@@ -69,6 +69,14 @@ namespace ChaosDbg.Engine
             services[serviceType] = new ServiceDescriptor(serviceType, implementation.GetType(), implementation: implementation);
         }
 
+        public void Add(ServiceDescriptor serviceDescriptor)
+        {
+            if (services.TryGetValue(serviceDescriptor.ServiceType, out _))
+                throw new InvalidOperationException($"Cannot create service '{serviceDescriptor.ServiceType.Name}': service has already been added to the {nameof(ServiceCollection)}.");
+
+            services.Add(serviceDescriptor.ServiceType, serviceDescriptor);
+        }
+
         public void Replace(Type serviceType, Type newImplementationType)
         {
             services.Remove(serviceType);

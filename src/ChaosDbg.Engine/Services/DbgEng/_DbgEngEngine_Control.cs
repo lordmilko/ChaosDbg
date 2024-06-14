@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ChaosDbg.DbgEng.Model;
 using ClrDebug;
 using ClrDebug.DbgEng;
 
@@ -37,6 +38,114 @@ namespace ChaosDbg.DbgEng
             Session.EngineThread.Invoke(() => Session.ExecuteBufferedCommand(action));
 
         public void WaitForBreak() => Session.BreakEvent.Task.Wait();
+
+        #region Model
+
+        /// <summary>
+        /// Gets a dynamic object that encapsulates the root namespace of the DbgEng Data Model.
+        /// </summary>
+        /// <returns>A dynamic object that encapsulates the root namespace of the DbgEng Data Model.</returns>
+        public dynamic GetModelRootNamespace()
+        {
+            var dataModel = ActiveClient.HostDataModelAccess.DataModel;
+            var dataModelManager = dataModel.manager;
+
+            var ns = dataModelManager.RootNamespace;
+
+            return DynamicDbgModelObject.New(ns, null, dataModelManager);
+        }
+
+        /// <summary>
+        /// Gets a dynamic object that should represent the @$cursession of the DbgEng Data Model.
+        /// </summary>
+        /// <returns>A dynamic object that should represent the @$cursession of the DbgEng Data Model.</returns>
+        public dynamic GetModelSession()
+        {
+            //I don't know 100% if this is what @$cursession does, but this technique of indexing
+            //into the list of sessions using the IDebugHostContext was derived from reversing how the JavaScript Provider
+            //provides its session value to JavaScript code
+
+            var dataModel = ActiveClient.HostDataModelAccess.DataModel;
+            var dataModelManager = dataModel.manager;
+            var debugHost = dataModel.host;
+
+            var (session, metadata) = GetRawModelSession(dataModelManager, debugHost);
+
+            return DynamicDbgModelObject.New(session, metadata, dataModelManager);
+        }
+
+        /// <summary>
+        /// Gets a dynamic object that should represent the @$curprocess of the DbgEng Data Model.
+        /// </summary>
+        /// <returns>A dynamic object that should represent the @$curprocess of the DbgEng Data Model.</returns>
+        public dynamic GetModelProcess()
+        {
+            //Same as above: I'm guessing this is how @$curprocess works
+
+            var dataModel = ActiveClient.HostDataModelAccess.DataModel;
+            var dataModelManager = dataModel.manager;
+            var debugHost = dataModel.host;
+
+            var (session, _) = GetRawModelSession(dataModelManager, debugHost);
+
+            //Conceptually, the Processes object has an indexer like "this[IDebugHostContext value]"
+
+            var processes = session.GetKeyValue("Processes").@object;
+
+            IndexableConcept indexableProcesses = processes.Concept.Indexable.conceptInterface;
+
+            var indexValue = dataModelManager.CreateIntrinsicObject(ModelObjectKind.ObjectContext, debugHost.CurrentContext.Raw);
+            var process = indexableProcesses.GetAt(processes.Raw, 1, new[] { indexValue.Raw });
+
+            return DynamicDbgModelObject.New(process.@object, process.metadata, dataModelManager);
+        }
+
+        private (ModelObject session, KeyStore metadata) GetRawModelSession(DataModelManager dataModelManager, DebugHost debugHost)
+        {
+            var sessions = dataModelManager.RootNamespace
+                .GetKeyValue("Debugger").@object
+                .GetKeyValue("Sessions").@object;
+
+            //This gives us the @$debuggerRootNamespace.Debugger.Sessions part
+            IndexableConcept indexableSessions = sessions.Concept.Indexable.conceptInterface;
+
+            //Conceptually, the Sessions object has an indexer like "this[IDebugHostContext value]"
+
+            //Create the argument to pass into the indexer
+            var indexValue = dataModelManager.CreateIntrinsicObject(ModelObjectKind.ObjectContext, debugHost.CurrentContext.Raw);
+
+            var session = indexableSessions.GetAt(sessions.Raw, 1, new[] { indexValue.Raw });
+
+            return (session.@object, session.metadata);
+        }
+
+        #endregion
+
+        public GetNextSymbolMatchResult[] GetSymbols(string[] patterns)
+        {
+            var debugSymbols = ActiveClient.Symbols;
+
+            var results = new List<GetNextSymbolMatchResult>();
+
+            foreach (var name in patterns)
+            {
+                var handle = debugSymbols.StartSymbolMatch(name);
+
+                try
+                {
+                    while (debugSymbols.TryGetNextSymbolMatch(handle, out var result) == HRESULT.S_OK)
+                    {
+                        results.Add(result);
+                    }
+                }
+                finally
+                {
+                    debugSymbols.EndSymbolMatch(handle);
+                }
+            }
+
+            return results.ToArray();
+        }
 
         public DbgEngFrame[] GetStackTrace()
         {

@@ -7,27 +7,21 @@ using ChaosDbg.Metadata;
 
 namespace ChaosDbg
 {
-    public class LaunchTargetOptions
+    /// <summary>
+    /// Represents a set of options that may be specified when launching a new debug target.<para/>
+    /// Not all options may be compatible with all debugger engines and debug types.
+    /// </summary>
+    public abstract class LaunchTargetOptions
     {
         private Dictionary<string, object> dict = new();
 
-        public bool IsAttach { get; }
+        public LaunchTargetKind Kind { get; }
 
-        public LaunchTargetOptions(string commandLine)
+        public bool IsAttach => Kind == LaunchTargetKind.AttachProcess;
+
+        protected LaunchTargetOptions(LaunchTargetKind kind)
         {
-            CommandLine = commandLine;
-
-            //Initialize the environment variables dictionary so that we can easily add them against the environment variables
-            //property on the options object
-            EnvironmentVariables = new StringDictionary();
-
-            StartMinimized = false;
-        }
-
-        public LaunchTargetOptions(int processId)
-        {
-            ProcessId = processId;
-            IsAttach = true;
+            Kind = kind;
         }
 
         #region Create
@@ -67,6 +61,16 @@ namespace ChaosDbg
         public int ProcessId
         {
             get => GetProperty<int>();
+            set => SetProperty(value);
+        }
+
+        #endregion
+        #region Dump
+
+        [Dump]
+        public string DumpFile
+        {
+            get => GetProperty<string>();
             set => SetProperty(value);
         }
 
@@ -117,10 +121,23 @@ namespace ChaosDbg
         {
             LaunchTargetOptions clone;
 
-            if (IsAttach)
-                clone = new LaunchTargetOptions(ProcessId);
-            else
-                clone = new LaunchTargetOptions(CommandLine);
+            switch (Kind)
+            {
+                case LaunchTargetKind.CreateProcess:
+                    clone = new CreateProcessTargetOptions(CommandLine);
+                    break;
+
+                case LaunchTargetKind.AttachProcess:
+                    clone = new AttachProcessTargetOptions(ProcessId);
+                    break;
+
+                case LaunchTargetKind.OpenDump:
+                    clone = new OpenDumpTargetOptions(DumpFile);
+                    break;
+
+                default:
+                    throw new UnknownEnumValueException(Kind);
+            }
 
             clone.dict = dict.ToDictionary(kv => kv.Key, kv =>
             {
@@ -187,6 +204,10 @@ namespace ChaosDbg
             {
                 EngineKind = engineKind;
             }
+        }
+
+        class DumpAttribute : Attribute
+        {
         }
 
         class CommonAttribute : Attribute

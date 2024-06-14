@@ -14,7 +14,7 @@ namespace ChaosDbg.Cordb
             Action<ICordbEngine> initCallback = null)
         {
             return engineProvider.CreateProcess(
-                new LaunchTargetOptions(commandLine)
+                new CreateProcessTargetOptions(commandLine)
                 {
                     StartMinimized = startMinimized,
                     UseInterop = useInterop,
@@ -30,7 +30,7 @@ namespace ChaosDbg.Cordb
             bool useInterop = false)
         {
             return engineProvider.Attach(
-                new LaunchTargetOptions(processId)
+                new AttachProcessTargetOptions(processId)
                 {
                     UseInterop = useInterop
                 }

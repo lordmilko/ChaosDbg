@@ -26,7 +26,7 @@ namespace ChaosDbg.Logger
 
             for (var i = 0; i < 10; i++)
             {
-                result = await base.SendAsync(request, cancellationToken);
+                result = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (result.IsSuccessStatusCode)
                     return result;

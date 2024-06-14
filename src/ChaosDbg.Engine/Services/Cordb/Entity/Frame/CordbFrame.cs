@@ -6,6 +6,10 @@ using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /// <summary>
+    /// Represents a stack frame in a managed process that is backed by some type of <see cref="ClrDebug.CorDebugFrame"/> object.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
     public abstract class CordbFrame<T> : CordbFrame where T : CorDebugFrame
     {
         public new T CorDebugFrame => (T) base.CorDebugFrame!;
@@ -15,6 +19,10 @@ namespace ChaosDbg.Cordb
         }
     }
 
+    /// <summary>
+    /// Represents a stack frame in a managed process.<para/>
+    /// This type is sub-classed for different types of stack frames (managed, transition, unmanaged, etc) that may exist in a stack trace.
+    /// </summary>
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public abstract class CordbFrame
     {
@@ -35,8 +43,16 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        /// <summary>
+        /// Gets the <see cref="ClrDebug.CorDebugFrame"/> that underpins this frame.<para/>
+        /// If this frame is not known to ICorDebug (e.g. this is a native frame that is not a transition frame (<see cref="CorDebugNativeFrame"/>)
+        /// then this value may be <see langword="null"/>.
+        /// </summary>
         public CorDebugFrame? CorDebugFrame { get; }
 
+        /// <summary>
+        /// Gets the register context that is associated with this frame.
+        /// </summary>
         public CrossPlatformContext Context { get; }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -76,6 +92,9 @@ namespace ChaosDbg.Cordb
 
         public virtual long FrameBP => Context.BP;
 
+        /// <summary>
+        /// Gets all variables (parameters and locals) that may be associated with this frame.
+        /// </summary>
         public abstract CordbVariable[] Variables { get; }
 
         protected CordbFrame(CorDebugFrame? corDebugFrame, CordbThread thread, CordbModule? module, CrossPlatformContext context)
