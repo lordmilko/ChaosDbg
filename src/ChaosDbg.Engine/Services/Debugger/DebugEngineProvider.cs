@@ -4,27 +4,36 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using ChaosDbg.Cordb;
+using ChaosDbg.DbgEng;
+using ChaosLib;
 
 namespace ChaosDbg
 {
-    public abstract class DebugEngineProvider<TEngine> where TEngine : IDbgEngine
+    /// <summary>
+    /// Provides facilities for creating and accessing <see cref="IDbgEngine"/> instances.<para/>
+    /// This type is the entry point for launching a debug target.
+    /// </summary>
+    public partial class DebugEngineProvider
     {
         private bool disposed;
 
-        private List<TEngine> engines = new List<TEngine>();
+        private List<IDbgEngine> engines = new List<IDbgEngine>();
+        private object enginesLock = new object();
 
-        private object objLock = new object();
+        //DbgEng is not thread safe. Attempting to create multiple machines concurrently will overwrite g_Machine which can cause other DbgEng instances
+        //to crash when the g_Machine gets nulled out
+        private static object dbgEngInstanceLock = new object();
 
-        private TEngine activeEngine;
+        private IDbgEngine activeEngine;
 
-        public TEngine ActiveEngine
+        public IDbgEngine ActiveEngine
         {
             get
             {
                 if (activeEngine != null)
                     return activeEngine;
 
-                lock (objLock)
+                lock (enginesLock)
                 {
                     activeEngine = engines.FirstOrDefault();
 
@@ -46,6 +55,15 @@ namespace ChaosDbg
         public void ClearEventHandlers()
         {
             events = new EventHandlerList();
+        }
+
+        /// <summary>
+        /// The event that occurs when the engine has initialized its <see cref="IDbgSessionInfo"/> but has not yet launched a debug target.
+        /// </summary>
+        public event EventHandler<EngineInitializedEventArgs> EngineInitialized
+        {
+            add => AddEvent(nameof(EngineInitialized), value);
+            remove => RemoveEvent(nameof(EngineInitialized), value);
         }
 
         /// <summary>
@@ -147,83 +165,213 @@ namespace ChaosDbg
 
         #endregion
 
+        private readonly DbgEngEngineServices dbgEngEngineServices;
+        private readonly CordbEngineServices cordbEngineServices;
+
         /// <summary>
-        /// Creates a new <typeparamref name="TEngine"/> against a newly created process.
+        /// Provides a simplified means of launching <see cref="CordbEngine"/> instances with commonly used configuration options.
         /// </summary>
+        public CordbEngineLaunchExtensions Cordb { get; }
+
+        /// <summary>
+        /// Provides a simplified means of launching <see cref="DbgEngEngine"/> instances with commonly used configuration options.
+        /// </summary>
+        public DbgEngEngineLaunchExtensions DbgEng { get; }
+
+        public DebugEngineProvider(DbgEngEngineServices dbgEngEngineServices, CordbEngineServices cordbEngineServices)
+        {
+            this.dbgEngEngineServices = dbgEngEngineServices;
+            this.cordbEngineServices = cordbEngineServices;
+
+            Cordb = new CordbEngineLaunchExtensions(this);
+            DbgEng = new DbgEngEngineLaunchExtensions(this);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="IDbgEngine"/> against a newly created process.
+        /// </summary>
+        /// <param name="engineKind">The type of engine to use to launch the target process.</param>
         /// <param name="options">The options to use to create the process.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to shutdown the engine thread.</param>
-        /// <param name="initCallback">A callback that is used to initialize the newly created engine prior to launching the target process.</param>
-        /// <returns>An <see cref="ICordbEngine"/> for debugging the specified process.</returns>
-        public TEngine CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken = default, Action<TEngine> initCallback = null)
+        /// <returns>An <see cref="IDbgEngine"/> for debugging the specified process.</returns>
+        public IDbgEngine CreateProcess(DbgEngineKind engineKind, CreateProcessTargetOptions options, CancellationToken cancellationToken = default)
         {
             CheckIfDisposed();
-            CheckRequiredEventHandlers();
+            CheckIfSupported(engineKind, options.Kind);
+            CheckRequiredEventHandlers(engineKind);
 
-            var engine = CreateEngine();
-
-            initCallback?.Invoke(engine);
+            var engine = CreateEngine(engineKind);
 
             ((IDbgEngineInternal) engine).CreateProcess(options, cancellationToken);
 
             return engine;
         }
 
-        public TEngine Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken = default)
+        public IDbgEngine Attach(DbgEngineKind engineKind, AttachProcessTargetOptions options, CancellationToken cancellationToken = default)
         {
             CheckIfDisposed();
-            CheckRequiredEventHandlers();
+            CheckIfSupported(engineKind, options.Kind);
+            CheckRequiredEventHandlers(engineKind);
 
-            var engine = CreateEngine();
+            var engine = CreateEngine(engineKind);
 
             ((IDbgEngineInternal) engine).Attach(options, cancellationToken);
 
             return engine;
         }
 
-        public TEngine OpenDumpInternal(OpenDumpTargetOptions options, CancellationToken cancellationToken = default)
+        public IDbgEngine OpenDump(DbgEngineKind engineKind, OpenDumpTargetOptions options, CancellationToken cancellationToken = default)
         {
             CheckIfDisposed();
-            CheckRequiredEventHandlers();
+            CheckIfSupported(engineKind, options.Kind);
+            CheckRequiredEventHandlers(engineKind);
 
-            var engine = CreateEngine();
+            var engine = CreateEngine(engineKind);
 
             ((IDbgEngineInternal) engine).OpenDump(options, cancellationToken);
 
             return engine;
         }
 
-        protected virtual TEngine CreateEngine()
+        public IDbgEngine ConnectServer(DbgEngineKind engineKind, ServerTargetOptions options, CancellationToken cancellationToken = default)
         {
-            lock (objLock)
-            {
-                var engine = NewEngine();
+            CheckIfDisposed();
+            CheckIfSupported(engineKind, options.Kind);
+            CheckRequiredEventHandlers(engineKind);
 
+            var engine = CreateEngine(engineKind);
+
+            ((DbgEngEngine) engine).ConnectServer(options, cancellationToken);
+
+            return engine;
+        }
+
+        protected virtual IDbgEngine CreateEngine(DbgEngineKind engineKind)
+        {
+            var engine = NewEngine(engineKind, false);
+
+            lock (enginesLock)
+            {
                 engines.Add(engine);
 
                 return engine;
             }
         }
 
-        protected abstract TEngine NewEngine();
-
-        public virtual void Remove(TEngine engine)
+        private IDbgEngine NewEngine(DbgEngineKind engineKind, bool throwIfUnavailable)
         {
-            lock (objLock)
+            switch (engineKind)
+            {
+                case DbgEngineKind.Cordb:
+                case DbgEngineKind.Interop:
+                {
+                    var engine = new CordbEngine(cordbEngineServices, this);
+                    engine.EventHandlers.AddHandlers(events);
+                    return engine;
+                }
+                    
+
+                case DbgEngineKind.DbgEng:
+                {
+                    if (Monitor.TryEnter(dbgEngInstanceLock))
+                    {
+                        Log.Debug<DebugEngineProvider>("Acquired DbgEng instance lock");
+
+                        var engine = new DbgEngEngine(dbgEngEngineServices, this);
+                        engine.EventHandlers.AddHandlers(events);
+                        return engine;
+                    }
+
+                    if (throwIfUnavailable)
+                        throw new InvalidOperationException($"Cannot create {engineKind}: engine is a singleton that is already in use");
+
+                    Log.Debug<DebugEngineProvider>("Waiting for DbgEng instance lock");
+
+                    Monitor.Enter(dbgEngInstanceLock);
+                    {
+                        Log.Debug<DebugEngineProvider>("Acquired DbgEng instance lock after waiting");
+
+                        var engine = new DbgEngEngine(dbgEngEngineServices, this);
+                        engine.EventHandlers.AddHandlers(events);
+                        return engine;
+                    }
+                }
+                default:
+                    throw new UnknownEnumValueException(engineKind);
+            }
+        }
+
+        public virtual void Remove(IDbgEngine engine)
+        {
+            lock (enginesLock)
             {
                 if (activeEngine != null && activeEngine.Equals(engine))
                     activeEngine = default;
 
                 engines.Remove(engine);
             }
+
+            if (engine is DbgEngEngine)
+            {
+                Log.Debug<DebugEngineProvider>("Releasing DbgEng instance lock");
+
+                Monitor.Exit(dbgEngInstanceLock);
+            }
         }
 
-        private void CheckRequiredEventHandlers()
+        internal void WithDbgEng(Action<DbgEngEngineServices> action)
+        {
+            lock (dbgEngInstanceLock)
+                action(dbgEngEngineServices);
+        }
+
+        protected void CheckRequiredEventHandlers(DbgEngineKind engineKind)
         {
             if (events[nameof(EngineFailure)] == null)
-                throw new InvalidOperationException($"Cannot create '{typeof(TEngine).Name}' instance: an '{nameof(EngineFailure)}' event handler has not been set.");
+                throw new InvalidOperationException($"Cannot create {engineKind} instance: an '{nameof(EngineFailure)}' event handler has not been set.");
         }
 
-        private void CheckIfDisposed()
+        public static bool CheckIfSupported(DbgEngineKind engineKind, LaunchTargetKind launchTargetKind)
+        {
+            switch (engineKind)
+            {
+                case DbgEngineKind.Cordb:
+                case DbgEngineKind.Interop:
+                    switch (launchTargetKind)
+                    {
+                        case LaunchTargetKind.CreateProcess:
+                        case LaunchTargetKind.AttachProcess:
+                            return true;
+
+                        case LaunchTargetKind.Kernel:
+                        case LaunchTargetKind.OpenDump:
+                        case LaunchTargetKind.Server:
+                            return false;
+
+                        default:
+                            throw new UnknownEnumValueException(launchTargetKind);
+                    }
+
+                case DbgEngineKind.DbgEng:
+                    switch (launchTargetKind)
+                    {
+                        case LaunchTargetKind.CreateProcess:
+                        case LaunchTargetKind.AttachProcess:
+                        case LaunchTargetKind.Kernel:
+                        case LaunchTargetKind.OpenDump:
+                        case LaunchTargetKind.Server:
+                            return true;
+
+                        default:
+                            throw new UnknownEnumValueException(launchTargetKind);
+                    }
+
+                default:
+                    throw new UnknownEnumValueException(launchTargetKind);
+            }
+        }
+
+        protected void CheckIfDisposed()
         {
             if (disposed)
                 throw new ObjectDisposedException(GetType().Name);
@@ -234,7 +382,7 @@ namespace ChaosDbg
             if (disposed)
                 return;
 
-            lock (objLock)
+            lock (enginesLock)
             {
                 foreach (var engine in engines)
                     engine.Dispose();

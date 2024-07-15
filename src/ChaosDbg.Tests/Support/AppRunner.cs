@@ -65,7 +65,7 @@ namespace ChaosDbg.Tests
                     }
                 }
 
-                //Create a bew GlobalProvider for the next test
+                //Create a new GlobalProvider for the next test
                 typeof(GlobalProvider).TypeInitializer.Invoke(null, null);
             });
             Log.CopyContextTo(thread);

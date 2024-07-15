@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class CommandsPaneViewModel : ViewModelBase
     {
-        public CommandsPaneViewModel(DbgEngEngine engine)
+        public CommandsPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

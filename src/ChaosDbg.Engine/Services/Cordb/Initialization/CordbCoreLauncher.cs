@@ -93,7 +93,7 @@ namespace ChaosDbg.Cordb
             GetCreateProcessArgs(out var creationFlags, out var si);
 
             //Disable the use of R2R images so that we can step through them properly
-            options.EnvironmentVariables["COMPlus_ReadyToRun"] = "0";
+            options.EnvironmentVariables[WellKnownEnvironmentVariable.COMPlus_ReadyToRun] = "0";
 
             var environment = GetEnvironmentBytes();
 

@@ -12,4 +12,6 @@
     <RootNamespace>TestApp</RootNamespace>
   </PropertyGroup>
 
+  <Import Project="$(Build)TerminateLockingProcesses.targets" />
+
 </Project>

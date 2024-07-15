@@ -1,6 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
@@ -9,15 +13,19 @@ using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.IL;
+using ChaosDbg.Logger;
 using ChaosDbg.Metadata;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
 
 namespace ChaosDbg.Tests
 {
+    [TestClass] //Required for our [AssemblyInitialize] handler to fire
     public abstract class BaseTest
     {
         public Microsoft.VisualStudio.TestTools.UnitTesting.TestContext TestContext { get; set; }
@@ -122,12 +130,33 @@ namespace ChaosDbg.Tests
             bool nativeTestApp = false,
             FrameworkKind? frameworkKind = null,
             bool waitForSignal = true,
-            string customExe = null)
+            bool? handleLoaderBP = null,
+            string customExe = null,
+            Action<CordbEngineProvider> hookEvents = null)
         {
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
                 throw new InvalidOperationException("ICorDebug can only be interacted with from an MTA thread. Attempting to interact with ICorDebug (such as calling Stop()) will cause E_NOINTERFACE errors.");
 
             var cordbEngineProvider = GetService<CordbEngineProvider>();
+
+            var cts = new CancellationTokenSource();
+
+            if (handleLoaderBP == null && waitForSignal)
+                handleLoaderBP = true;
+
+            if (handleLoaderBP == true && useInterop)
+            {
+                var haveLoaderBP = false;
+
+                cordbEngineProvider.EngineStatusChanged += (s, e) =>
+                {
+                    if (!haveLoaderBP && e.NewStatus == EngineStatus.Break)
+                    {
+                        haveLoaderBP = true;
+                        cordbEngineProvider.ActiveEngine.Continue();
+                    }
+                };
+            }
 
             string path;
             string commandLine;
@@ -147,20 +176,39 @@ namespace ChaosDbg.Tests
 
             using var ctx = new TestContext(cordbEngineProvider, path);
 
+            //Hook after creating the context so that default event handling occurs before our events
+            hookEvents?.Invoke(cordbEngineProvider);
+
+            cordbEngineProvider.EngineFailure += (s, e) =>
+            {
+                ctx.LastFatalException = e.Exception;
+                cts.Cancel();
+
+                ctx.LastFatalStatus = e.Status;
+            };
+
             using var cordbEngine = (CordbEngine) cordbEngineProvider.CreateProcess(
                 commandLine,
+                startMinimized: true,
                 useInterop: useInterop,
                 frameworkKind: frameworkKind);
+
+            SetThreadName($"[{cordbEngine.Session.EngineId}] {TestContext.TestName}");
 
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
             var win32Process = cordbEngine.Process.Win32Process;
 
+            using var optionsHolder = new DbgHelpOptionsHolder();
+
             try
             {
                 if (waitForSignal)
                 {
-                    eventHandle.WaitOne();
+                    WaitHandle.WaitAny(new[] {eventHandle, cts.Token.WaitHandle});
+
+                    if (ctx.LastFatalException != null)
+                        throw ctx.LastFatalException;
 
                     //Sleep for a moment to allow the program to have actually entered Thread.Sleep() itself
                     Thread.Sleep(100);

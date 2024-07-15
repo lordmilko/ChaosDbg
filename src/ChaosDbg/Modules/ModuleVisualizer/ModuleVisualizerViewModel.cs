@@ -1,5 +1,4 @@
-﻿using ChaosDbg.DbgEng;
-using ChaosDbg.Reactive;
+﻿using ChaosDbg.Reactive;
 
 namespace ChaosDbg.ViewModel
 {
@@ -8,7 +7,7 @@ namespace ChaosDbg.ViewModel
         [Reactive]
         public virtual ModuleVisualizerContent RenderContent { get; set; }
 
-        public ModuleVisualizerViewModel(DbgEngEngineProvider engineProvider)
+        public ModuleVisualizerViewModel(DebugEngineProvider engineProvider)
         {
             RenderContent = new ModuleVisualizerContent();
 

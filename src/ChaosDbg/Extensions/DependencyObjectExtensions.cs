@@ -8,7 +8,7 @@ namespace ChaosDbg
 {
     public static class DependencyObjectExtensions
     {
-        public static T GetAncestor<T>(this DependencyObject child) where T : DependencyObject
+        public static T GetAncestor<T>(this DependencyObject child, bool optional = false) where T : DependencyObject
         {
             if (child == null)
                 throw new ArgumentNullException(nameof(child));
@@ -16,7 +16,12 @@ namespace ChaosDbg
             var ancestor = Ancestors(child).OfType<T>().SingleOrDefault();
 
             if (ancestor == null)
+            {
+                if (optional)
+                    return null;
+
                 throw new InvalidOperationException($"Could not find ancestor of type '{typeof(T).Name}' on control '{child}'.");
+            }
 
             return ancestor;
         }

@@ -10,7 +10,7 @@ namespace chaos.Cordb.Commands
     {
         public BreakpointCommands(
             IConsole console,
-            CordbEngineProvider engineProvider) : base(console, engineProvider)
+            DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

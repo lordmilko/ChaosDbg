@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Management.Automation;
-using ChaosDbg.Cordb;
-using ChaosDbg.DbgEng;
+using System.Threading;
 using ChaosLib;
 
 namespace ChaosDbg.PowerShell.Cmdlets
@@ -11,6 +10,13 @@ namespace ChaosDbg.PowerShell.Cmdlets
 #pragma warning disable CS0618
         protected IServiceProvider ServiceProvider => InternalGlobalProvider.ServiceProvider;
 #pragma warning restore CS0618
+
+        /// <summary>
+        /// A cancellation token source to use with long running tasks that may need to be interrupted by Ctrl+C.
+        /// </summary>
+        private readonly CancellationTokenSource TokenSource = new CancellationTokenSource();
+
+        internal CancellationToken CancellationToken => TokenSource.Token;
 
         protected T GetService<T>() => ServiceProvider.GetService<T>();
 
@@ -22,24 +28,24 @@ namespace ChaosDbg.PowerShell.Cmdlets
             {
                 if (activeEngine == null)
                 {
-                    var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
+                    var engineProvider = GetService<DebugEngineProvider>();
 
-                    if (dbgEngEngineProvider.ActiveEngine != null)
-                        activeEngine = dbgEngEngineProvider.ActiveEngine;
-                    else
-                    {
-                        var cordbEngineProvider = GetService<CordbEngineProvider>();
+                    var activeEngine = engineProvider.ActiveEngine;
 
-                        if (cordbEngineProvider.ActiveEngine != null)
-                            activeEngine = cordbEngineProvider.ActiveEngine;
-                        else
-                            throw new NotImplementedException();
-                    }
+                    if (activeEngine == null)
+                        throw new InvalidOperationException("There is no active debug engine");
                 }
 
                 return activeEngine;
             }
         }
+
+        protected override void StopProcessing()
+        {
+            TokenSource.Cancel();
+        }
+
+        internal void Execute() => ProcessRecord();
 
         protected bool PermittedToWrite => CommandRuntime.GetPropertyValue("PipelineProcessor").GetFieldValue("_permittedToWrite") == this;
 

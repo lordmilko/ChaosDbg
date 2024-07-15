@@ -67,32 +67,35 @@ namespace ChaosDbg.Cordb
 
         internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
 
+        private void RaiseEngineInitialized() =>
+            HandleUIEvent((EventHandler<EngineInitializedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineInitialized)], this, new EngineInitializedEventArgs(Session));
+
         private void RaiseEngineOutput(EngineOutputEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineOutput)], this, args);
+            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineOutput)], this, args);
 
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineStatusChanged)], this, args);
+            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineStatusChanged)], this, args);
 
         private void RaiseEngineFailure(EngineFailureEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(CordbEngineProvider.EngineFailure)], this, args);
+            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineFailure)], this, args);
 
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleLoad)], this, args);
+            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleLoad)], this, args);
 
         private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(CordbEngineProvider.ModuleUnload)], this, args);
+            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleUnload)], this, args);
 
         private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadCreate)], this, args);
+            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadCreate)], this, args);
 
         private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ThreadExit)], this, args);
+            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadExit)], this, args);
 
         private void RaiseBreakpointHit(EngineBreakpointHitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.BreakpointHit)], this, args);
+            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.BreakpointHit)], this, args);
 
         private void RaiseExceptionHit(EngineExceptionHitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineExceptionHitEventArgs>) EventHandlers[nameof(CordbEngineProvider.ExceptionHit)], this, args);
+            HandleUIEvent((EventHandler<EngineExceptionHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ExceptionHit)], this, args);
 
         #endregion
         #region PreEvent
@@ -552,6 +555,9 @@ namespace ChaosDbg.Cordb
              * Amd64MachineInfo::InsertThreadDataBreakpoints ?
              */
 
+            if (!e.dwFirstChance)
+                throw new NotImplementedException("Handling second chanve exceptions is not implemented");
+
             //You MUST call CorDebugProcess.ClearCurrentException() for any breakpoints you handle. Otherwise, any subsequent actions you try and perform (such as stepping)
             //will be ignored
             switch (e.ExceptionRecord.ExceptionCode)
@@ -562,6 +568,11 @@ namespace ChaosDbg.Cordb
 
                 case NTSTATUS.STATUS_SINGLE_STEP:
                     ProcessSingleStep(e);
+                    break;
+
+                case NTSTATUS.STATUS_CPP_EH_EXCEPTION:
+                case NTSTATUS.STATUS_ACCESS_VIOLATION:
+                    ProcessAppException(e);
                     break;
 
                 default:
@@ -652,7 +663,23 @@ namespace ChaosDbg.Cordb
 
             AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand, exception));
             RaiseBreakpointHit(new EngineBreakpointHitEventArgs(null)); //temp
-            AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand));
+        }
+
+        private void ProcessAppException(in EXCEPTION_DEBUG_INFO exception)
+        {
+            var tid = Session.CallbackContext.UnmanagedEventThreadId;
+
+            Process.CorDebugProcess.ClearCurrentException(tid);
+
+            var outOfBand = Session.CallbackContext.UnmanagedOutOfBand;
+
+            //Add the pause before raising the event
+            AddUnmanagedPause(
+                exception.dwFirstChance
+                    ? new CordbNativeFirstChanceExceptionPauseReason(exception.ExceptionRecord, outOfBand)
+                    : new CordbNativeSecondChanceExceptionPauseReason(exception.ExceptionRecord, outOfBand)
+            );
+            RaiseExceptionHit(new EngineExceptionHitEventArgs(exception));
         }
 
         #endregion

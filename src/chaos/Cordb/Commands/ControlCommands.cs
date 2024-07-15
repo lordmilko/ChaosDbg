@@ -1,12 +1,11 @@
 ﻿using System;
 using ChaosDbg;
-using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
     class ControlCommands : CommandBase
     {
-        public ControlCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
+        public ControlCommands(IConsole console, DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

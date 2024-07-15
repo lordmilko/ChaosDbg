@@ -12,15 +12,16 @@ namespace ChaosDbg
         /// </summary>
         /// <typeparam name="T">The type of event args that should be passed to the event handler.</typeparam>
         /// <param name="handler">The event handler to be invoked.</param>
+        /// <param name="sender">The source of the event.</param>
         /// <param name="args">The event args to be passed to the event handler.</param>
-        public static void HandleUIEvent<T>(EventHandler<T> handler, T args)
+        public static void HandleUIEvent<T>(EventHandler<T> handler, object sender, T args)
         {
             if (handler != null)
             {
                 //Asynchronously dispatch to the UI thread so that if we're on the engine thread, we don't deadlock
                 //if the event handler on UI thread tries to invoke a command back on the engine thread
-                if (DispatchAsync == null || !DispatchAsync(() => handler.Invoke(handler, args)))
-                    handler.Invoke(handler, args);
+                if (DispatchAsync == null || !DispatchAsync(() => handler.Invoke(sender, args)))
+                    handler.Invoke(sender, args);
             }
         }
 
@@ -29,8 +30,9 @@ namespace ChaosDbg
         /// </summary>
         /// <typeparam name="T">The type of event args that should be passed to the event handler.</typeparam>
         /// <param name="handler">The event handler to be invoked.</param>
+        /// <param name="sender">The source of the event.</param>
         /// <param name="args">The event args to be passed to the event handler.</param>
-        public static void HandleEvent<T>(EventHandler<T> handler, T args)
+        public static void HandleEvent<T>(EventHandler<T> handler, object sender, T args)
         {
             handler?.Invoke(handler, args);
         }

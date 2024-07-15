@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LocalVsDock>$(MSBuildThisFileDirectory)\..\..\VsDock\VsDock\bin\Debug\net472\VsDock.dll</LocalVsDock>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <!-- If VsDock has been cloned to the parent directory containing both VsDock and ChaosDbg,
+         prefer the local version for development purposes -->
+    <PackageReference Include="VsDock" Version="$(VsDockVersion)" Condition="!Exists('$(LocalVsDock)')" />
+
+    <Reference Include="VsDock" Condition="Exists('$(LocalVsDock)')">
+      <HintPath>$(LocalVsDock)</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

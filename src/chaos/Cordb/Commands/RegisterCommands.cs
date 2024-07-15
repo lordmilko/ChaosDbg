@@ -1,13 +1,12 @@
 ﻿using System.Linq;
 using ChaosDbg;
-using ChaosDbg.Cordb;
 using ClrDebug;
 
 namespace chaos.Cordb.Commands
 {
     class RegisterCommands : CommandBase
     {
-        public RegisterCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
+        public RegisterCommands(IConsole console, DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

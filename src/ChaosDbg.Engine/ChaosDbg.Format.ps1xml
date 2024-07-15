@@ -1,0 +1,198 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Configuration>
+    <DefaultSettings>
+        <ShowError>true</ShowError>
+        <DisplayError>true</DisplayError>
+    </DefaultSettings>
+    <ViewDefinitions>
+        <View>
+            <Name>Default</Name>
+            <ViewSelectedBy>
+                <TypeName>ChaosDbg.Cordb.CordbNativeModule</TypeName>
+            </ViewSelectedBy>
+            <TableControl>
+                <TableHeaders>
+                    <TableColumnHeader/> <!-- Name -->
+                    <TableColumnHeader/> <!-- BaseAddress -->
+                    <TableColumnHeader/> <!-- EndAddress -->
+                    <TableColumnHeader/> <!-- IsCLR -->
+                    <TableColumnHeader/> <!-- Symbols -->
+                </TableHeaders>
+                <TableRowEntries>
+                    <TableRowEntry>
+                        <TableColumnItems>
+                            <TableColumnItem>
+                                <PropertyName>Name</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>BaseAddress</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                              <PropertyName>EndAddress</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                              <PropertyName>IsCLR</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Symbols</PropertyName>
+                            </TableColumnItem>
+                        </TableColumnItems>
+                    </TableRowEntry>
+                </TableRowEntries>
+            </TableControl>
+        </View>
+        <View>
+            <Name>Default</Name>
+            <ViewSelectedBy>
+                <TypeName>ChaosDbg.DbgEventFilter</TypeName>
+            </ViewSelectedBy>
+            <TableControl>
+                <TableHeaders>
+                    <TableColumnHeader> <!-- Name -->
+                        <Width>30</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- Alias -->
+                        <Width>6</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- ExceptionCode -->
+                        <Label>Code</Label>
+                        <Width>30</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- ExecutionOption -->
+                        <Width>21</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- ContinueOption -->
+                        <Width>16</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- Arg -->
+                        <Label>Arg</Label>
+                        <Width>5</Width>
+                    </TableColumnHeader>
+                    <TableColumnHeader> <!-- Cmds -->
+                        <Label>Cmd</Label>
+                    </TableColumnHeader>
+                </TableHeaders>
+                <TableRowEntries>
+                    <TableRowEntry>
+                        <TableColumnItems>
+                            <TableColumnItem>
+                                <PropertyName>Name</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Alias</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Code</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                              <PropertyName>ExecutionOption</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                              <PropertyName>ContinueOption</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Argument</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <ScriptBlock>
+                                    if ($_.Command)
+                                    {
+                                        $_.Command
+                                    }
+
+                                    if ($_.SecondCommand)
+                                    {
+                                        $_.SecondCommand
+                                    }
+                                </ScriptBlock>
+                            </TableColumnItem>
+                        </TableColumnItems>
+                    </TableRowEntry>
+                </TableRowEntries>
+            </TableControl>
+        </View>
+        <View>
+            <Name>Default</Name>
+            <ViewSelectedBy>
+                <TypeName>ChaosDbg.DbgEng.Model.TtdEvent</TypeName>
+            </ViewSelectedBy>
+            <TableControl>
+                <TableHeaders>
+                    <TableColumnHeader/> <!-- Type -->
+                    <TableColumnHeader/> <!-- Position -->
+                    <TableColumnHeader> <!-- Description -->
+                        <Label>Description</Label>
+                    </TableColumnHeader>
+                </TableHeaders>
+                <TableRowEntries>
+                    <TableRowEntry>
+                        <TableColumnItems>
+                            <TableColumnItem>
+                                <PropertyName>Type</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Position</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <ScriptBlock>
+                                    $_.ToString()
+                                </ScriptBlock>
+                            </TableColumnItem>
+                        </TableColumnItems>
+                    </TableRowEntry>
+                </TableRowEntries>
+            </TableControl>
+        </View>
+        <View>
+            <Name>Default</Name>
+            <ViewSelectedBy>
+                <TypeName>ChaosDbg.TTD.TtdDataFlowItem</TypeName>
+            </ViewSelectedBy>
+            <TableControl>
+                <TableHeaders>
+                    <TableColumnHeader/> <!-- Target -->
+                    <TableColumnHeader/> <!-- Thread -->
+                    <TableColumnHeader/> <!-- Name -->                    
+                    <TableColumnHeader/> <!-- Position -->
+                    <TableColumnHeader> <!-- Instruction -->
+                        <Label>Instruction</Label>
+                    </TableColumnHeader>
+                    <TableColumnHeader/> <!-- Tag -->                    
+                    <TableColumnHeader/> <!-- Location -->                    
+                </TableHeaders>
+                <TableRowEntries>
+                    <TableRowEntry>
+                        <TableColumnItems>
+                            <TableColumnItem>
+                                <PropertyName>Target</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Thread</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Name</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Position</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <ScriptBlock>
+                                    if($_.Instruction)
+                                    {
+                                        $_.Instruction.ToString([ChaosDbg.Disasm.DisasmFormatOptions]::Default)
+                                    }
+                                </ScriptBlock>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Tag</PropertyName>
+                            </TableColumnItem>
+                            <TableColumnItem>
+                                <PropertyName>Location</PropertyName>
+                            </TableColumnItem>
+                        </TableColumnItems>
+                    </TableRowEntry>
+                </TableRowEntries>
+            </TableControl>
+        </View>
+    </ViewDefinitions>
+</Configuration>

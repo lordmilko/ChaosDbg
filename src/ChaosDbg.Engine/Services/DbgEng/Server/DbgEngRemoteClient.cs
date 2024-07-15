@@ -11,13 +11,13 @@ namespace ChaosDbg.DbgEng.Server
     {
         public DebugClient DebugClient { get; }
 
-        public DbgEngServerInfo ServerInfo { get; }
+        public DbgEngServerConnectionInfo ServerInfo { get; }
 
         private Process process;
         private DbgEngRemoteClientProvider provider;
         private BufferOutputCallbacks output = new BufferOutputCallbacks();
 
-        public DbgEngRemoteClient(DebugClient debugClient, DbgEngServerInfo serverInfo, Process process, DbgEngRemoteClientProvider provider)
+        public DbgEngRemoteClient(DebugClient debugClient, DbgEngServerConnectionInfo serverInfo, Process process, DbgEngRemoteClientProvider provider)
         {
             DebugClient = debugClient;
 

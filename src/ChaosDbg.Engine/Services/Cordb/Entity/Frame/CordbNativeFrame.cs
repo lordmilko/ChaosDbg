@@ -78,7 +78,8 @@ namespace ChaosDbg.Cordb
                 //First, get all symbols from DbgHelp
 
                 //Ensure we've loaded the module first
-                Thread.Process.Symbols.EnsureModuleLoaded(Context.IP, true);
+                if (Thread.Process.Symbols.TryGetModuleBase(Context.IP, out var moduleBase))
+                    Thread.Process.Symbols.EnsureModuleLoaded(moduleBase, true);
 
                 var symbols = Thread.Process.Symbols.WithFrameContext(
                     Context.IP,

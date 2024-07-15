@@ -48,7 +48,7 @@ namespace ChaosDbg.Tests
 
         #region Pane
 
-        public static void Verify(this SplitterItemsDockContainerInfo info, double dockedWidth, double dockedHeight, Orientation orientation, params Action<IPaneItem[]>[] splitterItemDescendantVerifier)
+        public static void Verify(this SplitViewInfo info, double dockedWidth, double dockedHeight, Orientation orientation, params Action<IPaneItem[]>[] splitterItemDescendantVerifier)
         {
             Assert.AreEqual(dockedWidth, info.DockedWidth.Value);
             Assert.AreEqual(dockedHeight, info.DockedHeight.Value);

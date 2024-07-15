@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
+using ChaosDbg.Symbol;
 using ChaosLib;
 
 namespace ChaosDbg.Debugger
@@ -45,6 +47,9 @@ namespace ChaosDbg.Debugger
 
                 lock (pendingOperationLock)
                 {
+                    //Any async operations that we don't force to run synchronously (e.g. SymbolDeferrableSubOperation) will basically run immediately,
+                    //kick off a Task on the thread pool that will actually handle the work of loading symbols, and then return. Thus, any time you try and force
+                    //load symbols, a job is probably already executing and we just need to wait for it to finish
                     var dispatcherOperation = DispatcherThread.InvokeAsync(
                         () => parentOperation.Execute(forceSynchronous: false),
                         priority: 1
@@ -93,6 +98,31 @@ namespace ChaosDbg.Debugger
 
                 return false;
             }
+        }
+
+        public bool TryGetOperation(string name, out DeferrableOperation operation)
+        {
+            lock (pendingOperationLock)
+            {
+                foreach (var pendingOp in pendingOperations)
+                {
+                    if (pendingOp.Value is SymbolDeferrableOperation s)
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(s.Name);
+
+                        if (fileName.Equals(name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            operation = pendingOp.Value;
+                            return true;
+                        }
+                    }
+                    else
+                        throw new NotImplementedException($"Don't know how to handle an operation of type {pendingOp.Value.GetType().Name}");
+                }
+            }
+
+            operation = null;
+            return false;
         }
 
         /// <summary>

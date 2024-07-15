@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using ChaosDbg;
-using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
@@ -12,7 +11,7 @@ namespace chaos.Cordb.Commands
 
         public ThreadCommands(
             IConsole console,
-            CordbEngineProvider engineProvider,
+            DebugEngineProvider engineProvider,
             StackTraceCommands stackTraceCommand) : base(console, engineProvider)
         {
             StackTraceCommand = stackTraceCommand;

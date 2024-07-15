@@ -2,12 +2,13 @@
 
   <Import Project="$(Build)ClrDebug.props" />
   <Import Project="$(Build)ChaosLib.props" />
-  <Import Project="$(Build)ChaosDbg.MSBuild.props" />
+  <Import Project="$(Build)VsDock.props" />
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net472</TargetFramework>
     <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,9 +16,38 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="t4gen" Version="0.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="**\*.DotSettings" />
   </ItemGroup>
 
-  <Import Project="$(Build)ChaosDbg.MSBuild.targets" />
+  <ItemGroup>
+    <None Include="Modules\DependencyProperties.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>DependencyProperties.tt</DependentUpon>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Modules\DependencyProperties.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>DependencyProperties.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Modules\DependencyProperties.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>DependencyProperties.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
 
 </Project>

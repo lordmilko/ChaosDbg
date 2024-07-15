@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -84,6 +85,13 @@ namespace TestApp
 
                     while (true)
                         Thread.Sleep(1);
+
+                case TestType.DbgEngEngine_ChildProcess:
+                    var childProcess = Process.Start(Assembly.GetExecutingAssembly().Location, $"{TestType.CordbEngine_Thread_StackTrace_ManagedFrames} {args[1]}_Child");
+                    Console.WriteLine($"Started child process {childProcess.Id}");
+
+                    SignalReady();
+                    break;
 
                 default:
                     throw new NotImplementedException($"Don't know how to handle {nameof(TestType)} '{testType}'.");

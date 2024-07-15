@@ -46,7 +46,7 @@ namespace ChaosDbg.Cordb
 
             //Disable the use of NGEN images (zap is the original codename for NGEN) so that we can step
             //through them properly
-            options.EnvironmentVariables["COMPlus_ZapDisable"] = "1";
+            options.EnvironmentVariables[WellKnownEnvironmentVariable.COMPlus_ZapDisable] = "1";
             var environment = GetEnvironmentBytes();
 
             HRESULT hr;

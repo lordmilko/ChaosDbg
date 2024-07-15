@@ -1,10 +1,14 @@
+﻿using System;
 ﻿using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Metadata;
+using ChaosLib;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Serilog.Events;
 using TestApp;
 
 namespace ChaosDbg.Tests
@@ -69,7 +73,7 @@ namespace ChaosDbg.Tests
                         "Transition Frame",
                         "System.Threading.Thread.Sleep",
                         "TestApp.Program.SignalReady",
-                        "<>c.<Internal>b__1_0",
+                        "TestApp.CordbEngine_Thread_StackTrace+<>c.<Internal>b__1_0",
                         "[Runtime]",
                         "Transition Frame",
                         "[Runtime]",
@@ -320,7 +324,7 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "Native.x64!wmain+D6"));
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name is "Native.x86!wmain+C4" or "Native.x64!wmain+D6"));
                 },
                 useInterop: true,
                 native: true
@@ -402,6 +406,7 @@ namespace ChaosDbg.Tests
                     //in module names with underscores. Pity they didn't consider to treat
                     //periods as valid characters as well!
 
+                    var cdbName = cdbFrame.ToString();
                     var dbgEngName = deFrame.ToString();
 
                     var index = dbgEngName.IndexOf('!');
@@ -413,7 +418,14 @@ namespace ChaosDbg.Tests
                         for (var j = 0; j < index; j++)
                         {
                             if (chars[j] == '_')
+                            {
+                                //If the name actually is meant to contain an underscore, e.g. vcruntime140_clr0400.dll,
+                                //this will introduce an issue
+                                if (j < cdbName.Length && cdbName[j] == '_')
+                                    continue;
+
                                 chars[j] = '.';
+                            }
                         }
 
                         dbgEngName = new string(chars);
@@ -421,7 +433,7 @@ namespace ChaosDbg.Tests
 
                     //Because we now read the filename, we'll get KernelBase.dll
                     //while DbgEng will get KERNELBASE.dll
-                    Assert.AreEqual(cdbFrame.ToString(), dbgEngName, true);
+                    Assert.AreEqual(cdbName, dbgEngName, ignoreCase: true);
                 }
             }
         }

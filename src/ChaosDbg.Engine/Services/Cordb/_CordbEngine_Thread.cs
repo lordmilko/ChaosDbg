@@ -11,6 +11,10 @@ namespace ChaosDbg.Cordb
     {
         private void ThreadProc(LaunchTargetOptions options)
         {
+            //Unlike DbgEng, we don't really have any setup that we need to do; our CordbSessionInfo has been set,
+            //so let's go ahead and notify the user that engine is initialized
+            RaiseEngineInitialized();
+
             try
             {
                 CreateDebugTarget(options, Session.EngineCancellationToken);

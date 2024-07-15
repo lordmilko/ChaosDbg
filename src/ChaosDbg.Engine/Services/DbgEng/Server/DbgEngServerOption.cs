@@ -3,7 +3,11 @@ using ChaosLib;
 
 namespace ChaosDbg.DbgEng.Server
 {
-    class DbgEngServerOption
+    /// <summary>
+    /// Represents an argument that is specified when launching a debugger server that does not have an associaited value.
+    /// e.g. "hidden" in "tcp:port=1234,hidden"
+    /// </summary>
+    public class DbgEngServerOption
     {
         public StringEnum<DbgEngServerOptionKind> Kind { get; }
 

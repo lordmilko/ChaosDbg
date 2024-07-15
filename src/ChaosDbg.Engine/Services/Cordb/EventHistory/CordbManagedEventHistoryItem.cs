@@ -5,13 +5,9 @@ using ClrDebug;
 namespace ChaosDbg.Cordb
 {
     [DebuggerDisplay("[{EventType}] {DebuggerDisplay,nq}")]
-    class CordbManagedEventHistoryItem : ICordbEventHistoryItem
+    class CordbManagedEventHistoryItem : CordbEventHistoryItem
     {
         protected virtual string DebuggerDisplay => ManagedEventKind.ToString();
-
-        public CordbEventHistoryType EventType => CordbEventHistoryType.ManagedEvent;
-
-        public int EventThread { get; }
 
         public CorDebugManagedCallbackKind ManagedEventKind { get; }
 
@@ -36,10 +32,9 @@ namespace ChaosDbg.Cordb
             }
         }
 
-        protected CordbManagedEventHistoryItem(CorDebugManagedCallbackKind managedEventKind)
+        protected CordbManagedEventHistoryItem(CorDebugManagedCallbackKind managedEventKind) : base(CordbEventHistoryType.ManagedEvent)
         {
             ManagedEventKind = managedEventKind;
-            EventThread = Kernel32.GetCurrentThreadId();
         }
 
         public override string ToString() => DebuggerDisplay;

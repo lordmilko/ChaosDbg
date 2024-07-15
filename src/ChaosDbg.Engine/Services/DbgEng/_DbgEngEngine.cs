@@ -2,6 +2,7 @@
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using ClrDebug.DbgEng;
+using static ClrDebug.DbgEng.DEBUG_CLASS_QUALIFIER;
 
 namespace ChaosDbg.DbgEng
 {
@@ -21,19 +22,7 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         public bool IsEngineCancellationRequested => Session.IsEngineCancellationRequested;
 
-        public DebugClient ActiveClient
-        {
-            get
-            {
-                var tid = Thread.CurrentThread.ManagedThreadId;
-
-                if (tid == Session.EngineThreadId)
-                    return Session.EngineClient;
-
-                //If this isn't the UI Thread, UiClient will throw
-                return Session.UiClient;
-            }
-        }
+        public DebugClient ActiveClient => Session.ActiveClient;
 
         #region Services
 
@@ -52,10 +41,45 @@ namespace ChaosDbg.DbgEng
                 {
                     var debuggeeType = ActiveClient.Control.DebuggeeType;
 
-                    if (debuggeeType.Qualifier == DEBUG_CLASS_QUALIFIER.USER_WINDOWS_IDNA)
+                    if (debuggeeType.Class == DEBUG_CLASS.USER_WINDOWS && debuggeeType.Qualifier == DEBUG_CLASS_QUALIFIER.USER_WINDOWS_IDNA)
                         ttd = new DbgEngTtdServices(this);
                     else
-                        throw new InvalidOperationException($"TTD services cannot be used with a debuggee of type '{debuggeeType.Qualifier}'");
+                    {
+                        string qualifierStr;
+
+                        //Several enums share the same numeric value, so get the right string based on the class.
+                        //ToString() will not work, you have to use nameof instead
+                        switch (debuggeeType.Class)
+                        {
+                            case DEBUG_CLASS.KERNEL:
+                                qualifierStr = debuggeeType.Qualifier switch
+                                {
+                                    KERNEL_CONNECTION => nameof(KERNEL_CONNECTION),
+                                    KERNEL_LOCAL => nameof(KERNEL_LOCAL),
+                                    KERNEL_SMALL_DUMP => nameof(KERNEL_SMALL_DUMP),
+                                    KERNEL_FULL_DUMP => nameof(KERNEL_FULL_DUMP),
+                                    _ => debuggeeType.Qualifier.ToString()
+                                };
+                                break;
+
+                            case DEBUG_CLASS.USER_WINDOWS:
+                                qualifierStr = debuggeeType.Qualifier switch
+                                {
+                                    USER_WINDOWS_PROCESS => nameof(USER_WINDOWS_PROCESS),
+                                    USER_WINDOWS_PROCESS_SERVER => nameof(USER_WINDOWS_PROCESS_SERVER),
+                                    USER_WINDOWS_SMALL_DUMP => nameof(USER_WINDOWS_SMALL_DUMP),
+                                    USER_WINDOWS_DUMP => nameof(USER_WINDOWS_DUMP),
+                                    _ => debuggeeType.Qualifier.ToString()
+                                };
+                                break;
+
+                            default:
+                                qualifierStr = debuggeeType.Qualifier.ToString();
+                                break;
+                        }
+
+                        throw new InvalidOperationException($"TTD services cannot be used with a debuggee of type '{qualifierStr}'");
+                    }
                 }
 
                 return ttd;
@@ -73,11 +97,17 @@ namespace ChaosDbg.DbgEng
         #endregion
 
         private readonly DbgEngEngineServices services;
-        private readonly DbgEngEngineProvider engineProvider;
+        private readonly DebugEngineProvider engineProvider;
         private bool disposed;
 
-        public DbgEngEngine(DbgEngEngineServices services, DbgEngEngineProvider engineProvider)
+        public DbgEngEngine(DbgEngEngineServices services, DebugEngineProvider engineProvider)
         {
+            if (services == null)
+                throw new ArgumentNullException(nameof(services));
+
+            if (engineProvider == null)
+                throw new ArgumentNullException(nameof(engineProvider));
+
             this.services = services;
             this.engineProvider = engineProvider;
         }
@@ -85,18 +115,27 @@ namespace ChaosDbg.DbgEng
         /// <summary>
         /// Notifies the <see cref="EngineClient"/> that a command is available for processing.
         /// </summary>
-        internal void WakeEngineForInput() => Session.UiClient.ExitDispatch(Session.EngineClientRaw);
+        internal void WakeEngineForInput()
+        {
+            if (Session.EngineThreadId == Thread.CurrentThread.ManagedThreadId)
+                throw new InvalidOperationException("Engine should not be awoken from the engine thread");
 
-        [Obsolete("Do not call this method. Use DbgEngEngineProvider.CreateProcess() instead")]
+            Session.ActiveClient.ExitDispatch(Session.EngineClientRaw);
+        }
+
+        [Obsolete("Do not call this method. Use DebugEngineProvider.CreateProcess() instead")]
         void IDbgEngineInternal.CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        [Obsolete("Do not call this method. Use DbgEngEngineProvider.Attach() instead")]
+        [Obsolete("Do not call this method. Use DebugEngineProvider.Attach() instead")]
         void IDbgEngineInternal.Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        [Obsolete("Do not call this method. Use DbgEngEngineProvider.OpenDump() instead")]
+        [Obsolete("Do not call this method. Use DebugEngineProvider.OpenDump() instead")]
         void IDbgEngineInternal.OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken) =>
+            CreateSession(options, cancellationToken);
+
+        internal void ConnectServer(ServerTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
         private void CreateSession(LaunchTargetOptions options, CancellationToken cancellationToken)
@@ -105,9 +144,10 @@ namespace ChaosDbg.DbgEng
                 throw new InvalidOperationException($"Cannot launch target {options}: an existing session is already running.");
 
             Session = new DbgEngSessionInfo(
+                services,
                 () => ThreadProc(options),
 #pragma warning disable CS0618
-                services.SafeDebugCreate(options.UseDbgEngSymOpts ?? true), //g_Machine is protected by the DbgEngEngineProvider
+                services.SafeDebugCreate(options.UseDbgEngSymOpts ?? true), //g_Machine is protected by the DebugEngineProvider
 #pragma warning restore CS0618
                 options.DbgEngEngineId,
                 cancellationToken
@@ -120,7 +160,7 @@ namespace ChaosDbg.DbgEng
             {
                 //We want to be able to wait on the TCS with our CancellationToken, but this will result in an AggregateException being thrown on failure.
                 //GetAwaiter().GetResult() won't let you use your CancellationToken in conjunction with them
-                Session.TargetCreated.Task.Wait(cancellationToken);
+                Session.TargetCreated.Wait(cancellationToken);
             }
             catch (AggregateException ex)
             {

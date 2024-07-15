@@ -247,10 +247,8 @@ namespace ChaosDbg.Cordb
 
         IDbgProcessStore IDbgSessionInfo.Processes => externalProcessStore ??= new ExternalDbgProcessStore(Processes);
 
-        private ExternalDbgEventFilterStore externalEventFilterStore;
-
         /// <inheritdoc />
-        IDbgEventFilterStore IDbgSessionInfo.EventFilters => externalEventFilterStore ??= new ExternalDbgEventFilterStore(EventFilters);
+        IDbgEventFilterStore IDbgSessionInfo.EventFilters => EventFilters;
 
         #endregion
 

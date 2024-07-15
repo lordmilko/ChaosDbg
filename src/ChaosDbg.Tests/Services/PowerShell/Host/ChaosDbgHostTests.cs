@@ -99,7 +99,7 @@ namespace ChaosDbg.Tests
                 }
             };
 
-            ChaosShell.Start(terminal, "-noprofile", "-noninteractive");
+            ChaosShell.Start(GlobalProvider.ServiceProvider, "-noprofile", "-noninteractive");
 
             //Skip over the prompt at the start. The prompt at the end seems to not always be guaranteed based on our test (e.g. if we're doing a completion)
             var output = terminal.Output.Skip(1).ToArray();

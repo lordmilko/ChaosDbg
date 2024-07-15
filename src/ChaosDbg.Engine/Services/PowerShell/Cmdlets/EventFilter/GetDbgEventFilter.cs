@@ -12,7 +12,7 @@ namespace ChaosDbg.PowerShell.Cmdlets.EventFilter
 
         protected override void ProcessRecord()
         {
-            IEnumerable<IDbgEventFilter> filters = ActiveEngine.Session.EventFilters;
+            IEnumerable<DbgEventFilter> filters = ActiveEngine.Session.EventFilters;
 
             if (Name != null)
             {

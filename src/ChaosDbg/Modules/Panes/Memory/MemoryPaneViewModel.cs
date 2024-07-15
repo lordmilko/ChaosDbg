@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class MemoryPaneViewModel : ViewModelBase
     {
-        public MemoryPaneViewModel(DbgEngEngine engine)
+        public MemoryPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

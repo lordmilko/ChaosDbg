@@ -1,6 +1,5 @@
 ﻿using System;
 using ChaosDbg;
-using ChaosDbg.Cordb;
 
 namespace chaos.Cordb.Commands
 {
@@ -9,7 +8,7 @@ namespace chaos.Cordb.Commands
     {
         public EvaluateCommands(
             IConsole console,
-            CordbEngineProvider engineProvider) : base(console, engineProvider)
+            DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

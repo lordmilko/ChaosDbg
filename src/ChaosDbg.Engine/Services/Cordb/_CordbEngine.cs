@@ -8,7 +8,7 @@ namespace ChaosDbg.Cordb
 {
     //Engine startup/state/general code
 
-    public partial class CordbEngine : ICordbEngine, IDbgEngineInternal, IDisposable
+    public partial class CordbEngine : IDbgEngineInternal, IDisposable
     {
         #region State
 
@@ -26,11 +26,11 @@ namespace ChaosDbg.Cordb
         #endregion
 
         private readonly CordbEngineServices services;
-        private readonly CordbEngineProvider engineProvider;
+        private readonly DebugEngineProvider engineProvider;
         private object terminateLock = new object();
         private bool disposed;
 
-        public CordbEngine(CordbEngineServices services, CordbEngineProvider engineProvider)
+        public CordbEngine(CordbEngineServices services, DebugEngineProvider engineProvider)
         {
             //Ensure the right DbgHelp gets loaded before we need it
             services.NativeLibraryProvider.GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
@@ -39,15 +39,15 @@ namespace ChaosDbg.Cordb
             this.engineProvider = engineProvider;
         }
 
-        [Obsolete("Do not call this method. Use CordbEngineProvider.CreateProcess() instead")]
+        [Obsolete("Do not call this method. Use DebugEngineProvider.CreateProcess() instead")]
         void IDbgEngineInternal.CreateProcess(CreateProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        [Obsolete("Do not call this method. Use CordbEngineProvider.Attach() instead")]
+        [Obsolete("Do not call this method. Use DebugEngineProvider.Attach() instead")]
         void IDbgEngineInternal.Attach(AttachProcessTargetOptions options, CancellationToken cancellationToken) =>
             CreateSession(options, cancellationToken);
 
-        [Obsolete("Do not call this method. Use CordbEngineProvider.OpenDump() instead")]
+        [Obsolete("Do not call this method. Use DebugEngineProvider.OpenDump() instead")]
         void IDbgEngineInternal.OpenDump(OpenDumpTargetOptions options, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -75,7 +75,7 @@ namespace ChaosDbg.Cordb
             {
                 //We want to be able to wait on the TCS with our CancellationToken, but this will result in an AggregateException being thrown on failure.
                 //GetAwaiter().GetResult() won't let you use your CancellationToken in conjunction with them
-                Session.TargetCreated.Task.Wait(cancellationToken);
+                Session.TargetCreated.Wait(cancellationToken);
             }
             catch (AggregateException ex)
             {
@@ -295,7 +295,7 @@ namespace ChaosDbg.Cordb
         private void CheckIfDisposed()
         {
             if (disposed)
-                throw new ObjectDisposedException(nameof(CordbEngineProvider));
+                throw new ObjectDisposedException(nameof(CordbEngine));
         }
 
         #region IDbgEngine

@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class ThreadsPaneViewModel : ViewModelBase
     {
-        public ThreadsPaneViewModel(DbgEngEngine engine)
+        public ThreadsPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

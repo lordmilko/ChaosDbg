@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
+using ChaosDbg.DbgEng.Server;
+using ChaosDbg.TTD;
 using ChaosLib;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -20,15 +22,19 @@ namespace ChaosDbg.DbgEng
             {
                 //Clients can only be used on the thread that created them. Our UI Client is responsible for retrieving command inputs.
                 //The real client however exists on the engine thread here
-                Session.CreateEngineClient();
+                Session.CreateEngineClient(options);
 
                 //Sometimes we need to execute commands that only emit output to the output callbacks (e.g. OutputDisassemblyLines). Rather than pollute our normal output display,
                 //we define a special purpose "buffer client" that has its own output callbacks that write to an array.
                 Session.CreateBufferClient();
 
-                EngineClient.Control.EngineOptions =
-                    DEBUG_ENGOPT.INITIAL_BREAK | //Break immediately upon starting the debug session
+                var engineOpts =
                     DEBUG_ENGOPT.FINAL_BREAK;    //Break when the debug target terminates
+
+                if (options.InitialBreak)
+                    engineOpts |= DEBUG_ENGOPT.INITIAL_BREAK; //Break immediately upon starting the debug session
+
+                EngineClient.Control.EngineOptions = engineOpts;
 
                 //If we aren't allowing DbgEng to control DbgHelp options, our IAT hook for DbgHelp on DbgEng will intercept this
 
@@ -68,6 +74,10 @@ namespace ChaosDbg.DbgEng
                 //against the UI Client
                 EngineClient.InputCallbacks = this;
 
+                //We've about to launch our debug target. If the user wants to do any last minute customization of the debugger,
+                //now's their chance
+                RaiseEngineInitialized();
+
                 HRESULT hr;
 
                 switch (options.Kind)
@@ -82,6 +92,10 @@ namespace ChaosDbg.DbgEng
 
                     case LaunchTargetKind.OpenDump:
                         hr = TryOpenDump(options);
+                        break;
+
+                    case LaunchTargetKind.Server:
+                        hr = TryConnectServer(options);
                         break;
 
                     default:
@@ -99,13 +113,16 @@ namespace ChaosDbg.DbgEng
                         break;
                 }
 
+                Session.TargetCreated.SetResult();
+
                 //Enter the main engine loop. This method will not return until the debugger ends
                 EngineLoop();
             }
             catch (Exception ex)
             {
-                Session.TargetCreated.SetResult();
-                Session.BreakEvent.SetResult();
+                //If we already set these, all good
+                Session.TargetCreated.TrySetResult();
+                Session.BreakEvent.TrySetResult();
 
                 Log.Error<DbgEngEngine>(ex, "An unhandled exception occurred on the DbgEng Engine Thread: {message}", ex.Message);
 
@@ -125,8 +142,6 @@ namespace ChaosDbg.DbgEng
                  * is not very happy for some reason, which causes us to get an error. Thus, we have no choice but to set our TargetCreated event inside of the loop. This will be an issue if
                  * we allow launching the target without breaking initially, but we'll have to deal with that when that issue arises (currently we always break on the loader/attach breakpoint) */
 
-                var hasSetTargetCreated = false;
-
                 while (!IsEngineCancellationRequested)
                 {
                     try
@@ -140,12 +155,6 @@ namespace ChaosDbg.DbgEng
                         Debug.Assert(false, $"A {ex.GetType().Name} occurred while waiting for a DbgEng debug event. This most likely indicates an issue with a DbgHelp hook. The DbgEng engine lock most likely is still being held; any future attempts at interacting with DbgEng will hang");
 
                         throw;
-                    }
-
-                    if (!hasSetTargetCreated)
-                    {
-                        hasSetTargetCreated = true;
-                        Session.TargetCreated.SetResult();
                     }
 
                     //When disposing our debug session on the UI thread, we will cancel our CTS and then attempt to call DebugControl.SetInterrupt().
@@ -209,6 +218,8 @@ namespace ChaosDbg.DbgEng
 
             try
             {
+                //This _will_ execute prior to CreateProcessAndAttach() returning. While DbgEng may create a "pending process" in its bookkeeping, the actual
+                //process does exist
                 services.DbgEngNativeLibraryLoadCallback.HookCreateProcess = ctx =>
                 {
                     var si = (STARTUPINFOW*) ctx.Arg<IntPtr>("lpStartupInfo");
@@ -249,7 +260,7 @@ namespace ChaosDbg.DbgEng
                  * kernel32!Sleep and reducing the sleep amount */
                 var result = EngineClient.TryCreateProcessAndAttachWide(
                     0, options.CommandLine,
-                    DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS,
+                    DEBUG_CREATE_PROCESS.CREATE_NEW_CONSOLE | (options.DebugChildProcesses ? DEBUG_CREATE_PROCESS.DEBUG_PROCESS : DEBUG_CREATE_PROCESS.DEBUG_ONLY_THIS_PROCESS),
                     0,
                     DEBUG_ATTACH.DEFAULT
                 );
@@ -298,7 +309,33 @@ namespace ChaosDbg.DbgEng
 
             var hr = EngineClient.TryOpenDumpFile(options.DumpFile);
 
+#if DEBUG
+            if (options.HookTTD)
+            {
+                var replayEngine = TTD.ReplayEngine;
+
+                TTDTracer.Hook(replayEngine);
+            }
+#endif
+
             return hr;
+        }
+
+        private HRESULT TryConnectServer(LaunchTargetOptions options)
+        {
+            var info = options.ServerConnectionInfo;
+
+            if (info.Kind == DbgEngServerKind.Debugger)
+            {
+                //Already connected in CreateEngineClient()
+                return HRESULT.S_OK;
+            }
+            else
+            {
+                Debug.Assert(info.Kind == DbgEngServerKind.ProcessServer);
+                Session.EngineClient.ConnectProcessServer(info.ClientConnectionString);
+                throw new NotImplementedException("Handling a process server is not implemented. We need to both store the process server handle, and use it to then launch or attach to a process. It's not like a Debugger Server where you're just connecting to a server; you actually have to launch or attach to a process");
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ChaosDbg.DbgEng
 {
@@ -12,16 +12,16 @@ namespace ChaosDbg.DbgEng
         
         public DbgEngThread ActiveThread { get; set; }
 
-        private DbgEngProcess process;
+        private readonly DbgEngProcess process;
 
         public DbgEngThreadStore(DbgEngProcess process)
         {
             this.process = process;
         }
 
-        internal DbgEngThread Add(int userId, int systemId)
+        internal DbgEngThread Add(int userId, int systemId, long handle, long tebAddress)
         {
-            var thread = new DbgEngThread(userId, systemId);
+            var thread = new DbgEngThread(userId, systemId, handle, tebAddress, process);
             
             //If somehow we already have a thread with the specified system ID, this may
             //potentially indicate a bug and we'd like this to explode
@@ -50,7 +50,8 @@ namespace ChaosDbg.DbgEng
 
         public IEnumerator<DbgEngThread> GetEnumerator()
         {
-            throw new NotImplementedException();
+            lock (threadLock)
+                return ((IEnumerable<DbgEngThread>) threads.Values.ToArray()).GetEnumerator();
         }
 
         IEnumerator<IDbgThread> IDbgThreadStoreInternal.GetEnumerator() => GetEnumerator();

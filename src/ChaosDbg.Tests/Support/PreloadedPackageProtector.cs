@@ -6,7 +6,7 @@ namespace ChaosDbg.Tests
 {
     class PreloadedPackageProtector : IDisposable
     {
-        //During Application.Shutdown() it will call PreloadedPackages.Clear(). This causes the preloaded packages map to null.
+        //During Application.Shutdown() it will call PreloadedPackages.Clear(). This causes the preloaded packages map to be set to null.
         //PreloadedPackages is normally populated during static ctors, so it will never get re-populated again. As such, we must
         //store its contents before it is removed
         private static FieldInfo packagePairsField;

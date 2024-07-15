@@ -4,6 +4,7 @@ using System.Diagnostics;
 using ClrDebug;
 using ClrDebug.DbgEng;
 using static ChaosDbg.EventExtensions;
+using static ClrDebug.DbgEng.DbgEngExtensions;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.DbgEng
@@ -17,30 +18,33 @@ namespace ChaosDbg.DbgEng
         EventHandlerList IDbgEngineInternal.EventHandlers => EventHandlers;
 
         //These events are private so that external types cannot attempt to bind to them. All outside binding should go
-        //through DbgEngEngineProvider. We can't pass explicitly implemented event handlers so HandleUIEvent, so annoyingly
+        //through DebugEngineProvider. We can't pass explicitly implemented event handlers so HandleUIEvent, so annoyingly
         //we need to define "Raise" methods for all of them
         internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
 
+        private void RaiseEngineInitialized() =>
+            HandleUIEvent((EventHandler<EngineInitializedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineInitialized)], this, new EngineInitializedEventArgs(Session));
+
         private void RaiseEngineOutput(EngineOutputEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineOutput)], this, args);
+            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineOutput)], this, args);
 
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineStatusChanged)], this, args);
+            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineStatusChanged)], this, args);
 
         private void RaiseEngineFailure(EngineFailureEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.EngineFailure)], this, args);
+            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineFailure)], this, args);
 
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ModuleLoad)], this, args);
+            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleLoad)], this, args);
 
         private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ModuleUnload)], this, args);
+            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleUnload)], this, args);
 
         private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ThreadCreate)], this, args);
+            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadCreate)], this, args);
 
         private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DbgEngEngineProvider.ThreadExit)], this, args);
+            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadExit)], this, args);
 
         #endregion
         #region IDebugEventCallbacks
@@ -64,13 +68,16 @@ namespace ChaosDbg.DbgEng
 
         DEBUG_STATUS IDebugEventCallbacks.CreateThread(long handle, long dataOffset, long startOffset)
         {
+            //The 3 parameters that are sent to this callback are the 3 fields included in a CREATE_THREAD_DEBUG_INFO struct.
+            //dataOffset is in fact the address of the TEB
+
             Session.Processes.RefreshActiveProcess();
 
-            var userId = EngineClient.SystemObjects.EventThread;
-            var map = EngineClient.SystemObjects.GetThreadIdsByIndex(userId, 1);
-            var systemId = map.SysIds[0];
+            GetEventThreadInfo(out var userId, out var systemId);
 
-            var thread = ActiveProcess.Threads.Add(userId, systemId);
+            Session.EventHistory.Add(new DbgEngThreadCreateEventHistoryItem(Session.ActiveProcess.Id, systemId));
+
+            var thread = ActiveProcess.Threads.Add(userId, systemId, handle, dataOffset);
             
             RaiseThreadCreate(new EngineThreadCreateEventArgs(thread));
 
@@ -81,15 +88,9 @@ namespace ChaosDbg.DbgEng
         {
             Session.Processes.RefreshActiveProcess();
 
-            //We aren't passed the ThreadId, so we need to calculate it ourselves. NotifyExitThreadEvent() sets
-            //a field on g_EventThread to true. We need to somehow either get the system ID stored on g_EventThread or
-            //g_EventThreadSysId. I couldn't find a way to directly get either, so we'll get g_EventThread's user ID instead
-            var userId = EngineClient.SystemObjects.EventThread;
-            
-            //GetThreadIdsByIndex will return a mapping between the UserId we specified and the SystemId it corresponds to
-            var map = EngineClient.SystemObjects.GetThreadIdsByIndex(userId, 1);
+            GetEventThreadInfo(out _, out var systemId);
 
-            var systemId = map.SysIds[0];
+            Session.EventHistory.Add(new DbgEngThreadExitEventHistoryItem(Session.ActiveProcess.Id, systemId));
 
             var thread = ActiveProcess.Threads.Remove(systemId);
 
@@ -121,11 +122,20 @@ namespace ChaosDbg.DbgEng
         {
             Session.Processes.RefreshActiveProcess();
 
+            Session.EventHistory.Add(new DbgEngExitProcessEventHistoryItem(Session.ActiveProcess.Id));
+
+            Session.Processes.Remove(ActiveProcess);
+
+            return DEBUG_STATUS.NO_CHANGE;
+        }
+
         DEBUG_STATUS IDebugEventCallbacks.LoadModule(long imageFileHandle, long baseOffset, int moduleSize, string moduleName, string imageName, int checkSum, int timeDateStamp)
         {
             Session.Processes.RefreshActiveProcess();
 
             var module = ActiveProcess.Modules.Add(baseOffset, imageName, moduleName, moduleSize);
+
+            Session.EventHistory.Add(new DbgEngModuleLoadEventHistoryItem(module));
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
 
@@ -137,6 +147,8 @@ namespace ChaosDbg.DbgEng
             Session.Processes.RefreshActiveProcess();
 
             var module = ActiveProcess.Modules.Remove(baseOffset);
+
+            Session.EventHistory.Add(new DbgEngModuleUnloadEventHistoryItem(imageBaseName, baseOffset, ActiveProcess.Id));
 
             if (module != null)
                 RaiseModuleUnload(new EngineModuleUnloadEventArgs(module));
@@ -174,7 +186,7 @@ namespace ChaosDbg.DbgEng
             //into). However, sometimes DbgEng may be working on stuff internally that inadvertently
             //causes a ChangeEngineState() event to occur but we don't actually need to react to it yet.
             //When this is the case, the INSIDE_WAIT flag will be specified
-            bool hasInsideWait = (argument & DEBUG_STATUS.INSIDE_WAIT) != 0;
+            bool hasInsideWait = (argument & DEBUG_STATUS_FLAGS.INSIDE_WAIT) != 0;
 
             if (hasInsideWait == false)
             {
@@ -253,19 +265,30 @@ namespace ChaosDbg.DbgEng
 
         private EngineStatus ToEngineStatus(DEBUG_STATUS status)
         {
-            if (status == DEBUG_STATUS.NO_CHANGE || status == DEBUG_STATUS.NO_DEBUGGEE)
+            switch (status)
+            {
+                //I guess just keep whatever the existing status is?
+                case DEBUG_STATUS.NO_CHANGE:
+                    return Session?.Status ?? EngineStatus.None;
+
+                case DEBUG_STATUS.NO_DEBUGGEE:
                 return EngineStatus.None;
 
             //I think GO_HANDLED and GO_NOT_HANDLED relate to exception handling. GO_HANDLED is also generated when EndSession() is called
-            if (status == DEBUG_STATUS.GO || status == DEBUG_STATUS.REVERSE_GO || status == DEBUG_STATUS.GO_HANDLED)
-                return EngineStatus.Continue;
+                case DEBUG_STATUS.GO:
+                case DEBUG_STATUS.REVERSE_GO:
+                case DEBUG_STATUS.GO_HANDLED:
 
-            if (status == DEBUG_STATUS.BREAK)
-                return EngineStatus.Break;
+                //dbgeng!SetExecStepTrace will notify us of the fact we're planning to step
+                case DEBUG_STATUS.STEP_OVER:
+                case DEBUG_STATUS.STEP_INTO:
+                case DEBUG_STATUS.REVERSE_STEP_OVER:
+                case DEBUG_STATUS.REVERSE_STEP_INTO:
+                    return EngineStatus.Continue;
 
-            //dbgeng!SetExecStepTrace will notify us of the fact we're planning to step
-            if (status == DEBUG_STATUS.STEP_OVER || status == DEBUG_STATUS.STEP_INTO || status == DEBUG_STATUS.REVERSE_STEP_OVER || status == DEBUG_STATUS.REVERSE_STEP_INTO)
-                return EngineStatus.Continue;
+                case DEBUG_STATUS.BREAK:
+                    return EngineStatus.Break;
+            }
 
             throw new UnknownEnumValueException(status);
         }

@@ -6,13 +6,13 @@ using System.Linq;
 namespace ChaosDbg.Cordb
 {
     [DebuggerTypeProxy(typeof(CordbEventHistoryStoreDebugView))]
-    class CordbEventHistoryStore : IEnumerable<ICordbEventHistoryItem>
+    class CordbEventHistoryStore : IEnumerable<CordbEventHistoryItem>
     {
         private object objLock = new object();
 
         //Contains a list of all "important events" that have occurred during the life of the debugger,
         //be they managed/native callback occurrences, or reasons that the debugger event loop was told to stop.
-        private List<ICordbEventHistoryItem> history = new List<ICordbEventHistoryItem>();
+        private List<CordbEventHistoryItem> history = new List<CordbEventHistoryItem>();
 
         //Contains a list of all reasons that the debugger was ever told to stop. These events are also contained
         //in the main "history" list.
@@ -80,11 +80,11 @@ namespace ChaosDbg.Cordb
                 history.Add(item);
         }
 
-        public IEnumerator<ICordbEventHistoryItem> GetEnumerator()
+        public IEnumerator<CordbEventHistoryItem> GetEnumerator()
         {
             lock (objLock)
             {
-                return history.ToArray().Cast<ICordbEventHistoryItem>().GetEnumerator();
+                return ((IEnumerable<CordbEventHistoryItem>) history.ToArray()).GetEnumerator();
             }
         }
 

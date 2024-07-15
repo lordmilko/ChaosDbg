@@ -20,7 +20,7 @@ namespace ChaosDbg.Tests
 
     [TestClass]
     [DoNotParallelize]
-    public class CanvasTests
+    public class CanvasTests : BaseTest
     {
         [TestMethod]
         public void Canvas_ReadString()

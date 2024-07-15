@@ -1,6 +1,6 @@
 ﻿namespace ChaosDbg.DbgEng.Server
 {
-    enum DbgEngServerKind
+    public enum DbgEngServerKind
     {
         Debugger,
         ProcessServer

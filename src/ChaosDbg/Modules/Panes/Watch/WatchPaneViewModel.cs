@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class WatchPaneViewModel : ViewModelBase
     {
-        public WatchPaneViewModel(DbgEngEngine engine)
+        public WatchPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

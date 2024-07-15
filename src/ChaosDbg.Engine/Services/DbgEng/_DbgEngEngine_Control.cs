@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using ChaosDbg.DbgEng.Model;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -37,7 +38,17 @@ namespace ChaosDbg.DbgEng
         public string[] ExecuteBufferedCommand(Action<DebugClient> action) =>
             Session.EngineThread.Invoke(() => Session.ExecuteBufferedCommand(action));
 
-        public void WaitForBreak() => Session.BreakEvent.Task.Wait();
+        public void WaitForBreak(CancellationToken cancellationToken = default)
+        {
+            //We do not receive engine status events until we've waited for an initial debugger event,
+            //which means we'll race between CreateProcess() returning (which occurs as soon as the target
+            //has actually been created) and an actual WaitForEvent occurring
+
+            if (Session.Status != EngineStatus.Break)
+                Session.BreakEvent.Wait(cancellationToken);
+        }
+
+        public void Continue() => Invoke(c => c.Control.ExecutionStatus = DEBUG_STATUS.GO);
 
         #region Model
 

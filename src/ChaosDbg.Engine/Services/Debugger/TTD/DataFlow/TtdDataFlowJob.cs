@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using ChaosDbg.Disasm;
 using ChaosLib;
 using ClrDebug.TTD;
@@ -18,12 +19,12 @@ namespace ChaosDbg.TTD
             ParentEvent = parentEvent;
         }
 
-        internal IEnumerable<TtdDataFlowJob> EnumerateDataEvents(TtdDataFlowContext ctx)
+        internal IEnumerable<TtdDataFlowJob> EnumerateDataEvents(TtdDataFlowContext ctx, CancellationToken cancellationToken)
         {
             if (ctx.Cursor.GetPosition(ParentEvent.Thread.ThreadId) != ParentEvent.Position)
                 ctx.Cursor.SetPosition(ParentEvent.Position);
 
-            foreach (var item in EnumerateDataEventsInternal(ctx))
+            foreach (var item in EnumerateDataEventsInternal(ctx, cancellationToken))
             {
                 //If this item was resolved in the context of tracing the pointer that contained the actual value we're after,
                 //this child event now needs to be tagged as such as well
@@ -34,7 +35,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        protected virtual IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx)
+        protected virtual IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx, CancellationToken cancellationToken)
         {
             var instr = ParentEvent.Instruction.Instruction;
 
@@ -43,7 +44,7 @@ namespace ChaosDbg.TTD
                 case Mnemonic.Mov:
                 case Mnemonic.Movups:
                 case Mnemonic.Lea:
-                    foreach (var item in ProcessOp2(ctx))
+                    foreach (var item in ProcessOp2(ctx, cancellationToken))
                         yield return item;
                     break;
 
@@ -53,7 +54,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        private IEnumerable<TtdDataFlowJob> ProcessOp2(TtdDataFlowContext ctx)
+        private IEnumerable<TtdDataFlowJob> ProcessOp2(TtdDataFlowContext ctx, CancellationToken cancellationToken)
         {
             var instr = ParentEvent.Instruction.Instruction;
 
@@ -69,7 +70,14 @@ namespace ChaosDbg.TTD
             {
                 case OpKind.Register:
                     //The value in Op0 (which is either a register or a memory location) got its value from another register
-                    var result = TraceRegisterValue(ctx, instr.Op1Register, registerContext.GetRegisterValue<Int128>(instr.Op1Register), 1);
+                    var result = TraceRegisterValue(
+                        ctx: ctx,
+                        register: instr.Op1Register,
+                        currentRegisterContext: registerContext,
+                        futureRegisterValue: registerContext.GetRegisterValue<Int128>(instr.Op1Register),
+                        registerIndex: 1,
+                        cancellationToken: cancellationToken
+                    );
                     ParentEvent.Location = instr.Op1Register;
 
                     if (result != null)
@@ -197,8 +205,10 @@ namespace ChaosDbg.TTD
         internal unsafe TtdDataFlowJob TraceRegisterValue(
             TtdDataFlowContext ctx,
             Register register,
+            CrossPlatformContext currentRegisterContext,
             Int128 futureRegisterValue,
-            int registerIndex)
+            int registerIndex,
+            CancellationToken cancellationToken)
         {
             if (registerIndex != 1)
                 throw new NotImplementedException("Don't know how to handle a register index that is not 1");
@@ -228,33 +238,86 @@ namespace ChaosDbg.TTD
             while (true)
             {
                 var replayResult = ctx.Cursor.ReplayBackward(Position.Min, 1);
+        private bool ReverseStepOverInstr(
+            TtdDataFlowContext ctx,
+            Register register,
+            ref CrossPlatformContext previousContext,
+            Int128 futureRegisterValue,
+            out INativeInstruction currentInstr,
+            CancellationToken cancellationToken)
+        {
+            var replayResult = ctx.Cursor.ReplayBackward(Position.Min, 1);
 
-                if (replayResult.EventType != EventType.StepCount)
-                    throw new UnknownEnumValueException(replayResult.EventType);
+            if (replayResult.EventType != EventType.StepCount)
+                throw new UnknownEnumValueException(replayResult.EventType);
 
-                var registerContext = ctx.Cursor.GetCrossPlatformContext(ParentEvent.Thread.ThreadId);
+            var stepInPosition = ctx.Cursor.GetPosition();
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var stepRegisterContext = ctx.Cursor.GetCrossPlatformContext(ParentEvent.Thread.ThreadId);
+
+            ctx.Disassembler.BaseStream.Position = stepRegisterContext.IP;
+            var instr = ctx.Disassembler.Disassemble();
 
                 //Has the value in our target register changed yet?
                 var pastRegisterValue = registerContext.GetRegisterValue<Int128>(register);
 
+            if (stepRegisterContext.SP != previousContext.SP && instr.Instruction.Mnemonic == Mnemonic.Ret)
+            {
+                var watchpoint = new MemoryWatchpointData
+                {
+                    address = previousContext.IP - 1,
+                    size = 1,
+                    flags = BP_FLAGS.EXEC
+                };
+
+                //We just reverse stepped into a function call! Set a breakpoint on the instruction just before the instruction we were on before we rewound
+                ctx.Cursor.AddMemoryWatchpoint(watchpoint);
+
+                replayResult = ctx.Cursor.ReplayBackward(Position.Min, StepCount.Max);
+
+                ctx.Cursor.RemoveMemoryWatchpoint(watchpoint);
+
+                if (replayResult.EventType != 0)
+                    throw new UnknownEnumValueException(replayResult.EventType);
+
+                var watchpointContext = ctx.Cursor.GetCrossPlatformContext(ParentEvent.Thread.ThreadId);
+
+                var pastRegisterValue = watchpointContext.GetRegisterValue<Int128>(register);
+
                 if (pastRegisterValue != futureRegisterValue)
                 {
-                    //We found the point where the register value changed
-                    ctx.Disassembler.BaseStream.Position = registerContext.IP;
+                    //The value changed inside the function we just stepped over. Go back to where we were when we stepped over the function originally so we can
+                    //step through the function we reverse stepped into instruction by instruction
+                    ctx.Cursor.SetPosition(stepInPosition);
 
-                    ctx.SymbolManager.Update();
+                    previousContext = stepRegisterContext;
+                }
+                else
+                {
+                    //We don't need to step through the function we skipped over. The current context is the context from after we stepped back out of the function
+                    previousContext = watchpointContext;
 
-                    var instr = ctx.Disassembler.Disassemble();
-
-                    var name = ctx.SymbolManager.GetSymbol(registerContext);
-
-                    var dataFlowItem = new TtdDataFlowItem(ctx.TargetValue, name, ctx.Cursor.GetThreadInfo(), ctx.Cursor.GetPosition(), instr);
-
-                    ctx.ParentToRegisterContext[dataFlowItem] = registerContext;
-
-                    return new TtdDataFlowJob(dataFlowItem);
+                    //We're now on top of the call instruction. The next time the loop runs, we'll move to the instruction before it
                 }
             }
+            else
+            {
+                var pastRegisterValue = stepRegisterContext.GetRegisterValue<Int128>(register);
+
+                previousContext = stepRegisterContext;
+
+                if (pastRegisterValue != futureRegisterValue)
+                {
+                    //We found the point where the register value changed!
+                    currentInstr = instr;
+                    return true;
+                }
+            }
+
+            currentInstr = default;
+            return false;
         }
 
         protected unsafe TtdDataFlowItem TraceBufferValue(long address, TtdDataFlowContext ctx, int size)

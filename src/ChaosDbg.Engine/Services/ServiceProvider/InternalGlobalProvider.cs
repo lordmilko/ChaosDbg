@@ -65,8 +65,7 @@ namespace ChaosDbg
             var services = new ServiceCollection
             {
                 //Debug Engines
-                typeof(DbgEngEngineProvider),
-                typeof(CordbEngineProvider),
+                typeof(DebugEngineProvider),
 
                 //Debug Engine Service Collections
                 typeof(CordbEngineServices),

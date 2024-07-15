@@ -48,13 +48,17 @@ namespace ChaosDbg
             this.memoryReader = memoryReader;
         }
 
-        public RemotePeb(Process process) : this(GetPebAddress(process), new MemoryReader(process.Handle))
+        public RemotePeb(Process process) : this(process.Handle)
         {
         }
 
-        private static CLRDATA_ADDRESS GetPebAddress(Process process)
+        public RemotePeb(IntPtr hProcess) : this(GetPebAddress(hProcess), new MemoryReader(hProcess))
         {
-            var info = Ntdll.NtQueryInformationProcess<PROCESS_BASIC_INFORMATION>(process.Handle, PROCESSINFOCLASS.ProcessBasicInformation);
+        }
+
+        private static CLRDATA_ADDRESS GetPebAddress(IntPtr hProcess)
+        {
+            var info = Ntdll.NtQueryInformationProcess<PROCESS_BASIC_INFORMATION>(hProcess, PROCESSINFOCLASS.ProcessBasicInformation);
 
             return info.PebBaseAddress;
         }

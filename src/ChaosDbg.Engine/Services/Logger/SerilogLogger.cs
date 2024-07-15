@@ -16,6 +16,8 @@ using Log = ChaosLib.Log;
 
 /* This file is not included in ChaosDbg.Engine. To use this file, add Serilog as a dependency and then include this file manually in your client application */
 
+[assembly: DebuggerDisplay("{Properties[\"ThreadId\"]} {RenderMessage(),nq}", Target = typeof(LogEvent))]
+
 namespace ChaosDbg.Logger
 {
     class RetryHttpClientHandler : HttpClientHandler
@@ -37,6 +39,22 @@ namespace ChaosDbg.Logger
         }
     }
 
+#if DEBUG
+    class MemoryLogEventSink : ILogEventSink
+    {
+        public static readonly MemoryLogEventSink Instance = new MemoryLogEventSink();
+
+        internal List<LogEvent> events = new List<LogEvent>();
+        private object objLock = new object();
+
+        public void Emit(LogEvent logEvent)
+        {
+            lock (objLock)
+                events.Add(logEvent);
+        }
+    }
+#endif
+
     public class SerilogLogger : ILogger
     {
         public static void Install()
@@ -49,7 +67,12 @@ namespace ChaosDbg.Logger
                 .MinimumLevel.Verbose()
                 .Enrich.FromLogContext()
                 .Enrich.With(new SerilogDefaultEnricher())
-                .AuditTo.Seq("http://127.0.0.1:5341", messageHandler: new RetryHttpClientHandler()) //Use IP instead of localhost so there isn't a delay while Windows tries to resolve IPv6 first
+#if DEBUG
+                //Logging to Seq can be very slow, especially inside callbacks. Allow logging to a memory sink instead
+                //for intercepting debug events
+                //.AuditTo.Seq("http://127.0.0.1:5341", messageHandler: new RetryHttpClientHandler()) //Use IP instead of localhost so there isn't a delay while Windows tries to resolve IPv6 first
+                .AuditTo.Sink(MemoryLogEventSink.Instance, LogEventLevel.Debug)
+#endif
                 .CreateLogger();
 
             var serilogWrapper = new SerilogLogger(rawSerilogLogger);

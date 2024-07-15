@@ -18,14 +18,14 @@ namespace ChaosDbg.ViewModel
 
         private Font font;
 
-        private DbgEngEngineProvider engineProvider;
-        private DbgEngEngine engine => engineProvider.ActiveEngine;
+        private DebugEngineProvider engineProvider;
+        private IDbgEngine engine => engineProvider.ActiveEngine;
         private INativeDisassemblerProvider nativeDisassemblerProvider;
         private IPEFileProvider peFileProvider;
 
         public event EventHandler<AddressChangedEventArgs> AddressChanged;
 
-        public DisasmPaneViewModel(IThemeProvider themeProvider, DbgEngEngineProvider engineProvider, INativeDisassemblerProvider nativeDisassemblerProvider, IPEFileProvider peFileProvider)
+        public DisasmPaneViewModel(IThemeProvider themeProvider, DebugEngineProvider engineProvider, INativeDisassemblerProvider nativeDisassemblerProvider, IPEFileProvider peFileProvider)
         {
             font = themeProvider.GetTheme().ContentFont;
             this.engineProvider = engineProvider;
@@ -41,9 +41,9 @@ namespace ChaosDbg.ViewModel
             {
                 //We've broken into the debugger! Find out what module we're in, create a buffer for displaying disassembly
                 //and notify the UI that the active address of our buffer has changed
-                var addr = engine.ActiveClient.Control.Evaluate("@$scopeip", DEBUG_VALUE_TYPE.INT64).Value.I64;
+                var addr = ((DbgEngEngine) engine).ActiveClient.Control.Evaluate("@$scopeip", DEBUG_VALUE_TYPE.INT64).Value.I64;
 
-                var module = engine.Modules.GetModuleForAddress(addr);
+                var module = ((DbgEngEngine) engine).ActiveProcess.Modules.GetModuleForAddress(addr);
                 var navigator = GetNavigator(module.BaseAddress);
 
                 Buffer = new DbgEngDisasmTextBuffer(
@@ -60,13 +60,13 @@ namespace ChaosDbg.ViewModel
 
         private CodeNavigator GetNavigator(long baseAddress)
         {
-            var dbgEngStream = new DbgEngMemoryStream(engine.Session.UiClient);
+            var dbgEngStream = new DbgEngMemoryStream(((DbgEngEngine) engine).Session.ActiveClient);
             var relativeStream = new RelativeToAbsoluteStream(dbgEngStream, baseAddress);
             relativeStream.Seek(0, SeekOrigin.Begin);
 
             var peFile = peFileProvider.ReadStream(relativeStream, true);
 
-            var disasmEngine = nativeDisassemblerProvider.CreateDisassembler(dbgEngStream, engine.Target.Is32Bit);
+            var disasmEngine = nativeDisassemblerProvider.CreateDisassembler(dbgEngStream, engine.ActiveProcess.Is32Bit);
 
             var nav = new CodeNavigator(peFile, disasmEngine);
 

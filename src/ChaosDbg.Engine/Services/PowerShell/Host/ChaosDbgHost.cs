@@ -137,7 +137,22 @@ namespace ChaosDbg.PowerShell.Host
 
         private void OnCommandNotFound(object sender, CommandLookupEventArgs e)
         {
-            //throw new System.NotImplementedException();
+            //When PowerShell fails to resolve a given name, it will try again with the given value prefixed by "get-"
+            if (e.CommandName.StartsWith("get-"))
+                return;
+
+            //If we have any arguments, we know there was a space between the command name and the arguments (hence how these values were able to be stored in $args in the first place)
+            //But if we don't have any arguments, don't add a space after the command name; 'dx' is a valid command, 'dx ' is not and will give an error that an expression was missing
+            e.CommandScriptBlock = ScriptBlock.Create($@"
+if($args)
+{{
+    Invoke-DbgCommand ('{e.CommandName}' + ' ' + $args)
+}}
+else
+{{
+    Invoke-DbgCommand '{e.CommandName}'
+}}
+");
         }
 
         private void OnPreCommandLookup(object sender, CommandLookupEventArgs e)

@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class LocalsPaneViewModel : ViewModelBase
     {
-        public LocalsPaneViewModel(DbgEngEngine engine)
+        public LocalsPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

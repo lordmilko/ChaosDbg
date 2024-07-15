@@ -6,5 +6,6 @@
         AttachProcess,
         OpenDump,
         Kernel,
+        Server
     }
 }

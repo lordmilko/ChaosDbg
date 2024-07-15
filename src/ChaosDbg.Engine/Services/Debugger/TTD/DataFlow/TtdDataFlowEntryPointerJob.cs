@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 
 namespace ChaosDbg.TTD
 {
@@ -12,7 +13,7 @@ namespace ChaosDbg.TTD
             this.address = address;
         }
 
-        protected override IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx)
+        protected override IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx, CancellationToken cancellationToken)
         {
             var item = TraceBufferValue(address, ctx, ctx.ValueSize);
 

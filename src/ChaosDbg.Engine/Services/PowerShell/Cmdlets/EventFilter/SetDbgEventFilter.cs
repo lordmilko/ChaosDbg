@@ -17,7 +17,7 @@ namespace ChaosDbg.PowerShell.Cmdlets.EventFilter
             throw new NotImplementedException();
         }
 
-        private IDbgEventFilter GetSingleFilter()
+        private DbgEventFilter GetSingleFilter()
         {
             var filter = ActiveEngine.Session.EventFilters.FirstOrDefault(e => Name.Equals(e.Alias, StringComparison.OrdinalIgnoreCase));
 

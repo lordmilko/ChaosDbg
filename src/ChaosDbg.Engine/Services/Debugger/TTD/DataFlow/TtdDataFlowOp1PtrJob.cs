@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using Iced.Intel;
 
 namespace ChaosDbg.TTD
@@ -11,7 +12,7 @@ namespace ChaosDbg.TTD
         {
         }
 
-        protected override IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx)
+        protected override IEnumerable<TtdDataFlowJob> EnumerateDataEventsInternal(TtdDataFlowContext ctx, CancellationToken cancellationToken)
         {
             var instr = ParentEvent.Instruction.Instruction;
 
@@ -35,7 +36,12 @@ namespace ChaosDbg.TTD
                     if (instr.MemoryIndex != Register.None)
                         yield break;
 
-                    job = TraceRegisterValue(ctx, instr.MemoryBase, registerValue, 1);
+                    job = TraceRegisterValue(
+                        ctx: ctx,
+                        register: instr.MemoryBase,
+                        currentRegisterContext: registerContext,
+                        futureRegisterValue: registerValue, 1, cancellationToken
+                    );
 
                     if (job == null)
                         yield break;

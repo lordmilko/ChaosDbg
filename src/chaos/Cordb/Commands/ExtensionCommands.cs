@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
-using ChaosDbg.Cordb;
+using ChaosDbg;
 using ChaosLib;
 using IConsole = ChaosDbg.IConsole;
 
@@ -8,7 +8,7 @@ namespace chaos.Cordb.Commands
 {
     class ExtensionCommands : CommandBase
     {
-        public ExtensionCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
+        public ExtensionCommands(IConsole console, DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

@@ -33,7 +33,7 @@ namespace ChaosDbg.DbgEng
 
             lock (moduleLock)
             {
-                var module = new DbgEngModule(baseAddress, imageName, moduleName, moduleSize, peFile);
+                var module = new DbgEngModule(baseAddress, imageName, moduleName, moduleSize, process, peFile);
 
                 //If somehow the same module is loaded at the same address multiple times without being unloaded, this may potentially
                 //indicate a bug and we'd like this to explode

@@ -48,25 +48,46 @@ namespace ChaosDbg.DbgEng.Server
             Debug.Assert(activeClients.Count == 0, $"Had {activeClients.Count} outstanding {nameof(DbgEngRemoteClient)} objects. All DebugClient objects must be properly disposed prior to unloading DbgEng");
         }
 
-        public DbgEngServerInfo[] GetServers()
+        public DbgEngServerConnectionInfo[] GetServers()
         {
             var rawServers = output.Capture(
                 () => debugClient.OutputServers(DEBUG_OUTCTL.THIS_CLIENT, Environment.MachineName, DEBUG_SERVERS.ALL)
             );
 
-            var servers = new DbgEngServerInfo[rawServers.Length];
+            var servers = new DbgEngServerConnectionInfo[rawServers.Length];
 
             for (var i = 0; i < rawServers.Length; i++)
-                servers[i] = new DbgEngServerInfo(rawServers[i]);
+                servers[i] = new DbgEngServerConnectionInfo(rawServers[i]);
 
             return servers;
         }
 
-        public DbgEngRemoteClient CreateDebuggerServer(DbgEngServerProtocol protocol, DbgEngServerOption[] serverOptions, string commandLine)
+        public void CreateInProcDebuggerServer(DbgEngServerOptionsModel options)
+        {
+            var connectionString = options.CreateConnectionString(DbgEngServerKind.Debugger);
+
+            debugClient.StartServer(connectionString);
+
+            //In order to end the server you have to call .endsrv using the server ID which is only returned from .servers.
+            //Haven't found a way to get the ID programmatically yet
+        }
+
+        public void CreateInProcProcessServer(DbgEngServerOptionsModel options)
+        {
+            var connectionString = options.CreateConnectionString(DbgEngServerKind.ProcessServer);
+
+            //Apparently the only one that is supported is USER_WINDOWS
+            debugClient.StartProcessServer(DEBUG_CLASS.USER_WINDOWS, connectionString, IntPtr.Zero);
+
+            debugClient.WaitForProcessServerEnd(Kernel32.INFINITE);
+            debugClient.EndSession(DEBUG_END.END_REENTRANT);
+        }
+
+        public DbgEngRemoteClient CreateOutOfProcDebuggerServer(DbgEngServerProtocol protocol, DbgEngServerOption[] serverOptions, string commandLine)
         {
             KillStaleServers();
 
-            var info = new DbgEngServerInfo(DbgEngServerKind.Debugger, protocol, serverOptions);
+            var info = new DbgEngServerConnectionInfo(DbgEngServerKind.Debugger, protocol, serverOptions);
 
             var si = new STARTUPINFOW
             {
@@ -124,7 +145,7 @@ namespace ChaosDbg.DbgEng.Server
             }
         }
 
-        private void WaitForServerStartup(DbgEngServerInfo info)
+        private void WaitForServerStartup(DbgEngServerConnectionInfo info)
         {
             var targetPipe = info[DbgEngServerOptionKind.Pipe];
 
@@ -168,9 +189,15 @@ namespace ChaosDbg.DbgEng.Server
             throw new TimeoutException("Timed out waiting for debug server target to initialize");
         }
 
-        public DbgEngRemoteClient CreateDebuggerServer(string commandLine)
+        /// <summary>
+        /// Creates an out-of-process debugger server (using cdb) that launches and attaches
+        /// to a brand new proess.
+        /// </summary>
+        /// <param name="commandLine">The command line value that should be used to launch the new process.</param>
+        /// <returns>A <see cref="DbgEngRemoteClient"/> that provides facilities for interacting with the remote server.</returns>
+        public DbgEngRemoteClient CreateOutOfProcDebuggerServer(string commandLine)
         {
-            return CreateDebuggerServer(
+            return CreateOutOfProcDebuggerServer(
                 DbgEngServerProtocol.NamedPipe,
                 new DbgEngServerOption[]
                 {
@@ -180,8 +207,13 @@ namespace ChaosDbg.DbgEng.Server
             );
         }
 
-        public DbgEngRemoteClient CreateDebuggerServer(int debuggeePID) =>
-            CreateDebuggerServer($"-pv -p {debuggeePID} -c \"~*m\"");
+        /// <summary>
+        /// Creates an out-of-process debugger server (using cdb) that attaches to a given process.
+        /// </summary>
+        /// <param name="debuggeePID">The process ID of the process to attach to.</param>
+        /// <returns>A <see cref="DbgEngRemoteClient"/> that provides facilities for interacting with the remote server.</returns>
+        public DbgEngRemoteClient CreateOutOfProcDebuggerServer(int debuggeePID) =>
+            CreateOutOfProcDebuggerServer($"-pv -p {debuggeePID} -c \"~*m\"");
 
         internal void Remove(DbgEngRemoteClient client) => activeClients.Remove(client);
 
@@ -203,7 +235,7 @@ namespace ChaosDbg.DbgEng.Server
                 if (args[1] == "-server" && args[2].StartsWith($"npipe:server={Environment.MachineName},pipe=ChaosDbg_"))
                 {
                     //It's a server that we created
-                    var info = new DbgEngServerInfo(DbgEngServerKind.Debugger, args[2]);
+                    var info = new DbgEngServerConnectionInfo(DbgEngServerKind.Debugger, args[2]);
 
                     var pipeOption = info[DbgEngServerOptionKind.Pipe];
 

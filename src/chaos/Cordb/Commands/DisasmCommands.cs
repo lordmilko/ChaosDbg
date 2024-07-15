@@ -18,7 +18,7 @@ namespace chaos.Cordb.Commands
 
         public DisasmCommands(
             IConsole console,
-            CordbEngineProvider engineProvider,
+            DebugEngineProvider engineProvider,
             ConsoleDisasmWriter consoleDisasmWriter) : base(console, engineProvider)
         {
             this.consoleDisasmWriter = consoleDisasmWriter;

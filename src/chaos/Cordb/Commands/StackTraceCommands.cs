@@ -7,7 +7,7 @@ namespace chaos.Cordb.Commands
 {
     class StackTraceCommands : CommandBase
     {
-        public StackTraceCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
+        public StackTraceCommands(IConsole console, DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
         

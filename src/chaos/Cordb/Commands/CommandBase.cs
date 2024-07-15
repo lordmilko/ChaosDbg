@@ -7,10 +7,10 @@ namespace chaos.Cordb.Commands
     {
         protected IConsole Console { get; }
 
-        private CordbEngineProvider engineProvider;
-        protected CordbEngine engine => engineProvider.ActiveEngine;
+        private DebugEngineProvider engineProvider;
+        protected CordbEngine engine => (CordbEngine) engineProvider.ActiveEngine;
 
-        protected CommandBase(IConsole console, CordbEngineProvider engineProvider)
+        protected CommandBase(IConsole console, DebugEngineProvider engineProvider)
         {
             Console = console;
             this.engineProvider = engineProvider;

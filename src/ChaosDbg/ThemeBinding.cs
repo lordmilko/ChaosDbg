@@ -25,6 +25,8 @@ namespace ChaosDbg
 
         public static Brush WindowBackgroundBrush => GetOrAddBrush(Theme.WindowBackgroundColor);
 
+        public static Brush DockPreviewBackgroundColor => GetOrAddBrush(Theme.DockPreviewBackgroundColor);
+
         private static Brush GetOrAddBrush(Color color, [CallerMemberName] string callerMemberName = null)
         {
             Debug.Assert(callerMemberName != null);

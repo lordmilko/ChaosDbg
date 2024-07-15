@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Metadata;
 
 namespace ChaosDbg
@@ -22,6 +23,7 @@ namespace ChaosDbg
         protected LaunchTargetOptions(LaunchTargetKind kind)
         {
             Kind = kind;
+            InitialBreak = true;
         }
 
         #region Create
@@ -74,8 +76,41 @@ namespace ChaosDbg
             set => SetProperty(value);
         }
 
+#if DEBUG
+        [Dump]
+        public bool HookTTD
+        {
+            get => GetProperty<bool>();
+            set => SetProperty(value);
+        }
+#endif
+
+        #endregion
+        #region Server
+
+        [Server]
+        public DbgEngServerConnectionInfo ServerConnectionInfo
+        {
+            get => GetProperty<DbgEngServerConnectionInfo>();
+            set => SetProperty(value);
+        }
+
         #endregion
         #region DbgEng
+
+        [Attach(DbgEngineKind.DbgEng)]
+        public bool InitialBreak
+        {
+            get => GetProperty<bool>();
+            set => SetProperty(value);
+        }
+
+        [Attach(DbgEngineKind.DbgEng)]
+        public bool DebugChildProcesses
+        {
+            get => GetProperty<bool>();
+            set => SetProperty(value);
+        }
 
         [Attach(DbgEngineKind.DbgEng)]
         public bool NonInvasive
@@ -207,6 +242,10 @@ namespace ChaosDbg
         }
 
         class DumpAttribute : Attribute
+        {
+        }
+
+        class ServerAttribute : Attribute
         {
         }
 

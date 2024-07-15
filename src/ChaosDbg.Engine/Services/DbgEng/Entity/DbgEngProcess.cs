@@ -12,6 +12,8 @@ namespace ChaosDbg.DbgEng
         /// <inheritdoc />
         public bool Is32Bit { get; }
 
+        public string Name { get; internal set; }
+
         /// <inheritdoc />
         public string[] CommandLine { get; }
 
@@ -23,6 +25,11 @@ namespace ChaosDbg.DbgEng
 
         /// <inheritdoc cref="IDbgProcess.Modules" />
         public DbgEngModuleStore Modules { get; }
+
+        #endregion
+        #region Services
+
+        internal DbgEngMemoryReader MemoryReader { get; }
 
         #endregion
         #region Debugger State
@@ -43,6 +50,7 @@ namespace ChaosDbg.DbgEng
         {
             Id = processId;
             Is32Bit = is32Bit;
+            MemoryReader = new DbgEngMemoryReader(this);
 
             if (commandLine != null)
                 CommandLine = Shell32.CommandLineToArgvW(commandLine);
@@ -66,5 +74,13 @@ namespace ChaosDbg.DbgEng
         IDbgModuleStore IDbgProcess.Modules => externalModuleStore ??= new ExternalDbgModuleStore(Modules);
 
         #endregion
+
+        public override string ToString()
+        {
+            if (CommandLine != null)
+                return string.Join(" ", CommandLine);
+
+            return base.ToString();
+        }
     }
 }

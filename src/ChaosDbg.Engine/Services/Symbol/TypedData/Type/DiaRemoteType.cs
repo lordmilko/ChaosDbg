@@ -47,5 +47,10 @@ namespace ChaosDbg.TypedData
             DiaSymbol = diaSymbol;
             Fields = new DiaRemoteFieldInfoCollection(this);
         }
+
+        public override string ToString()
+        {
+            return Name;
+        }
     }
 }

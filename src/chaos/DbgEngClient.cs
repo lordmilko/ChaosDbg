@@ -1,23 +1,23 @@
 ﻿using System;
-using System.Threading;
+using System.Diagnostics;
 using ChaosDbg;
 using ChaosDbg.DbgEng;
-using ClrDebug;
 using ClrDebug.DbgEng;
 
 namespace chaos
 {
     class DbgEngClient : IDisposable
     {
-        private DbgEngEngineProvider engineProvider;
+        private DebugEngineProvider engineProvider;
+        private Stopwatch sw = new Stopwatch();
 
-        public DbgEngClient(IConsole console, DbgEngEngineProvider engineProvider)
+        public DbgEngClient(IConsole console, DebugEngineProvider engineProvider)
         {
             Console = console;
             this.engineProvider = engineProvider;
         }
 
-        private DbgEngEngine engine => engineProvider.ActiveEngine;
+        private DbgEngEngine engine => (DbgEngEngine) engineProvider.ActiveEngine;
 
         protected IConsole Console { get; }
 
@@ -25,12 +25,13 @@ namespace chaos
         {
             Console.RegisterInterruptHandler(Console_CancelKeyPress);
 
-            engineProvider = GlobalProvider.ServiceProvider.GetService<DbgEngEngineProvider>();
+            engineProvider = GlobalProvider.ServiceProvider.GetService<DebugEngineProvider>();
             engineProvider.EngineOutput += Engine_EngineOutput;
 
             engineProvider.EngineFailure += (s, e) => Console.WriteColorLine($"FATAL: {e.Exception}", ConsoleColor.Red);
 
-            engineProvider.CreateProcess(executable, minimized);
+            sw.Start();
+            engineProvider.DbgEng.CreateProcess(executable, minimized);
 
             EngineLoop();
         }
@@ -50,9 +51,9 @@ namespace chaos
 
         private void InputLoop()
         {
-            var client = engine.Session.UiClient;
+            var client = engine.Session.ActiveClient;
 
-            while (engine.ActiveProcess.Status == EngineStatus.Break)
+            while (engine.Session.Status == EngineStatus.Break)
             {
                 client.Control.OutputPrompt(DEBUG_OUTCTL.ALL_CLIENTS | DEBUG_OUTCTL.NOT_LOGGED, " ");
 
@@ -76,7 +77,7 @@ namespace chaos
 
         private void Engine_EngineOutput(object sender, EngineOutputEventArgs e)
         {
-            Console.Write(e.Text);
+            Console.Write(sw.Elapsed + " " + e.Text);
         }
 
         public void Dispose()

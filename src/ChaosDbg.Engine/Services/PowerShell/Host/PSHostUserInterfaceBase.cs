@@ -30,7 +30,7 @@ namespace ChaosDbg.PowerShell.Host
         public override PSHostRawUserInterface RawUI { get; }
 
         protected PSHostBase host;
-        private ITerminal terminal;
+        protected ITerminal terminal;
         private SMA.PowerShell commandCompletionPowerShell;
         private ProgressPane progressPane;
 
@@ -40,7 +40,7 @@ namespace ChaosDbg.PowerShell.Host
         internal bool NoPrompt { get; set; }
 
         internal bool ReadFromStdin { get; set; }
-        
+
         /// <summary>
         /// True if command completion is currently running.
         /// </summary>
@@ -638,9 +638,29 @@ namespace ChaosDbg.PowerShell.Host
             terminal.WriteConsole(value, false);
         }
 
+        public override void WriteLine(ConsoleColor foregroundColor, ConsoleColor backgroundColor, string value) =>
+            Write(foregroundColor, backgroundColor, value + "\n");
+
         public override void Write(ConsoleColor foregroundColor, ConsoleColor backgroundColor, string value)
         {
-            throw new NotImplementedException();
+            terminal.LockProtection(() =>
+            {
+                var fg = RawUI.ForegroundColor;
+                var bg = RawUI.BackgroundColor;
+
+                RawUI.ForegroundColor = foregroundColor;
+                RawUI.BackgroundColor = backgroundColor;
+
+                try
+                {
+                    terminal.WriteConsole(value, false);
+                }
+                finally
+                {
+                    RawUI.ForegroundColor = fg;
+                    RawUI.BackgroundColor = bg;
+                }
+            });
         }
 
         public override void WriteLine(string value)
@@ -650,7 +670,10 @@ namespace ChaosDbg.PowerShell.Host
 
         public override void WriteErrorLine(string value)
         {
-            //throw new NotImplementedException();
+            if (string.IsNullOrEmpty(value))
+                return;
+
+            WriteLine(ConsoleColor.Red, Console.BackgroundColor, value);
         }
 
         public override void WriteDebugLine(string message)

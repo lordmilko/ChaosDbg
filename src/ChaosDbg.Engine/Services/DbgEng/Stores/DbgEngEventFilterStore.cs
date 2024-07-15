@@ -1,28 +1,44 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using ChaosDbg.Cordb;
+using ChaosDbg.Debugger;
+using ChaosLib;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
 {
-    public class DbgEngEventFilterStore : IDbgEventFilterStoreInternal, IEnumerable<DbgEngEventFilter>
+    public class DbgEngEventFilterStore : IDbgEventFilterStore
     {
         private object eventFilterLock = new object();
 
         private DbgEngSessionInfo session;
-        private List<DbgEngEventFilter> filters;
+        private List<DbgEventFilter> filters;
 
-        private Dictionary<string, string> eventFilterAbbreviationMap;
+        private Dictionary<string, string> nameToAliasMap;
 
-        private Dictionary<string, string> EventFilterAbbreviationMap
+        private Dictionary<string, string> NameToAliasMap
         {
             get
             {
-                if (eventFilterAbbreviationMap == null)
-                    eventFilterAbbreviationMap = CordbEventFilterStore.GetEventFilterMap();
+                if (nameToAliasMap == null)
+                    nameToAliasMap = CordbEventFilterStore.GetEventFilterMap();
 
-                return eventFilterAbbreviationMap;
+                return nameToAliasMap;
+            }
+        }
+
+        private Dictionary<WellKnownEventFilter, string> wellKnownEventFilterToAliasMap;
+
+        private Dictionary<WellKnownEventFilter, string> WellKnownEventFilterToAliasMap
+        {
+            get
+            {
+                if (wellKnownEventFilterToAliasMap == null)
+                    wellKnownEventFilterToAliasMap = Enum.GetValues(typeof(WellKnownEventFilter)).Cast<WellKnownEventFilter>().ToDictionary(v => v, v => v.GetDescription());
+
+                return wellKnownEventFilterToAliasMap;
             }
         }
 
@@ -69,7 +85,7 @@ namespace ChaosDbg.DbgEng
                 filters = null;
         }
 
-        private DbgEngEventFilter GetEventFilter(DebugControl control, in DEBUG_SPECIFIC_FILTER_PARAMETERS filter, int index)
+        private DbgEventFilter GetEventFilter(DebugControl control, in DEBUG_SPECIFIC_FILTER_PARAMETERS filter, int index)
         {
             string command = null;
             string argument = null;
@@ -84,53 +100,75 @@ namespace ChaosDbg.DbgEng
                 argument = control.GetSpecificEventFilterArgument(index);
 
             //There's no way to get the abbreviated name from DbgEng. Thus, the best we can do is use pre-recorded information
-            EventFilterAbbreviationMap.TryGetValue(text, out var alias);
+            NameToAliasMap.TryGetValue(text, out var alias);
 
-            var result = new DbgEngEngineEventFilter(index, text, alias, filter, command, argument);
+            var result = new DbgEngineEventFilter(index, text, alias, filter.ExecutionOption, filter.ContinueOption, command, argument);
 
             return result;
         }
 
-        public void Update(DbgEngEventFilter eventFilter)
+        public void SetEventFilter(
+            DbgEngineEventFilter eventFilter,
+            DEBUG_FILTER_EXEC_OPTION? execOption = null,
+            DEBUG_FILTER_CONTINUE_OPTION? continueOption = null,
+            string argument = null,
+            string command = null)
         {
-            var control = session.EngineClient.Control;
-
-            //DbgEng just looks at the execution and continue options, so we can synthesize a fake set of params
-
-            if (eventFilter is DbgEngEngineEventFilter e)
+            session.EngineThread.Invoke(() =>
             {
-                control.SetSpecificFilterParameters(eventFilter.Index, 1, new[]
+                var control = session.EngineClient.Control;
+
+                if (execOption != null || continueOption != null)
                 {
-                    new DEBUG_SPECIFIC_FILTER_PARAMETERS
+                    control.SetSpecificFilterParameters(eventFilter.Index, 1, new[]
                     {
-                        ExecutionOption = eventFilter.ExecutionOption,
-                        ContinueOption = eventFilter.ContinueOption
-                    }
-                });
+                        //DbgEng just looks at the execution and continue options, so we can synthesize a fake set of params
 
-                control.SetSpecificEventFilterArgument(eventFilter.Index, e.Argument);
-            }
-            else
+                        new DEBUG_SPECIFIC_FILTER_PARAMETERS
+                        {
+                            ExecutionOption = execOption ?? eventFilter.ExecutionOption,
+                            ContinueOption = continueOption ?? eventFilter.ContinueOption
+                        }
+                    });
+                }
+
+                //We interpret a null argument as being "not specified", and string.Empty as "remove the argument".
+                //DbgEng however treats null as being "remove the argument", so we must transform it
+                if (argument != null)
+                    control.SetSpecificEventFilterArgument(eventFilter.Index, argument == string.Empty ? null : argument);
+            });
+        }
+
+        public void SetEventFilter(
+            DbgExceptionEventFilter eventFilter,
+            DEBUG_FILTER_EXEC_OPTION? execOption = null,
+            DEBUG_FILTER_CONTINUE_OPTION? continueOption = null,
+            string command = null,
+            string secondCommand = null)
+        {
+            session.EngineThread.Invoke(() =>
             {
-                var ex = (DbgEngExceptionEventFilter) eventFilter;
+                var control = session.EngineClient.Control;
 
                 control.SetExceptionFilterParameters(1, new[]
                 {
                     new DEBUG_EXCEPTION_FILTER_PARAMETERS
                     {
-                        ExceptionCode = ex.Code,
-                        ExecutionOption = ex.ExecutionOption,
-                        ContinueOption = ex.ContinueOption
+                        ExceptionCode = eventFilter.Code,
+                        ExecutionOption = execOption ?? eventFilter.ExecutionOption,
+                        ContinueOption = continueOption ?? eventFilter.ContinueOption
                     }
                 });
 
-                control.SetExceptionFilterSecondCommand(eventFilter.Index, ex.SecondCommand);
-            }
+                if (command != null)
+                    control.SetEventFilterCommand(eventFilter.Index, command == string.Empty ? null : command);
 
-            control.SetEventFilterCommand(eventFilter.Index, eventFilter.Command);
+                if (secondCommand != null)
+                    control.SetExceptionFilterSecondCommand(eventFilter.Index, secondCommand);
+            });
         }
 
-        private DbgEngEventFilter GetExceptionFilter(DebugControl control, in DEBUG_EXCEPTION_FILTER_PARAMETERS filter, int index)
+        private DbgEventFilter GetExceptionFilter(DebugControl control, in DEBUG_EXCEPTION_FILTER_PARAMETERS filter, int index)
         {
             string command = null;
             string secondCommand = null;
@@ -143,56 +181,95 @@ namespace ChaosDbg.DbgEng
 
             var text = control.GetEventFilterText(index);
 
-            EventFilterAbbreviationMap.TryGetValue(text, out var alias);
+            NameToAliasMap.TryGetValue(text, out var alias);
 
-            var result = new DbgEngExceptionEventFilter(index, text, alias, filter, command, secondCommand);
+            var result = new DbgExceptionEventFilter(index, text, alias, filter.ExecutionOption, filter.ContinueOption, filter.ExceptionCode, command, secondCommand);
 
             return result;
         }
 
-        public IEnumerator<DbgEngEventFilter> GetEnumerator()
+        public void SetArgument(WellKnownEventFilter kind, string argumentValue)
         {
-            lock (eventFilterLock)
+            //This method will call the ChangeEngineState() event callback, which will dispatch to our Refresh() method and
+            //create a new event filter object before this method returns
+            session.EngineThread.Invoke(() =>
             {
-                if (filters != null)
-                    return filters.GetEnumerator();
+                var eventFilter = this[kind];
+                session.EngineClient.Control.SetSpecificEventFilterArgument(eventFilter.Index, argumentValue);
+            });
+        }
 
-                filters = session.EngineThread.Invoke(() =>
+        public DbgEventFilter this[WellKnownEventFilter kind]
+        {
+            get
+            {
+                //Considering how rare it might be to modify an event filter, I'm not sure it's worth the memory overhead
+                //of storing a map
+                var alias = WellKnownEventFilterToAliasMap[kind];
+
+                lock (eventFilterLock)
                 {
-                    var control = session.EngineClient.Control;
+                    EnsureFiltersNoLock();
 
-                    var num = control.NumberEventFilters;
-
-                    //The exception filters "start" after the specific event filters
-                    var eventFilters = control.GetSpecificFilterParameters(0, num.SpecificEvents);
-                    var exceptionFilters = control.GetExceptionFilterParameters(num.SpecificExceptions + num.ArbitraryExceptions, null, num.SpecificEvents);
-
-                    var results = new List<DbgEngEventFilter>(eventFilters.Length + exceptionFilters.Length);
-
-                    for (var i = 0; i < eventFilters.Length; i++)
+                    foreach (var filter in filters)
                     {
-                        var filter = eventFilters[i];
-
-                        results.Add(GetEventFilter(control, filter, i));
+                        if (filter.Alias == alias)
+                            return filter;
                     }
+                }
 
-                    for (var i = 0; i < exceptionFilters.Length; i++)
-                    {
-                        var filter = exceptionFilters[i];
-                        var index = i + num.SpecificEvents;
-
-                        results.Add(GetExceptionFilter(control, filter, index));
-                    }
-
-                    //The NTSTATUS value names of Windows Runtime Originate Error and Windows Runtime Transform Error are unknown, even to DbgShell
-                    return results;
-                });
-
-                return filters.GetEnumerator();
+                throw new InvalidOperationException($"Could not find a filter of type {kind}");
             }
         }
 
-        IEnumerator<IDbgEventFilter> IDbgEventFilterStoreInternal.GetEnumerator() => GetEnumerator();
+        public IEnumerator<DbgEventFilter> GetEnumerator()
+        {
+            lock (eventFilterLock)
+            {
+                EnsureFiltersNoLock();
+
+                //Make a copy so they don't trip over us modifying the original collection
+                return ((IEnumerable<DbgEventFilter>) filters.ToArray()).GetEnumerator();
+            }
+        }
+
+        private void EnsureFiltersNoLock()
+        {
+            if (filters != null)
+                return;
+
+            filters = session.EngineThread.Invoke(() =>
+            {
+                var control = session.EngineClient.Control;
+
+                var num = control.NumberEventFilters;
+
+                //The exception filters "start" after the specific event filters
+                var eventFilters = control.GetSpecificFilterParameters(0, num.SpecificEvents);
+                var exceptionFilters = control.GetExceptionFilterParameters(num.SpecificExceptions + num.ArbitraryExceptions, null, num.SpecificEvents);
+
+                var results = new List<DbgEventFilter>(eventFilters.Length + exceptionFilters.Length);
+
+                for (var i = 0; i < eventFilters.Length; i++)
+                {
+                    var filter = eventFilters[i];
+
+                    results.Add(GetEventFilter(control, filter, i));
+                }
+
+                for (var i = 0; i < exceptionFilters.Length; i++)
+                {
+                    var filter = exceptionFilters[i];
+                    var index = i + num.SpecificEvents;
+
+                    results.Add(GetExceptionFilter(control, filter, index));
+                }
+
+                //The NTSTATUS value names of Windows Runtime Originate Error and Windows Runtime Transform Error are unknown, even to DbgShell
+                return results;
+            });
+        }
+
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

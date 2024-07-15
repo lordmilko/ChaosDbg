@@ -10,7 +10,7 @@ namespace ChaosDbg.DbgEng
     {
         public event EventHandler<EventArgs> UpdateBuffer;
 
-        public void RaiseUpdateBuffer(EventArgs args) => EventExtensions.HandleEvent(UpdateBuffer, args);
+        public void RaiseUpdateBuffer(EventArgs args) => EventExtensions.HandleEvent(UpdateBuffer, this, args);
 
         public Font Font { get; }
 

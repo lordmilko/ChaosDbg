@@ -76,9 +76,9 @@ namespace ChaosDbg.Tests
             this.cordbEngineProvider = cordbEngineProvider;
 
             breakpointHit = new ManualResetEventSlim(false);
-            void OnBreakpointHit(object sender, EngineBreakpointHitEventArgs e) => breakpointHit.Set();
+            cordbEngineProvider.BreakpointHit += (s, e) => breakpointHit.Set();
+            cordbEngineProvider.ExceptionHit += (s, e) => breakpointHit.Set();
 
-            cordbEngineProvider.BreakpointHit += OnBreakpointHit;
             //cordbEngineProvider.ModuleLoad += (s, e) => Debug.WriteLine($"[ModLoad] {e.Module}");
             //cordbEngineProvider.ModuleUnload += (s, e) => Debug.WriteLine($"[ModUnload] {e.Module}");
 

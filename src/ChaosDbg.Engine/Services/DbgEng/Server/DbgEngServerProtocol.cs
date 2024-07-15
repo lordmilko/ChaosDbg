@@ -2,7 +2,7 @@
 
 namespace ChaosDbg.DbgEng.Server
 {
-    enum DbgEngServerProtocol
+    public enum DbgEngServerProtocol
     {
         Unknown,
 
@@ -13,7 +13,7 @@ namespace ChaosDbg.DbgEng.Server
         TCP,
 
         [Description("com")]
-        COMPort,
+        ComPort,
 
         [Description("spipe")]
         SecurePipe,

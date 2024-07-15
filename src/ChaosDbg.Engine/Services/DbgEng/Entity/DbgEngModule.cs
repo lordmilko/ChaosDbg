@@ -17,14 +17,17 @@ namespace ChaosDbg.DbgEng
 
         public long EndAddress => BaseAddress + Size;
 
+        public DbgEngProcess Process { get; }
+
         public PEFile PEFile { get; }
 
-        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize, PEFile peFile)
+        public DbgEngModule(long baseAddress, string fileName, string moduleName, int moduleSize, DbgEngProcess process, PEFile peFile)
         {
             BaseAddress = baseAddress;
             FileName = fileName;
             ModuleName = moduleName;
             Size = moduleSize;
+            Process = process;
             PEFile = peFile;
         }
 

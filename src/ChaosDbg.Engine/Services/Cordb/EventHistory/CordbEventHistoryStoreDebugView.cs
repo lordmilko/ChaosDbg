@@ -7,7 +7,7 @@ namespace ChaosDbg.Cordb
 {
     class CordbEventHistoryStoreDebugView
     {
-        public ICordbEventHistoryItem[] AllEvents => store.ToArray();
+        public CordbEventHistoryItem[] AllEvents => store.ToArray();
 
         public ICordbThreadEventHistoryItem[] ThreadEvents => GetEvents<ICordbThreadEventHistoryItem>(
             DebugEventType.CREATE_THREAD_DEBUG_EVENT,
@@ -16,7 +16,7 @@ namespace ChaosDbg.Cordb
             CorDebugManagedCallbackKind.ExitThread
         );
 
-        public ICordbEventHistoryItem[] ModuleEvents => GetEvents<ICordbEventHistoryItem>(
+        public CordbEventHistoryItem[] ModuleEvents => GetEvents<CordbEventHistoryItem>(
             DebugEventType.LOAD_DLL_DEBUG_EVENT,
             DebugEventType.UNLOAD_DLL_DEBUG_EVENT,
             CorDebugManagedCallbackKind.LoadModule,
@@ -34,7 +34,7 @@ namespace ChaosDbg.Cordb
             this.store = store;
         }
 
-        private T[] GetEvents<T>(params object[] kinds) where T : ICordbEventHistoryItem
+        private T[] GetEvents<T>(params object[] kinds)
         {
             var results = new List<T>();
 

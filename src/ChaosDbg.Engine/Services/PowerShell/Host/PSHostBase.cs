@@ -36,7 +36,7 @@ namespace ChaosDbg.PowerShell.Host
         internal bool isRunningPromptLoop;
         private Exception lastRunspaceInitializationException;
         private Stack<InputLoop> InputStack { get; } = new Stack<InputLoop>();
-        
+
         protected PSHostBase(ITerminal terminal, CommandLineParameterParser cpp)
         {
             this.terminal = terminal;
@@ -146,7 +146,7 @@ namespace ChaosDbg.PowerShell.Host
             if (!cpp.NonInteractive)
                 iss.ImportPSModule(new[] { "PSReadLine" });
 
-            iss.ImportPSModule(new[] {GetType().Assembly.Location});
+            iss.ImportPSModule(new[] {Path.Combine(Path.GetDirectoryName(GetType().Assembly.Location), "ChaosDbg.psd1")});
 
             Runspace = RunspaceFactory.CreateRunspace(this, iss);
 
@@ -374,8 +374,8 @@ namespace ChaosDbg.PowerShell.Host
             lock (hostGlobalLock)
             {
                 IsNested = InputLoop.ExitCurrentLoop(this);
+            }
         }
-                }
 
         #endregion
         #region Debug
@@ -436,8 +436,8 @@ namespace ChaosDbg.PowerShell.Host
             catch (Exception ex) when (ex.GetType().Name == "ExitNestedPromptException")
             {
                 // ignore the exception
+            }
         }
-                }
 
         /// <summary>
         /// Handler for debugger events.
@@ -464,7 +464,7 @@ namespace ChaosDbg.PowerShell.Host
                     baseLoop = InputLoop.GetNonNestedLoop(this);
                     //baseLoop?.BlockCommandOutput();
                     throw new NotImplementedException();
-            }
+                }
 
                 //
                 // Display the banner only once per session
@@ -474,7 +474,7 @@ namespace ChaosDbg.PowerShell.Host
                     WriteDebuggerMessage("Entering debug mode. Use h or ? for help.");
                     WriteDebuggerMessage(string.Empty);
                     displayDebuggerBanner = false;
-        }
+                }
 
                 //
                 // If we hit a breakpoint output its info
@@ -742,7 +742,7 @@ namespace ChaosDbg.PowerShell.Host
             else
             {
                 error = (object) new ErrorRecord(e, "ConsoleHost.ReportException", ErrorCategory.NotSpecified, null);
-        }
+            }
 
             /*PSObject wrappedError = new PSObject(error)
             {

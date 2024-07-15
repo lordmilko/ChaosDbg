@@ -8,8 +8,8 @@ using ChaosDbg.Disasm;
 using ChaosDbg.SymStore;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

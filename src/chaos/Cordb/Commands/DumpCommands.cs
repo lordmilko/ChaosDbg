@@ -8,7 +8,7 @@ namespace chaos.Cordb.Commands
 {
     class DumpCommands : CommandBase
     {
-        public DumpCommands(IConsole console, CordbEngineProvider engineProvider) : base(console, engineProvider)
+        public DumpCommands(IConsole console, DebugEngineProvider engineProvider) : base(console, engineProvider)
         {
         }
 

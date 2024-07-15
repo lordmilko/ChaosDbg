@@ -12,7 +12,7 @@ namespace ChaosDbg.Text
     {
         public event EventHandler<EventArgs> UpdateBuffer;
 
-        public void RaiseUpdateBuffer(EventArgs args) => HandleEvent(UpdateBuffer, args);
+        public void RaiseUpdateBuffer(EventArgs args) => HandleEvent(UpdateBuffer, this, args);
 
         public Font Font { get; }
 

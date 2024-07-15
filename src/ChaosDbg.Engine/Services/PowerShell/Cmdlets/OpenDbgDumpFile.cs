@@ -10,16 +10,26 @@ namespace ChaosDbg.PowerShell.Cmdlets
         [Parameter(Mandatory = true, Position = 0)]
         public string Path { get; set; }
 
+#if DEBUG
+        [Parameter(Mandatory = false)]
+        public SwitchParameter HookTTD { get; set; }
+#endif
+
         protected override void ProcessRecord()
         {
-            var dbgEngEngineProvider = GetService<DbgEngEngineProvider>();
+            var engineProvider = GetService<DebugEngineProvider>();
 
-            dbgEngEngineProvider.EngineFailure += EngineFailure;
-            dbgEngEngineProvider.EngineOutput += EngineOutput;
+            engineProvider.EngineFailure += EngineFailure;
+            engineProvider.EngineOutput += EngineOutput;
 
-            dbgEngEngineProvider.OpenDump(Path);
+            var engine = engineProvider.DbgEng.OpenDump(
+                Path
+#if DEBUG
+                , HookTTD
+#endif
+            );
 
-            dbgEngEngineProvider.ActiveEngine.WaitForBreak();
+            engine.WaitForBreak();
         }
     }
 }

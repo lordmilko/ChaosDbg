@@ -17,26 +17,19 @@ namespace ChaosDbg.PowerShell.Host
         {
         }
 
-        protected override void TryInstallPSReadLineShortcuts(Type psConsoleReadLineType)
+        protected override void TryInstallPSReadLineShortcuts(object psConsoleReadLineInstance)
         {
             var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
 
-            var instanceField = psConsoleReadLineType.GetField("_singleton", flags);
+            var setKeyHandlerMethodInfo = psConsoleReadLineInstance.GetType().GetMethod("SetKeyHandlerInternal", flags);
 
-            if (instanceField == null)
-                goto incompatible;
-
-            var setKeyHandlerMethodInfo = psConsoleReadLineType.GetMethod("SetKeyHandlerInternal", flags);
-        
             if (setKeyHandlerMethodInfo == null)
                 goto incompatible;
-
-            var instance = instanceField.GetValue(null);
 
             void InstallKeyBinding(string key, string command)
             {
                 setKeyHandlerMethodInfo.Invoke(
-                    instance,
+                    psConsoleReadLineInstance,
                     new object[]
                     {
                         new[]{key},

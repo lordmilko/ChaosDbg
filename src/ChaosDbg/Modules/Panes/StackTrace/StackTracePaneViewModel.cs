@@ -1,10 +1,8 @@
-﻿using ChaosDbg.DbgEng;
-
-namespace ChaosDbg.ViewModel
+﻿namespace ChaosDbg.ViewModel
 {
     public class StackTracePaneViewModel : ViewModelBase
     {
-        public StackTracePaneViewModel(DbgEngEngine engine)
+        public StackTracePaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

@@ -6,7 +6,9 @@
         CordbEngine_Thread_StackTrace_InternalFrames,
         CordbEngine_Thread_TLS,
         CordbEngine_Thread_TLS_Extended,
-        CordbEngine_Thread_Type
+        CordbEngine_Thread_Type,
+
+        DbgEngEngine_ChildProcess
     }
 
     public enum NativeTestType

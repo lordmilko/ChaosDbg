@@ -1,4 +1,6 @@
-﻿namespace ChaosDbg.Tests
+﻿using VsDock;
+
+namespace ChaosDbg.Tests
 {
     class SplitterGripInfo : PaneItem<SplitterGrip>
     {

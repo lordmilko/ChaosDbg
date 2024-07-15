@@ -4,7 +4,7 @@ namespace ChaosDbg.ViewModel
 {
     public class BreakpointsPaneViewModel : ViewModelBase
     {
-        public BreakpointsPaneViewModel(DbgEngEngine engine)
+        public BreakpointsPaneViewModel(DebugEngineProvider engineProvider)
         {
         }
     }

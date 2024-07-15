@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
-using ChaosDbg.DbgEng;
 using ChaosDbg.Render;
 
 namespace ChaosDbg.ViewModel
@@ -18,13 +17,13 @@ namespace ChaosDbg.ViewModel
         public void AddModule(IDbgModule module)
         {
             modules.Add(module);
-            EventExtensions.HandleEvent(Changed, EventArgs.Empty);
+            EventExtensions.HandleEvent(Changed, this, EventArgs.Empty);
         }
 
         public void RemoveModule(IDbgModule module)
         {
             modules.Remove(module);
-            EventExtensions.HandleEvent(Changed, EventArgs.Empty);
+            EventExtensions.HandleEvent(Changed, this, EventArgs.Empty);
         }
 
         public void Render(DrawingContext drawingContext, RenderContext renderContext)

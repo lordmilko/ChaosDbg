@@ -12,14 +12,14 @@ namespace ChaosDbg.TTD
     /// <summary>
     /// Provides facilities for hooking and tracing API calls made by TTD.
     /// </summary>
-    class TTDTracer
+    static class TTDTracer
     {
-        public TTDTracer(ReplayEngine initial)
+        public static void Hook(ReplayEngine initial)
         {
             DetourBuilder.AddVtblHook(initial, ReplayEngineHook);
         }
 
-        unsafe object ReplayEngineHook(DetourContext ctx)
+        static unsafe object ReplayEngineHook(DetourContext ctx)
         {
             switch (ctx.Name)
             {
@@ -170,7 +170,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        unsafe object CursorHook(DetourContext ctx)
+        static unsafe object CursorHook(DetourContext ctx)
         {
             switch (ctx.Name)
             {
@@ -413,9 +413,9 @@ namespace ChaosDbg.TTD
         }
 
         [ThreadStatic]
-        private bool logThreadView;
+        private static bool logThreadView;
 
-        private void WithThreadView(Action action)
+        private static void WithThreadView(Action action)
         {
             //Disable calls made by TTDReplay against the IThreadView that have nothing to do with calls actually being made in a callback
             logThreadView = true;
@@ -430,7 +430,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        private T WithThreadView<T>(Func<T> action)
+        private static T WithThreadView<T>(Func<T> action)
         {
             logThreadView = true;
 
@@ -444,7 +444,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        unsafe object ThreadViewHook(DetourContext ctx)
+        static unsafe object ThreadViewHook(DetourContext ctx)
         {
             if (!logThreadView)
                 return ctx.InvokeOriginal();
@@ -500,7 +500,7 @@ namespace ChaosDbg.TTD
             }
         }
 
-        private object LogDefault(string className, DetourContext ctx)
+        private static object LogDefault(string className, DetourContext ctx)
         {
             var result = ctx.InvokeOriginal();
 

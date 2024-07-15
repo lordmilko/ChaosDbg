@@ -5,7 +5,6 @@ using System.Threading;
 using chaos.Cordb.Commands;
 using ChaosDbg;
 using ChaosDbg.Cordb;
-using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
 using ChaosDbg.Symbol;
@@ -17,12 +16,11 @@ namespace chaos
     {
         private ManualResetEventSlim wakeEvent = new ManualResetEventSlim(false);
 
-        private CordbEngineProvider engineProvider;
-        private DbgEngEngineProvider dbgEngEngineProvider;
+        private DebugEngineProvider engineProvider;
         private RelayParser commandDispatcher;
         private CancellationToken cancellationToken;
 
-        private CordbEngine engine => engineProvider.ActiveEngine;
+        private CordbEngine engine => (CordbEngine) engineProvider.ActiveEngine;
 
         protected IConsole Console { get; }
 
@@ -32,13 +30,11 @@ namespace chaos
 
         public CordbClient(
             IConsole console,
-            CordbEngineProvider engineProvider,
-            DbgEngEngineProvider dbgEngEngine,
+            DebugEngineProvider engineProvider,
             CommandBuilder commandBuilder)
         {
             Console = console;
             this.engineProvider = engineProvider;
-            this.dbgEngEngineProvider = dbgEngEngine;
             commandDispatcher = commandBuilder.Build();
 
             RegisterCallbacks();
@@ -55,7 +51,7 @@ namespace chaos
             sw.Start();
 
             Console.WriteLine("Launching...");
-            engineProvider.CreateProcess(executable, minimized, interop, frameworkKind);
+            engineProvider.Cordb.CreateProcess(executable, minimized, interop, frameworkKind);
 
             EngineLoop();
         }
