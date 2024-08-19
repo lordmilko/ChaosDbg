@@ -67,6 +67,8 @@ namespace ChaosDbg.Cordb
 
             if (localProcess != null)
             {
+                //This will hang if the target process is zombified
+                //We currently make the assumption that the debugger thread inside of the target won't be interrupted
                 var hr = localProcess.CorDebugProcess.TryStop(0);
 
                 switch (hr)

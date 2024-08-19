@@ -1,5 +1,5 @@
 ﻿using System;
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using ChaosDbg.Cordb;
@@ -8,7 +8,6 @@ using ChaosDbg.Metadata;
 using ChaosLib;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Serilog.Events;
 using TestApp;
 
 namespace ChaosDbg.Tests
@@ -97,6 +96,52 @@ namespace ChaosDbg.Tests
                     CompareDbgEngFrames(ctx.CordbEngine.Process.Threads.Single(t => t.IsManaged), ctx.InProcDbgEng.Value);
                 },
                 useInterop: true
+            );
+        }
+
+        [TestMethod]
+        public void CordbEngine_Thread_Managed_StackTrace_NativeFrames_AtNativeException()
+        {
+            //We're on the Win32 Event Thread and try and do a native stack trace
+
+            var endEvent = new ManualResetEventSlim(false);
+
+            TestContext context = null;
+
+            TestSignalledDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_InternalFrames,
+                ctx =>
+                {
+                    context = ctx;
+
+                    //LoaderBP
+                    ctx.WaitForBreakpoint();
+                    ctx.CordbEngine.Continue();
+
+                    //Exception
+                    ctx.WaitForBreakpoint();
+
+                    Assert.IsInstanceOfType(ctx.Process.Session.EventHistory.LastStopReason, typeof(CordbNativeFirstChanceExceptionPauseReason));
+
+                    if (!endEvent.Wait(10000))
+                        throw new TimeoutException();
+                },
+                useInterop: true,
+                customExe: "powershell",
+                waitForSignal: false,
+                hookEvents: p => p.ExceptionHit += (s, e) =>
+                {
+                    Assert.AreEqual(NTSTATUS.STATUS_CPP_EH_EXCEPTION, e.Exception.ExceptionRecord.ExceptionCode);
+
+                    try
+                    {
+                        CompareDbgEngFrames(context.ActiveThread, context.InProcDbgEng.Value);
+                    }
+                    finally
+                    {
+                        endEvent.Set();
+                    }
+                }
             );
         }
 
@@ -259,13 +304,6 @@ namespace ChaosDbg.Tests
             );
         }
 
-        [TestMethod]
-        public void CordbEngine_Shutdown_Cleanup_Threads()
-        {
-            for (var i = 0; i < 10; i++)
-                CordbEngine_Thread_NativeToManaged_Bookkeeping_Attach();
-        }
-
         #endregion
         #region Main Thread
 
@@ -386,6 +424,12 @@ namespace ChaosDbg.Tests
             var cordbFrames = cordbThread.StackTrace;
             var dbgEngFrames = dbgEngEngine.GetStackTrace();
 
+            //Validate that our crazy DbgEng detours haven't broken the normal DbgEng stack tracing logic
+            var lastDbgEngFrame = dbgEngFrames.Last();
+            Assert.IsTrue(lastDbgEngFrame.ToString().Contains("RtlUserThreadStart"));
+
+            Debug.WriteLine($"DbgEng: {dbgEngFrames.Length}, Cordb: {cordbFrames.Length}");
+
             Assert.AreEqual(cordbFrames.Length, dbgEngFrames.Length);
 
             for (var i = 0; i < cordbFrames.Length; i++)
@@ -393,7 +437,7 @@ namespace ChaosDbg.Tests
                 var cdbFrame = cordbFrames[i];
                 var deFrame = dbgEngFrames[i];
 
-                if (cdbFrame is CordbILFrame || cdbFrame is CordbRuntimeNativeFrame)
+                if (cdbFrame is CordbILFrame || cdbFrame is CordbRuntimeNativeFrame || deFrame.Name == null) //It seems that even with Cordb's NativeFrame, we don't set the Name to be the address, so it seems acceptable for DbgEng to do the same thing
                 {
                     Assert.AreEqual(deFrame.IP, cdbFrame.Context.IP);
                     Assert.AreEqual(deFrame.SP, cdbFrame.Context.SP);

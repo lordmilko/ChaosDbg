@@ -1,4 +1,5 @@
 ﻿using System;
+using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
 
@@ -6,6 +7,13 @@ namespace ChaosDbg
 {
     public static class RegisterContextExtensions
     {
+        /// <summary>
+        /// Gets the value of a register, converted to a <see langword="long"/> value.<para/>
+        /// This method cannot be used to retrieve XMM registers (which are 128-bits wide). To retrieve these values, use <see cref="GetRegisterValue{T}(CrossPlatformContext, Register)"/>.
+        /// </summary>
+        /// <param name="context">The register context to retrieve the value from.</param>
+        /// <param name="register">The register of the context to retrieve.</param>
+        /// <returns>The value of the specified register.</returns>
         public static long GetRegisterValue(this CrossPlatformContext context, Register register)
         {
             if (context.IsX86)
@@ -17,6 +25,31 @@ namespace ChaosDbg
             throw new NotImplementedException($"Don't know what CPU architecture the register context is (flags: {context.Flags})");
         }
 
+        /// <summary>
+        /// Gets the value of a register, converted to a specified integer type.<para/>
+        /// This method can be used to retrieve XMM registers (which are 128-bits wide) by requesting a value of type <see cref="Int128"/>.
+        /// </summary>
+        /// <typeparam name="T">The integer type to retrieve the register value as.</typeparam>
+        /// <param name="context">The register context to retrieve the value from.</param>
+        /// <param name="register">The register of the context to retrieve.</param>
+        /// <returns>The value of the specified register.</returns>
+        public static T GetRegisterValue<T>(this CrossPlatformContext context, Register register)
+        {
+            if (context.IsX86)
+                return context.Raw.X86Context.GetRegisterValue<T>(register);
+
+            if (context.IsAmd64)
+                return context.Raw.Amd64Context.GetRegisterValue<T>(register);
+
+            throw new NotImplementedException($"Don't know what CPU architecture the register context is (flags: {context.Flags})");
+        }
+
+        /// <summary>
+        /// Sets the value of a register from a <see langword="long"/> value. The value will automatically be casted to an <see langword="int"/> if the specified context <see cref="CrossPlatformContext.IsX86"/>.
+        /// </summary>
+        /// <param name="context">The register context to set a value on.</param>
+        /// <param name="register">The register of the context to modify.</param>
+        /// <param name="value">The value to set the specified register to.</param>
         public static void SetRegisterValue(this CrossPlatformContext context, Register register, long value)
         {
             if (context.IsX86)
@@ -37,9 +70,31 @@ namespace ChaosDbg
         #region x86
         #region Get
 
+        public static T GetRegisterValue<T>(this in X86_CONTEXT context, Register register)
+        {
+            var value = GetRegisterValue(context, register);
+
+            var t = typeof(T);
+
+            if (t == typeof(int))
+                return (T) (object) value;
+
+            if (t == typeof(long))
+                return (T) (object) (long) value;
+
+            if (t == typeof(Int128))
+                return (T) (object) (Int128) value;
+
+            //We don't recommend retrieving the value as an int because our 64-bit GetRegisterValue<T> doesn't support that, and generally speaking you should be trying to write code that interacts with register values in an architecture independent way
+            throw new NotSupportedException($"Retrieving a {nameof(X86_CONTEXT)} register value as a '{t.Name}' is not supported. Consider retrieving the value as a long or Int128 and converting it yourself.");
+        }
+
         public static int GetRegisterValue(this in X86_CONTEXT context, Register register)
         {
-            var fullRegister = register.GetFullRegister32();
+            //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
+            var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
+                ? register
+                : register.GetFullRegister32();
 
             var result = GetFullRegisterValue(context, fullRegister);
 
@@ -156,7 +211,10 @@ namespace ChaosDbg
 
         public static void SetRegisterValue(this ref X86_CONTEXT context, Register register, int value)
         {
-            var fullRegister = register.GetFullRegister32();
+            //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
+            var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
+                ? register
+                : register.GetFullRegister32();
 
             if (fullRegister != register)
                 throw new NotImplementedException("Setting partial register values is not implemented. Not sure if we need to merge it with the full value or something");
@@ -263,9 +321,53 @@ namespace ChaosDbg
         #region x64
         #region Get
 
+        public static unsafe T GetRegisterValue<T>(this in AMD64_CONTEXT context, Register register)
+        {
+            var t = typeof(T);
+
+            if (t == typeof(long))
+            {
+                long result = GetRegisterValue(context, register);
+
+                return (T) (object) result;
+            }
+            else if (t == typeof(Int128))
+            {
+                AMD64_CONTEXT local = context;
+
+                Int128 result = register switch
+                {
+                    Register.XMM0 => *(Int128*) (&local.Xmm0),
+                    Register.XMM1 => *(Int128*) (&local.Xmm1),
+                    Register.XMM2 => *(Int128*) (&local.Xmm2),
+                    Register.XMM3 => *(Int128*) (&local.Xmm3),
+                    Register.XMM4 => *(Int128*) (&local.Xmm4),
+                    Register.XMM5 => *(Int128*) (&local.Xmm5),
+                    Register.XMM6 => *(Int128*) (&local.Xmm6),
+                    Register.XMM7 => *(Int128*) (&local.Xmm7),
+                    Register.XMM8 => *(Int128*) (&local.Xmm8),
+                    Register.XMM9 => *(Int128*) (&local.Xmm9),
+                    Register.XMM10 => *(Int128*) (&local.Xmm10),
+                    Register.XMM11 => *(Int128*) (&local.Xmm11),
+                    Register.XMM12 => *(Int128*) (&local.Xmm12),
+                    Register.XMM13 => *(Int128*) (&local.Xmm13),
+                    Register.XMM14 => *(Int128*) (&local.Xmm14),
+                    Register.XMM15 => *(Int128*) (&local.Xmm15),
+                    _ => GetRegisterValue(context, register)
+                };
+
+                return (T) (object) result;
+            }
+            else
+                throw new NotSupportedException($"Retrieving a {nameof(AMD64_CONTEXT)} register value as a '{t.Name}' is not supported. Consider retrieving the value as a long or Int128 and converting it yourself.");
+        }
+
         public static long GetRegisterValue(this in AMD64_CONTEXT context, Register register)
         {
-            var fullRegister = register.GetFullRegister();
+            //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
+            var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
+                ? register
+                : register.GetFullRegister();
 
             var result = GetFullRegisterValue(context, fullRegister);
 
@@ -474,7 +576,10 @@ namespace ChaosDbg
 
         public static void SetRegisterValue(this ref AMD64_CONTEXT context, Register register, long value)
         {
-            var fullRegister = register.GetFullRegister();
+            //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
+            var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
+                ? register
+                : register.GetFullRegister();
 
             if (fullRegister != register)
                 throw new NotImplementedException("Setting partial register values is not implemented. Not sure if we need to merge it with the full value or something");

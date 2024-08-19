@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ChaosLib;
 using ChaosLib.PortableExecutable;
 
 namespace ChaosDbg.SymStore
@@ -32,7 +33,7 @@ namespace ChaosDbg.SymStore
         {
             this.logger = logger;
 
-            StoreChain = BuildSymbolStore(ntSymbolPath ?? Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH"));
+            StoreChain = BuildSymbolStore(ntSymbolPath ?? Environment.GetEnvironmentVariable(WellKnownEnvironmentVariable.NT_SYMBOL_PATH));
             CacheStore = GetCacheStore();
         }
 
@@ -71,13 +72,18 @@ namespace ChaosDbg.SymStore
                 //SymbolStoreFile is IDisposable, but all it does is dispose the filestream, which we're already disposing anyway
                 var symbolStoreFile = new SymbolStoreFile(fileStream, modulePath);
 
-                var keyGenerator = new PEFileKeyGenerator(logger, symbolStoreFile);
+                var keyGenerator = existingPEFile != null
+                    ? new PEFileKeyGenerator(logger, existingPEFile, symbolStoreFile.FileName)
+                    : new PEFileKeyGenerator(logger, symbolStoreFile);
 
                 //These flags are the default flags that dotnet/symstore -> SymClient uses
                 var flags =
                     KeyTypeFlags.IdentityKey | //Download the binary itself
                     KeyTypeFlags.SymbolKey |   //Download the symbols for the binary, if applicable
                     KeyTypeFlags.ClrKeys;      //Download the SOS/DAC of the module, if applicable. It's very important to use the right DAC for a given binary
+
+                if (pdbOnly)
+                    flags = KeyTypeFlags.SymbolKey;
 
                 //Get the relative paths to each file we might download. e.g. kernel32.pdb/035E6BB05110717C09CA1EE13F816FE61/kernel32.pdb
                 var keys = keyGenerator.GetKeys(flags).ToArray();
@@ -107,10 +113,8 @@ namespace ChaosDbg.SymStore
             }
         }
 
-        private SymbolStore BuildSymbolStore()
+        private SymbolStore BuildSymbolStore(string ntSymbolPath)
         {
-            var ntSymbolPath = Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH");
-
             SymbolStore store = null;
 
             if (ntSymbolPath != null)

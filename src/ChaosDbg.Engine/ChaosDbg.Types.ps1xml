@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Types>
+    <Type>
+        <Name>ClrDebug.NTSTATUS</Name>
+        <Members>
+            <ScriptMethod>
+                <Name>ToString</Name>
+                <Script>
+                    if ([Enum]::IsDefined($this.GetType(), $this))
+                    {
+                        return [Enum]::GetName($this.GetType(), $this)
+                    }
+                    else
+                    {
+                        "0x" + ([int]$this).ToString("x")
+                    }
+                </Script>
+            </ScriptMethod>
+        </Members>
+    </Type>
+</Types>

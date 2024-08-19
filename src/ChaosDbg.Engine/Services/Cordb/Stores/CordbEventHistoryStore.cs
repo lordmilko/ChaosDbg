@@ -31,6 +31,12 @@ namespace ChaosDbg.Cordb
 
         public int ManagedEventCount { get; private set; }
 
+        //Protects against races between us adding a stop reason and a callback
+        //querying what the last stop reason was. e.g. if a callback is asking what
+        //the last stop reason as right after we asked for a stop, it's going to think
+        //that no stop reason was provided since it already has the latest stop reason
+        internal readonly object StopReasonLock = new object();
+
         public CordbPauseReason LastStopReason
         {
             get
@@ -68,6 +74,7 @@ namespace ChaosDbg.Cordb
         public void Add(CordbPauseReason stopReason)
         {
             lock (objLock)
+            lock (StopReasonLock)
             {
                 history.Add(stopReason);
                 stopReasons.Add(stopReason);

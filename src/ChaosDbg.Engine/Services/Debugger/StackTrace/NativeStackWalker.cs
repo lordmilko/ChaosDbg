@@ -78,14 +78,17 @@ namespace ChaosDbg
 
                 Marshal.StructureToPtr(match, dynamicFunctionTableResult, false);
 
+                Log("    [DynamicFunctionTable] Resolved {0:X} to {1:X}", AddrBase, match.BeginAddress);
+
                 return dynamicFunctionTableResult;
             }
+
+            Log("    [DynamicFunctionTable] Failed to resolve {0:X}", AddrBase);
 
             return IntPtr.Zero;
         }
 
         public IEnumerable<NativeFrame> Walk(
-            IntPtr hProcess,
             IntPtr hThread,
             CrossPlatformContext context,
             Func<NativeFrame, bool> predicate = null)
@@ -116,14 +119,24 @@ namespace ChaosDbg
                 //but we can't use unsafe code in an iterator, so we're forced to play games, wrapping the unsafe code up in an internal method
                 unsafe bool DoStackWalk(ref CROSS_PLATFORM_CONTEXT ctx, ref STACKFRAME_EX frame)
                 {
-                    STACKFRAME_EX* p = default;
-
                     fixed (CROSS_PLATFORM_CONTEXT* pCtx = &ctx)
                     fixed (STACKFRAME_EX* pFrame = &frame)
                     {
-                        var walkResult = DbgHelp.Native.StackWalkEx(
+                        Log(
+                            "[Begin] AddrPC: {0:X}, AddrFrame: {1:X}, AddrStack: {2:X}, AddrReturn: {3:X}, RIP: {4:X}, RSP: {5:X}, RBP: {6:X}",
+                            frame.AddrPC.Offset,
+                            frame.AddrFrame.Offset,
+                            frame.AddrStack.Offset,
+                            frame.AddrReturn.Offset,
+                            ctx.Amd64Context.Rip,
+                            ctx.Amd64Context.Rsp,
+                            ctx.Amd64Context.Rbp
+                        );
+
+                        var dbgHelp = functionTables.UnsafeGetDbgHelp();
+
+                        var walkResult = dbgHelp.StackWalkEx(
                             machineType,
-                            hProcess,
                             hThread,
                             (IntPtr) pFrame,
                             (IntPtr) pCtx,
@@ -132,6 +145,17 @@ namespace ChaosDbg
                             GetModuleBase,
                             null,
                             SYM_STKWALK.DEFAULT
+                        );
+
+                        Log(
+                            "[End]   AddrPC: {0:X}, AddrFrame: {1:X}, AddrStack: {2:X}, AddrReturn: {3:X}, RIP: {4:X}, RSP: {5:X}, RBP: {6:X}",
+                            frame.AddrPC.Offset,
+                            frame.AddrFrame.Offset,
+                            frame.AddrStack.Offset,
+                            frame.AddrReturn.Offset,
+                            ctx.Amd64Context.Rip,
+                            ctx.Amd64Context.Rsp,
+                            ctx.Amd64Context.Rbp
                         );
 
                         return walkResult;
@@ -150,7 +174,7 @@ namespace ChaosDbg
                 //that the return address of frame is the IP of the next frame. If that isn't the case though, we need
                 //to re-evaluate things
                 if (previousReturn != null && previousReturn != 0)
-                    Debug.Assert(previousReturn.Value == stackFrame.AddrPC.Offset);
+                    Debug.Assert(previousReturn.Value == stackFrame.AddrPC.Offset, "Previous return value did not match frame offset. Is this a bug or not?");
 
                 //In the case of an inline frame, the return address will be the same as the frame after it that it's actually
                 //a part of
@@ -166,7 +190,7 @@ namespace ChaosDbg
             }
         }
 
-        private IntPtr FunctionTableAccess(IntPtr hProcess, long addrBase)
+        private unsafe IntPtr FunctionTableAccess(IntPtr hProcess, long addrBase)
         {
             /* DbgEng employs the following logic in SwFunctionTableAccess():
              * - if the target is i386, it tries to resolve the function table via SymFunctionTableAccess()
@@ -185,7 +209,17 @@ namespace ChaosDbg
             //to resolve the function table of an address in a CLR method, this will occur in the DynamicFunctionCallback()
             //registered above after DbgHelp's normal resolution logic fails
 
-            return functionTables.GetFunctionTableEntry(addrBase);
+            var result = functionTables.GetFunctionTableEntry(addrBase);
+
+            if (result == default)
+                Log("    [FunctionTable] Failed to resolve {0:X}", addrBase);
+            else
+            {
+                var rt = (RUNTIME_FUNCTION*) result;
+                Log("    [FunctionTable] Resolved {0:X} to {1:X}", addrBase, rt->BeginAddress);
+            }
+
+            return result;
         }
 
         private long GetModuleBase(IntPtr hProcess, long qwAddr)
@@ -194,7 +228,10 @@ namespace ChaosDbg
             //All modules we know about should be known to DbgHelp as well, so we're fine to just call SymGetModuleBase64() directly
 
             if (functionTables.TryGetNativeModuleBase(qwAddr, out var moduleBase))
+            {
+                Log("    [ModuleBase]    Resolved {0:X} to {1:X}", qwAddr, moduleBase);
                 return moduleBase;
+            }
 
             //Dynamic function tables only apply to 64-bit processes, so our resolver won't be initialized
             //when we're targeting an i386 process.
@@ -202,11 +239,24 @@ namespace ChaosDbg
             {
                 //Maybe this address is within a dynamically generated function
                 if (dynamicFunctionTableProvider.TryGetDynamicFunctionTableModuleBase(qwAddr, out var result))
+                {
+                    Log("    [DynamicModuleBase]    Resolved {0:X} to {1:X}", qwAddr, moduleBase);
                     return result;
+                }
             }
 
             //Failed to resolve the specified address
+            Log("    [ModuleBase]    Failed to resolve {0:X}", qwAddr);
             return 0;
+        }
+
+        [Conditional("DEBUG")]
+        private void Log(string messageTemplate, params object[] propertyValues)
+        {
+            //Comment/uncomment this logging as required for debugging stack tracing behavior
+
+            //ChaosLib.Log.Debug<NativeStackWalker>(messageTemplate, propertyValues);
+            //Debug.WriteLine(messageTemplate, propertyValues);
         }
 
         public void Dispose()

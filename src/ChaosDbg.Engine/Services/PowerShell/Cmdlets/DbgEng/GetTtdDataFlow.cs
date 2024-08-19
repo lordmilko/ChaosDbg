@@ -84,7 +84,10 @@ namespace ChaosDbg.PowerShell.Cmdlets
 
                 target = registerContext.GetRegisterValue(register);
 
-                initial = new TtdDataFlowEntryRegisterJob(register, new TtdDataFlowItem(target, startName, thread, position, instr));
+                initial = new TtdDataFlowEntryRegisterJob(register, registerContext, new TtdDataFlowItem(target, startName, thread, position, instr)
+                {
+                    Location = "Search Start"
+                });
             }
             else
             {
@@ -149,7 +152,6 @@ namespace ChaosDbg.PowerShell.Cmdlets
 
                 try
                 {
-                    foreach (var childJob in parentJob.EnumerateDataEvents(ctx))
                     foreach (var childJob in parentJob.EnumerateDataEvents(ctx, CancellationToken))
                     {
                         if (CancellationToken.IsCancellationRequested)

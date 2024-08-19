@@ -229,6 +229,7 @@ namespace ChaosDbg.PowerShell.Host
                         $". '{EscapeSingleQuotes(profileFileName)}'",
                         exec,
                         Executor.ExecutionOptions.AddOutDefault
+                    );
                 }
             }
         }

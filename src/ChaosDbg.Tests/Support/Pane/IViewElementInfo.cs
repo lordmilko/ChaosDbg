@@ -1,6 +1,8 @@
-﻿namespace ChaosDbg.Tests
+﻿using VsDock;
+
+namespace ChaosDbg.Tests
 {
-    interface IDockContainerInfo : IPaneItem
+    interface IViewElementInfo : IPaneItem
     {
         SplitterGripInfo SplitterGrip { get; }
 

@@ -1,9 +1,34 @@
 #################
-# Visual Studio #
+# Deferred      #
 #################
 
 design/
 src/ChaosDbg/Modules/Shell/
+src/MSTestMonitor/
+
+# Graph
+Graph/
+GraphTests.cs
+GraphTestState.cs
+InstrFactory.cs
+DisasmGraphTests.cs
+
+# Pattern
+PEModuleMetadataPatternTests.cs
+PrePostConditionFunctionPattern.cs
+
+# Analysis
+PEModuleMetadataTests_old.cs
+
+# PowerShell
+src/ChaosDbg.Engine/Services/PowerShell/Debugger/
+
+# Decompiler
+CSharpDecompiler.cs
+
+#################
+# Visual Studio #
+#################
 
 # Build results
 [Bb]in/
@@ -30,6 +55,7 @@ BenchmarkDotNet.Artifacts/
 
 # ReSharper settings
 *.DotSettings
+.idea/
 
 # User-specific files
 .vs/

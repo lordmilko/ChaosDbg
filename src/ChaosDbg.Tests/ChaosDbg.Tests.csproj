@@ -8,16 +8,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\ChaosDbg.Engine\Services\Logger\SerilogLogger.cs" Link="SerilogLogger.cs" />
     <Compile Include="..\TestApp\Managed.x64\TestType.cs" Link="TestType.cs" />
   </ItemGroup>
 
   <ItemGroup>
 	  <PackageReference Include="envdte80" Version="$(EnvDTEVersion)" />
     <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent.SupportFiles" Version="$(TraceEventVersion)" ExcludeAssets="compile;runtime" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSDKVersion)" />
     <PackageReference Include="MSTest.TestAdapter" Version="$(MSTestVersion)" />
     <PackageReference Include="MSTest.TestFramework" Version="$(MSTestVersion)" />
     <PackageReference Include="coverlet.collector" Version="$(CoverletVersion)" />
+    <PackageReference Include="Serilog.Sinks.Seq" Version="7.0.1" />
+
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,7 +38,19 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="$(TraceEventSupportFilesBase)native\x86\msdia140.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
+    <None Include="$(TraceEventSupportFilesBase)native\amd64\msdia140.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Clear the TestResults directory under the project folder to prevent files/folders under this directory from accumulating -->
+  <Target Name="ClearTestResults" BeforeTargets="DispatchToInnerBuilds">
+    <RemoveDir Directories="$(ProjectDir)TestResults" />
+    <RemoveDir Directories="$(SolutionDir)TestResults" />
+  </Target>
+
   <Import Project="$(Build)ClrDebug.props" />
   <Import Project="$(Build)ChaosLib.props" />
+  <Import Project="$(Build)VsDock.props" />
 
 </Project>

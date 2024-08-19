@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using ChaosDbg.DbgEng;
@@ -263,29 +264,37 @@ namespace ChaosDbg.Cordb
         {
             lock (terminateLock)
             {
-                if (Process != null)
+                try
                 {
-                    Log.Verbose("Terminating and disposing CorDebugProcess");
+                    if (Process != null)
+                    {
+                        Log.Verbose("Terminating and disposing CorDebugProcess");
 
+                        //CordbProcess.Terminate will wait for our exit process event to be signalled before returning
 #pragma warning disable CS0618 // Type or member is obsolete
-                    Process.Terminate();
+                        Process.Terminate();
 #pragma warning restore CS0618 // Type or member is obsolete
 
-                    //Now clear out the process so we don't attempt to kill it when this engine is destroyed
-                    Session.ActiveProcess.Dispose();
-                    Session.ActiveProcess = null;
+                        //Now clear out the process so we don't attempt to kill it when this engine is destroyed
+                        Session.ActiveProcess.Dispose();
+                        Session.ActiveProcess = null;
+                    }
+
+                    //CordbProcess.Terminate() should wait for the ExitProcess event to be emitted, and so we now want to assert that it is safe for us to shutdown ICorDebug ASAP.
+                    //There's nothing left for this engine to do once we no longer have a process, anyway.
+                    if (Session.CorDebug != null)
+                    {
+                        Log.Verbose("Terminating CorDebug...");
+
+                        Session.CorDebug.Terminate();
+                        Session.CorDebug = null;
+
+                        Log.Verbose("Terminated CorDebug");
+                    }
                 }
-
-                //CordbProcess.Terminate() should wait for the ExitProcess event to be emitted, and so we now want to assert that it is safe for us to shutdown ICorDebug ASAP.
-                //There's nothing left for this engine to do once we no longer have a process, anyway.
-                if (Session.CorDebug != null)
+                catch (Exception ex)
                 {
-                    Log.Verbose("Terminating CorDebug...");
-
-                    Session.CorDebug.Terminate();
-                    Session.CorDebug = null;
-
-                    Log.Verbose("Terminated CorDebug");
+                    Debug.Assert(false, $"An exception occurred while attempting to terminate {nameof(CordbEngine)}: {ex.Message}");
                 }
             }
         }
@@ -314,7 +323,18 @@ namespace ChaosDbg.Cordb
             Log.Verbose("Disposing CordbEngine");
 
             //The process should have been properly cleaned up when we terminated/detached from it, but dispose again here just in case
-            Process?.Dispose();
+            Terminate();
+
+            var process = Process;
+
+            //At this point, the process should no longer be running, and should be safe to dispose. Disposing the process while it's still running is dangerous,
+            //because event callbacks may try and access services on the CordbProcess object (such as the DAC), which will fail if it's prematurely been disposed.
+            //To make matters worse, if we throw accessing a disposed resource during the EXIT_PROCESS_DEBUG_EVENT callback, we won't call Continue() and so won't
+            //close the remaining handles to the target thread in kernel32!ContinueDebugEvent()
+            if (process == null)
+                Log.Debug<CordbEngine>("Process was already null");
+            else
+                process.Dispose();
 
             //To avoid races with the managed callback thread, we say that we're disposed
             //immediately just in case an event comes in

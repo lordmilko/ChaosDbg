@@ -22,7 +22,11 @@ namespace ChaosDbg.Cordb
 
         public IPEFileProvider PEFileProvider { get; }
 
+        public IDbgHelpProvider DbgHelpProvider { get; }
+
         public MicrosoftPdbSourceFileProvider MicrosoftPdbSourceFileProvider { get; }
+
+        public IUserInterface UserInterface { get; }
 
         public CordbEngineServices(
             IFrameworkTypeDetector frameworkTypeDetector,
@@ -30,14 +34,17 @@ namespace ChaosDbg.Cordb
             INativeDisassemblerProvider nativeDisasmProvider,
             ILDisassemblerProvider ilDisasmProvider,
             IPEFileProvider peFileProvider,
-            MicrosoftPdbSourceFileProvider microsoftPdbSourceFileProvider)
+            IDbgHelpProvider dbgHelpProvider,
+            MicrosoftPdbSourceFileProvider microsoftPdbSourceFileProvider, IUserInterface userInterface)
         {
             FrameworkTypeDetector = frameworkTypeDetector;
             NativeLibraryProvider = nativeLibraryProvider;
             NativeDisasmProvider = nativeDisasmProvider;
             ILDisasmProvider = ilDisasmProvider;
             PEFileProvider = peFileProvider;
+            DbgHelpProvider = dbgHelpProvider;
             MicrosoftPdbSourceFileProvider = microsoftPdbSourceFileProvider;
+            UserInterface = userInterface;
         }
     }
 }

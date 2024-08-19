@@ -176,7 +176,7 @@ namespace ChaosDbg.Scroll
 
         private Point RoundPointToPixel(Point pt)
         {
-            var window = Application.Current.MainWindow;
+            var window = App.Current.MainWindow;
 
             if (window == null)
                 return pt;

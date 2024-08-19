@@ -9,7 +9,7 @@ namespace ChaosDbg.Tests
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private SplitterItemInfo info;
 
-        public IDockContainerInfo Content => info.Content;
+        public IViewElementInfo Content => info.Content;
 
         public IndependentRect Bounds => info.Bounds;
 
@@ -23,7 +23,7 @@ namespace ChaosDbg.Tests
     [DebuggerTypeProxy(typeof(SplitterItemInfoProxy))]
     class SplitterItemInfo : PaneItem<SplitterItem>
     {
-        public IDockContainerInfo Content => (IDockContainerInfo) Children.Single();
+        public IViewElementInfo Content => (IViewElementInfo) Children.Single();
 
         public SplitterItemInfo(SplitterItem element, IPaneItem child) : base(element, new[] { child })
         {

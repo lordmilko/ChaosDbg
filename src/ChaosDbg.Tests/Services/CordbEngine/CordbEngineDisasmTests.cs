@@ -39,7 +39,6 @@ namespace ChaosDbg.Tests
         }
 
         [TestMethod]
-        [DoNotParallelize]
         public void CordbEngine_Disasm_Native()
         {
             TestSignalledDebugCreate(
@@ -158,6 +157,20 @@ namespace ChaosDbg.Tests
                                 var methodProps = mdi.GetMethodProps(method);
 
                                 var function = corDebugModule.GetFunctionFromToken(method);
+
+                                //mscordbi!CordbFunction::GetILCodeAndSigToken() will throw if its not il.
+                                //Preempt this by performing the same checks that are done in CordbFunction::InitNativeImpl()
+                                //to determine whether the function should be classified as native or not
+                                if (methodProps.pdwImplFlags.IsMiNative())
+                                    continue;
+
+                                if (methodProps.pulCodeRVA == 0)
+                                {
+                                    //If the module isn't dynamic and it's not an edit and continue function, it's classified as native. We won't have done any edit-and-continuing
+                                    //in this test, so we can skip that check
+                                    if (!corDebugModule.IsDynamic)
+                                        continue;
+                                }
 
                                 if (function.TryGetILCode(out _) == HRESULT.CORDBG_E_FUNCTION_NOT_IL)
                                     continue;

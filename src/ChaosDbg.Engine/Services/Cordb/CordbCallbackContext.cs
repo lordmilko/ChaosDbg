@@ -127,8 +127,11 @@ namespace ChaosDbg.Cordb
 
         public void ClearManaged()
         {
-            initialHistoryCount = session.EventHistory.Count;
-            initialManagedLastStopReason = session.EventHistory.LastStopReason;
+            lock (session.EventHistory.StopReasonLock)
+            {
+                initialHistoryCount = session.EventHistory.Count;
+                initialManagedLastStopReason = session.EventHistory.LastStopReason;
+            }
         }
 
         public void EnsureHasStopReason(bool unmanaged)
@@ -141,19 +144,22 @@ namespace ChaosDbg.Cordb
             if (session.EventHistory.LastStopReason == previousReason)
             {
                 Debug.Assert(false, "Attempted to stop the debugger without specifying a stop reason");
-                throw new NotImplementedException();
+                throw new NotImplementedException("Attempted to stop the debugger without specifying a stop reason");
             }
         }
 
         public void ClearUnmanaged()
         {
-            //Interop
-            initialUnmanagedLastStopReason = session.EventHistory.LastStopReason;
-            unmanagedEventProcessId = -1;
-            unmanagedEventThreadId = -1;
-            unmanagedOutOfBand = null;
-            unmanagedContinue = null;
-            unmanagedEventType = null;
+            lock (session.EventHistory.StopReasonLock)
+            {
+                //Interop
+                initialUnmanagedLastStopReason = session.EventHistory.LastStopReason;
+                unmanagedEventProcessId = -1;
+                unmanagedEventThreadId = -1;
+                unmanagedOutOfBand = null;
+                unmanagedContinue = null;
+                unmanagedEventType = null;
+            }
         }
     }
 }

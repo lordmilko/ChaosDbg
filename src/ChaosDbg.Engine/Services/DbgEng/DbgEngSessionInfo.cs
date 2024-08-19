@@ -65,6 +65,15 @@ namespace ChaosDbg.DbgEng
             return false;
         }
 
+        internal void AddUiClient()
+        {
+            lock (uiClientCacheLock)
+            {
+                var safeDebugClient = new SafeDebugClient(engineClient.CreateClient());
+                uiClientCache.Add(Thread.CurrentThread.ManagedThreadId, safeDebugClient);
+            }
+        }
+
         #region EngineClient
 
         private DebugClient engineClient;

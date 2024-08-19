@@ -16,4 +16,6 @@
     <Compile Include="..\Managed.x64\*.cs" />
   </ItemGroup>
 
+  <Import Project="$(Build)TerminateLockingProcesses.targets" />
+
 </Project>

@@ -29,9 +29,11 @@ namespace ChaosDbg.WinMD
 
         private List<WindowsMetadataType> apiTypes = new List<WindowsMetadataType>();
 
-        private Dictionary<string, WindowsMetadataField[]> constants;
+        private IReadOnlyDictionary<string, WindowsMetadataField[]> constants;
 
-        private Dictionary<string, WindowsMetadataField[]> Constants
+        private object objLock = new object();
+
+        private IReadOnlyDictionary<string, WindowsMetadataField[]> Constants
         {
             get
             {
@@ -42,9 +44,9 @@ namespace ChaosDbg.WinMD
             }
         }
 
-        private Dictionary<string, WindowsMetadataMethod[]> functions;
+        private IReadOnlyDictionary<string, WindowsMetadataMethod[]> functions;
 
-        private Dictionary<string, WindowsMetadataMethod[]> Functions
+        private IReadOnlyDictionary<string, WindowsMetadataMethod[]> Functions
         {
             get
             {
@@ -114,8 +116,11 @@ namespace ChaosDbg.WinMD
 
         private void EnsureInitialized()
         {
-            if (allTypes == null)
-                Initialize();
+            lock (objLock)
+            {
+                if (allTypes == null)
+                    Initialize();
+            }
         }
 
         private void Initialize()

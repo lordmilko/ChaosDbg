@@ -2,6 +2,8 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using VsDock;
+using VsDock.View;
 
 namespace ChaosDbg.Tests
 {
@@ -30,16 +32,16 @@ namespace ChaosDbg.Tests
         }
 
         public IPaneItem VisitSplitterItem(SplitterItem control) =>
-            new SplitterItemInfo(control, VisitDockContainerOwner(control));
+            new SplitterItemInfo(control, VisitViewElementOwner(control));
 
-        public override IPaneItem VisitWindow(TestWindow window) => VisitDockContainerOwner(window);
+        public override IPaneItem VisitWindow(TestWindow window) => VisitViewElementOwner(window);
 
-        private IPaneItem VisitDockContainerOwner(ContentControl control)
+        private IPaneItem VisitViewElementOwner(ContentControl control)
         {
-            var container = (DockContainer) control.Content;
+            var element = (ViewElement) control.Content;
 
-            if (container == null)
-                throw new InvalidOperationException($"Expected control '{control}' to contain a {nameof(DockContainer)} however it did not contain any content.");
+            if (element == null)
+                throw new InvalidOperationException($"Expected control '{control}' to contain a {nameof(ViewElement)} however it did not contain any content.");
 
             var children = VisitChildren(control);
 
@@ -51,15 +53,15 @@ namespace ChaosDbg.Tests
              * containing several more inner SplitterItemsDockContainer instances) */
             var bounds = control is Window ? children.Single().Bounds : control.GetBounds();
 
-            if (container is SplitterItemsDockContainer s)
+            if (element is SplitView s)
             {
-                return new SplitterItemsDockContainerInfo(s, children)
+                return new SplitViewInfo(s, children)
                 {
                     Bounds = bounds
                 };
             }
 
-            throw new NotImplementedException($"Don't know how to handle content of type '{container.GetType().Name}'");
+            throw new NotImplementedException($"Don't know how to handle content of type '{element.GetType().Name}'");
         }
 
         public IPaneItem VisitSplitterGrip(SplitterGrip control)

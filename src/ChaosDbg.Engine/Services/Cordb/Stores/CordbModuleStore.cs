@@ -144,7 +144,7 @@ namespace ChaosDbg.Cordb
             //in order to resolve any exception handlers
             var peFile = process.Session.Services.PEFileProvider.ReadStream(memoryStream, true);
 
-            var name = CordbNativeModule.GetNativeModuleName(loadDll);
+            var name = CordbNativeModule.GetNativeModuleName(loadDll, process.Id);
 
             CordbNativeModule native;
 

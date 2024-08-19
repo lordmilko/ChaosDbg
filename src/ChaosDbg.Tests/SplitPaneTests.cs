@@ -9,23 +9,22 @@ using static ChaosDbg.Tests.LayoutFactory;
 namespace ChaosDbg.Tests
 {
     [TestClass]
-    [DoNotParallelize]
-    public class SplitPaneTests
+    public class SplitPaneTests : BaseTest
     {
         [TestMethod]
         public void SplitPane_TwoColumns()
         {
-            var xaml = XamlFactory.SplitterItemsDockContainer(
+            var xaml = XamlFactory.SplitView(
                 Orientation.Horizontal,
-                XamlFactory.SplitterItemsDockContainer(),
-                XamlFactory.SplitterItemsDockContainer()
+                XamlFactory.SplitView(),
+                XamlFactory.SplitView()
             );
 
-            var expected = Expected<SplitterItemsDockContainerInfo>(width: 785.6, height: 412.8, v => v.Verify(dockedWidth: 100, dockedHeight: 100, orientation: Orientation.Horizontal),
+            var expected = Expected<SplitViewInfo>(width: 785.6, height: 412.8, v => v.Verify(dockedWidth: 100, dockedHeight: 100, orientation: Orientation.Horizontal),
                 Inherited<SplitterItemsControlInfo>(
                     Inherited<SplitterPanelInfo>(
                         Expected<SplitterItemInfo>(width: 392.8, height: 412.8,
-                            Inherited<SplitterItemsDockContainerInfo>(
+                            Inherited<SplitViewInfo>(
                                 Explicit<SplitterGripInfo>(x: 388, y: 0, width: 5, height: 412.8),
                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 0, width: 387.8, height: 412.8,
                                     Inherited<SplitterPanelInfo>()
@@ -33,7 +32,7 @@ namespace ChaosDbg.Tests
                             )
                         ),
                         Expected<SplitterItemInfo>(width: 392.8, height: 412.8,
-                            Inherited<SplitterItemsDockContainerInfo>(
+                            Inherited<SplitViewInfo>(
                                 Expected<SplitterGripInfo>(0, 0),
                                 Expected<SplitterItemsControlInfo>(width: 392.8, height: 412.8,
                                     Inherited<SplitterPanelInfo>()
@@ -50,17 +49,17 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void SplitPane_TwoRows()
         {
-            var xaml = XamlFactory.SplitterItemsDockContainer(
+            var xaml = XamlFactory.SplitView(
                 Orientation.Vertical,
-                XamlFactory.SplitterItemsDockContainer(),
-                XamlFactory.SplitterItemsDockContainer()
+                XamlFactory.SplitView(),
+                XamlFactory.SplitView()
             );
 
-            var expected = Expected<SplitterItemsDockContainerInfo>(width: 785.6, height: 412.8,
+            var expected = Expected<SplitViewInfo>(width: 785.6, height: 412.8,
                 Inherited<SplitterItemsControlInfo>(
                     Inherited<SplitterPanelInfo>(
                         Expected<SplitterItemInfo>(width: 785.6, height: 206.4,
-                            Inherited<SplitterItemsDockContainerInfo>(
+                            Inherited<SplitViewInfo>(
                                 Explicit<SplitterGripInfo>(x: 0, y: 201.6, width: 785.6, height: 5),
                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 0, width: 785.6, height: 201.4,
                                     Inherited<SplitterPanelInfo>()
@@ -68,7 +67,7 @@ namespace ChaosDbg.Tests
                             )
                         ),
                         Expected<SplitterItemInfo>(width: 785.6, height: 206.4,
-                            Inherited<SplitterItemsDockContainerInfo>(
+                            Inherited<SplitViewInfo>(
                                 Expected<SplitterGripInfo>(width: 0, height: 0),
                                 Expected<SplitterItemsControlInfo>(width: 785.6, height: 206.4,
                                     Inherited<SplitterPanelInfo>()
@@ -85,41 +84,41 @@ namespace ChaosDbg.Tests
         [TestMethod]
         public void SplitPane_Complex()
         {
-            var xaml = XamlFactory.SplitterItemsDockContainer(
+            var xaml = XamlFactory.SplitView(
                 Orientation.Horizontal,
-                XamlFactory.SplitterItemsDockContainer(
+                XamlFactory.SplitView(
                     Orientation.Vertical,
                     dockedWidth: "350",
                     children: new[]
                     {
-                        XamlFactory.SplitterItemsDockContainer(dockedHeight: "240"),
-                        XamlFactory.SplitterItemsDockContainer(
+                        XamlFactory.SplitView(dockedHeight: "240"),
+                        XamlFactory.SplitView(
                             Orientation.Horizontal,
-                            XamlFactory.SplitterItemsDockContainer(),
-                            XamlFactory.SplitterItemsDockContainer()
+                            XamlFactory.SplitView(),
+                            XamlFactory.SplitView()
                         )
                     }
                 ),
-                XamlFactory.SplitterItemsDockContainer(
+                XamlFactory.SplitView(
                     Orientation.Vertical,
-                    XamlFactory.SplitterItemsDockContainer(),
-                    XamlFactory.SplitterItemsDockContainer(),
-                    XamlFactory.SplitterItemsDockContainer()
+                    XamlFactory.SplitView(),
+                    XamlFactory.SplitView(),
+                    XamlFactory.SplitView()
                 )
             );
 
-            var expected = Expected<SplitterItemsDockContainerInfo>(width: 785.6, height: 412.8,
+            var expected = Expected<SplitViewInfo>(width: 785.6, height: 412.8,
                 Inherited<SplitterItemsControlInfo>(
                     Inherited<SplitterPanelInfo>(
                         //Item
                         Expected<SplitterItemInfo>(width: 611.022222222222, height: 412.8,
-                            Expected<SplitterItemsDockContainerInfo>(width: 611.022222222222, height: 412.8,
+                            Expected<SplitViewInfo>(width: 611.022222222222, height: 412.8,
                                 Explicit<SplitterGripInfo>(x: 606.4, y: 0, width: 5, height: 412.8),
                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 0, width: 606.022222222222, height: 412.8,
                                     Expected<SplitterPanelInfo>(width: 606.022222222222, height: 412.8,
                                         //Item
                                         Expected<SplitterItemInfo>(width: 606.022222222222, height: 291.388235294118,
-                                            Expected<SplitterItemsDockContainerInfo>(width: 606.022222222222, height: 291.388235294118,
+                                            Expected<SplitViewInfo>(width: 606.022222222222, height: 291.388235294118,
                                                 Explicit<SplitterGripInfo>(x: 0, y: 286.4, width: 606.022222222222, height: 5),
                                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 0, width: 606.022222222222, height: 286.388235294118,
                                                     Expected<SplitterPanelInfo>(width: 606.022222222222, height: 286.388235294118)
@@ -129,12 +128,12 @@ namespace ChaosDbg.Tests
 
                                         //Item
                                         Explicit<SplitterItemInfo>(x: 0, y: 291.2, width: 606.022222222222, height: 121.411764705882,
-                                            Expected<SplitterItemsDockContainerInfo>(width: 606.022222222222, height: 121.411764705882,
+                                            Expected<SplitViewInfo>(width: 606.022222222222, height: 121.411764705882,
                                                 Explicit<SplitterGripInfo>(x: 0, y: 291.2, width: 0, height: 0),
                                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 291.2, width: 606.022222222222, height: 121.411764705882,
                                                     Expected<SplitterPanelInfo>(width: 606.022222222222, height: 121.411764705882,
                                                         Expected<SplitterItemInfo>(width: 303.011111111111, height: 121.411764705882,
-                                                            Expected<SplitterItemsDockContainerInfo>(width: 303.011111111111, height: 121.411764705882,
+                                                            Expected<SplitViewInfo>(width: 303.011111111111, height: 121.411764705882,
                                                                 Explicit<SplitterGripInfo>(x: 298.4, y: 291.2, width: 5, height: 121.411764705882),
                                                                 Explicit<SplitterItemsControlInfo>(x: 0, y: 291.2, width: 298.011111111111, height: 121.411764705882,
                                                                     Expected<SplitterPanelInfo>(width: 298.011111111111, height: 121.411764705882)
@@ -142,7 +141,7 @@ namespace ChaosDbg.Tests
                                                             )
                                                         ),
                                                         Explicit<SplitterItemInfo>(x: 303.2, y: 291.2, width: 303.011111111111, height: 121.411764705882,
-                                                            Expected<SplitterItemsDockContainerInfo>(width: 303.011111111111, height: 121.411764705882,
+                                                            Expected<SplitViewInfo>(width: 303.011111111111, height: 121.411764705882,
                                                                 Explicit<SplitterGripInfo>(x: 303.2, y: 291.2, width: 0, height: 0),
                                                                 Explicit<SplitterItemsControlInfo>(x: 303.2, y: 291.2, width: 303.011111111111, height: 121.411764705882,
                                                                     Expected<SplitterPanelInfo>(width: 303.011111111111, height: 121.411764705882)
@@ -159,13 +158,13 @@ namespace ChaosDbg.Tests
                         ),
                         //Item
                         Explicit<SplitterItemInfo>(x: 611.2, y: 0, width: 174.577777777778, height: 412.8,
-                            Expected<SplitterItemsDockContainerInfo>(width: 174.577777777778, height: 412.8,
+                            Expected<SplitViewInfo>(width: 174.577777777778, height: 412.8,
                                 Explicit<SplitterGripInfo>(x: 611.2, y: 0, width: 0, height: 0),
                                 Explicit<SplitterItemsControlInfo>(x: 611.2, y: 0, width: 174.577777777778, height: 412.8,
                                     Expected<SplitterPanelInfo>(width: 174.577777777778, height: 412.8,
                                         //Item
                                         Expected<SplitterItemInfo>(width: 174.577777777778, height: 137.6,
-                                            Expected<SplitterItemsDockContainerInfo>(width: 174.577777777778, height: 137.6,
+                                            Expected<SplitViewInfo>(width: 174.577777777778, height: 137.6,
                                                 Explicit<SplitterGripInfo>(x: 611.2, y: 132.8, width: 174.577777777778, height: 5),
                                                 Explicit<SplitterItemsControlInfo>(x: 611.2, y: 0, width: 174.577777777778, height: 132.6,
                                                     Expected<SplitterPanelInfo>(width: 174.577777777778, height: 132.6)
@@ -174,7 +173,7 @@ namespace ChaosDbg.Tests
                                         ),
                                         //Item
                                         Expected<SplitterItemInfo>(width: 174.577777777778, height: 137.6,
-                                            Expected<SplitterItemsDockContainerInfo>(width: 174.577777777778, height: 137.6,
+                                            Expected<SplitViewInfo>(width: 174.577777777778, height: 137.6,
                                                 Explicit<SplitterGripInfo>(x: 611.2, y: 270.4, width: 174.577777777778, height: 5),
                                                 Explicit<SplitterItemsControlInfo>(x: 611.2, y: 137.6, width: 174.577777777778, height: 132.6,
                                                     Expected<SplitterPanelInfo>(width: 174.577777777778, height: 132.6)
@@ -183,7 +182,7 @@ namespace ChaosDbg.Tests
                                         ),
                                         //Item
                                         Expected<SplitterItemInfo>(width: 174.577777777778, height: 137.6,
-                                            Expected<SplitterItemsDockContainerInfo>(width: 174.577777777778, height: 137.6,
+                                            Expected<SplitViewInfo>(width: 174.577777777778, height: 137.6,
                                                 Explicit<SplitterGripInfo>(x: 611.2, y: 275.2, width: 0, height: 0),
                                                 Explicit<SplitterItemsControlInfo>(x: 611.2, y: 275.2, width: 174.577777777778, height: 137.6,
                                                     Expected<SplitterPanelInfo>(width: 174.577777777778, height: 137.6)
@@ -203,11 +202,11 @@ namespace ChaosDbg.Tests
 
         private void Test(XamlElement xaml, ControlInfo expected)
         {
-            AppRunner.WithCustomXaml(xaml, w =>
+            AppRunner.WithCustomXaml(xaml, (app, win) =>
             {
                 var visitor = new PaneVisualTreeVisitor();
 
-                var root = visitor.Visit(w);
+                var root = visitor.Visit(win);
 
                 CompareTree(expected, root);
             });

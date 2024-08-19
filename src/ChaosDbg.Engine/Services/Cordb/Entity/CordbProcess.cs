@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using ChaosDbg.DAC;
 using ChaosDbg.Disasm;
 using ChaosDbg.Evaluator.Masm;
 using ChaosDbg.Symbol;
 using ChaosLib;
+using ChaosLib.Handle;
 using ChaosLib.Symbols;
+using ChaosLib.TypedData;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -103,6 +106,13 @@ namespace ChaosDbg.Cordb
         /// Gets the underlying <see cref="ClrDebug.CorDebugProcess"/> of this entity.
         /// </summary>
         public CorDebugProcess CorDebugProcess { get; }
+
+#if DEBUG
+        /// <summary>
+        /// Provides access to the native mscordbi!CordbProcess via typed data.
+        /// </summary>
+        internal IDbgRemoteObject TypedProcess { get; }
+#endif
 
         public Process Win32Process { get; }
 
@@ -205,6 +215,7 @@ namespace ChaosDbg.Cordb
                 corDebugProcess.Handle,
                 Session.EngineId,
                 new CordbDebuggerSymbolProviderExtension(this),
+                Session.Services.DbgHelpProvider,
                 Session.Services.MicrosoftPdbSourceFileProvider
             );
 
@@ -214,6 +225,13 @@ namespace ChaosDbg.Cordb
             ProcessDisassembler = session.Services.NativeDisasmProvider.CreateDisassembler(this, resolver);
             resolver.ProcessDisassembler = ProcessDisassembler;
 
+#if DEBUG
+            TypedProcess = CorDebugProcess.Raw.GetType().IsCOMObject
+                ? NativeReflector.GetTypedData(CorDebugProcess)
+                : null;
+#endif
+
+            //This MUST be last, no exceptions!
             dbgHelpHolder.SuppressDispose();
         }
 
@@ -243,6 +261,10 @@ namespace ChaosDbg.Cordb
             );
 
             CorDebugProcess = new CorDebugProcess((ICorDebugProcess) result.ppProcess);
+
+#if DEBUG
+            TypedProcess = NativeReflector.GetTypedData(CorDebugProcess);
+#endif
         }
 
         HRESULT ICLRDebuggingLibraryProvider.ProvideLibrary(string pwszFileName, int dwTimestamp, int dwSizeOfImage, out IntPtr phModule)
@@ -319,10 +341,22 @@ namespace ChaosDbg.Cordb
             //See the notes under the CordbEngine.cs: Shutdown section for information on how ICorDebug shutdown logic works, and how ChaosDbg
             //has been designed to interoperate with that.
 
+            /* It is absolutely essential that we dispose our threads in order for the process to properly terminate. If any single process in the system is holding a reference to a given thread handle,
+             * the process won't be able to terminate, as the handle will be being kept alive. If the process doesn't terminate, mscordbi won't know to trigger an ExitProcess
+             * notification event. Having said this, it's important to note that every handle that was given out by CREATE_THREAD_DEBUG_EVENT is owned by Kernel32.
+             * These handles will be closed by Kernel32 after the EXIT_PROCESS_DEBUG_EVENT has been processed. So it's expected there will at least be _some_ outstanding
+             * thread handles after we call this. It could also be the case that we don't own any thread handles and this method call will do nothing.
+             *
+             * Ordinarily, we won't have any handles to dispose, but in in V3, our ManagedAccessors open handles. */
+            Threads.Dispose();
+
             //As soon as we call terminate it's going to dispatch to the Win32 event thread an event requesting termination; thus, we want to ensure
-            //we have our bookkeeping done first
+            //we have our bookkeeping done
+tryTerminate:
             Session.IsTerminating = true;
             var hr = CorDebugProcess.TryTerminate(0);
+
+            Log.Debug<CordbProcess>("CorDebugProcess.Terminate() returned with {hr}", hr);
 
             switch (hr)
             {
@@ -333,6 +367,18 @@ namespace ChaosDbg.Cordb
                     //It's not our responsibility to claim that the process has terminated; only the ExitProcess event can do that
                     break;
 
+                case HRESULT.CORDBG_E_PROCESS_NOT_SYNCHRONIZED:
+                    //We currently make the assumption that the debugger thread inside of the target won't be interrupted
+                    Log.Debug<CordbProcess>("Failed to terminate process as process was not synchronized. Attempting to stop process");
+                    hr = CorDebugProcess.TryStop(0);
+
+                    //I've seen a case where CordbEngine.Continue() was called after we called Stop() (not sure if it was our unit test that called Continue()
+                    //or it occurred within a currently executing callback). In any case, if someone starts the debugger again, we'll just stop it again.
+                    //There is a risk that we could loop infinitely here however though; I'm betting on getting a different error besides not synchronized
+                    //if we keep trying this long enough though
+                    Log.Debug<CordbProcess>("CorDebugProcess.Stop() returned with {hr}. Reattempting termination", hr);
+                    goto tryTerminate;
+
                 default:
                     hr.ThrowOnNotOK();
                     break;
@@ -341,13 +387,103 @@ namespace ChaosDbg.Cordb
             /* We need to ensure the debugger is running in order to receive the exit process event.
              * If the process has already terminated, I believe we still need to wait for the ExitProcess event anyway; if we let this method
              * return without having received it, we may end up receiving it after we've already set our Process object to null, and we assert
-             * that we must always have a Process object in our pre-event handler */
-            if (Session.EventHistory.LastStopReason is CordbNativeEventPauseReason { OutOfBand: true })
+             * that we must always have a Process object in our pre-event handler
+             *
+             * Ostensibly, the stop count on mscordbi!CordbProcess should match the stop count on our CordbSessionInfo. However, if an unhandled
+             * exception occurs during the handling of a managed callback, this will not be the case. mscordbi!CordbProcess::DispatchRCEvent
+             * bumps up the m_stopCount _twice_ so that it guarantees that the target is still stopped even after you call Continue(). We don't
+             * know whether we're in this scenario, so to be safe, we'll just keep on calling continue until we're told to stop */
+
+            if (Session.EventHistory.LastStopReason is CordbNativeEventPauseReason {OutOfBand: true})
                 CorDebugProcess.TryContinue(true);
-            else
-                CorDebugProcess.TryContinue(false);
+
+            //Keep calling continue until until we're told to stop
+            while (true)
+            {
+                //Note that if this is the Win32 Event Thread, we're in big trouble, because when we send a non-OOB unmanaged continue,
+                //the Win32 Event Thread needs to process it, but that's not going to be possible because we're on it, and we need
+                //to block waiting for our WaitExitProcess event
+                if (CorDebugProcess.TryContinue(false) != HRESULT.S_OK)
+                    break;
+            }
+
+            //Target is now running. No point checking m_stopCount, as it may just be showing us what's going on on the Win32 Event Thread
+
+            /* We are waiting for mscordbi to call CordbWin32EventThread::ExitProcess. Terminate() above literally attempts to terminate the process. ExitProcess is then called under the following scenarios:
+             *
+             * In CordbWin32EventThread::Win32EventLoop():
+             * - the wait handle for the process indicates it has exited
+             * - a W32ETA_DETACH event is sent to the Win32 Event Thread
+             *
+             * In CordbWin32EventThread::DoDbgContinue when a EXIT_PROCESS_DEBUG_EVENT event is received
+             *
+             * When is DoDbgContinue called?
+             *
+             * - in CordbProcess::DispatchUnmanagedInBandEvent() after dispatching an in-band event
+             * - in CordbProcess::DispatchUnmanagedOOBEvent() when m_dispatchingOOBEvent is false (which should be the case if we continued the event)
+             * - in CordbProcess::HandleDebugEventForInteropDebugging
+             * - in CordbWin32EventThread::UnmanagedContinue
+             */
+#if DEBUG
+            //Process.HasExited lies to you! You can have a process still alive even though it says its exited if there are still outstanding handles
+            //to any of the processes' threads
+
+tryWait:
+            //With all the logging that goes on, it's not completely impossible that there could be a >30s delay for shutdown to even get to the point that we get the exit process event.
+            //When running unit tests with the inproc DbgHelp, there can also be massive amounts of contention which causes issues when we've received the unmanaged ExitProcess notification event,
+            //but are now hung waiting to enter DbgHelp in order to unload the unmanaged module for our process, creating the impression that we've hung when we haven't
+            if (!Session.WaitExitProcess.Wait(40000))
+            {
+                if (Session.IsPerformingExitProcess)
+                    goto tryWait;
+
+                ValidateReadyToTerminate();
+
+                //If we've received the EXIT_PROCESS_DEBUG_EVENT, but m_dispatchingOOBEvent is true, this either means
+                //- that we're in the middle of EXIT_PROCESS_DEBUG_EVENT and it's hung, or
+                //- our eager calls to Continue() above have stuffed up the real continue for an OOB event, and m_dispatchingOOBEvent was never set to false, preventing DoDbgContinue from being called
+                Debug.Assert(false, "Hung while waiting for process to exit");
+            }
+#endif
 
             Session.WaitExitProcess.Wait();
+        }
+
+        private void ValidateReadyToTerminate()
+        {
+            /* If any outstanding handles are held to any threads in the target process, it won't terminate properly, and will exist in a zombie state.
+             * Attempts to query it by PID will still succeed, Process.HasExited will return true despite the fact the process is still alive, and
+             * perhaps most importantly: we won't receive our ExitProcess event, because the final thread of the process hasn't actually exited yet.
+             * Thus, rather than just try and proceed with termination and wonder what is going on when we end up hanging waiting for WaitExitProcess
+             * to be signalled, we'll preemptively try and query for any handles to the target process that might exist. While in theory we should
+             * be scanning all handles in all processes (since any one of them could theoretically have a handle that may be keeping our target process
+             * open), for performance and stability purposes (we currently may throw if we fail to retrieve handle information) we'll limit our search
+             * to handles owned by the current process */
+
+            //Note that any thread handles provided to us by CREATE_THREAD_DEBUG_EVENT notifications are owned by Kernel32; we don't need to close these,
+            //these will automatically be closed after the EXIT_PROCESS_DEBUG_EVENT notification has been received.
+
+            ThreadHandleInfo[] handles = null;
+
+            try
+            {
+                handles = HandleInfo.EnumerateHandles(Kernel32.GetCurrentProcessId()).OfType<ThreadHandleInfo>().Where(i => i.ThreadProcessId == Id).ToArray();
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Debug.Assert(false, $"Failed to enumerate thread handles: {ex.Message}");
+#else
+                //In production, don't make any noise, just cross our fingers and see what happens
+                return;
+#endif
+            }
+
+            if (handles.Length > 0)
+            {
+                //Note: we don't know which threads are owned by Kernel32 vs which ones might be owned by us!
+                throw new InvalidOperationException($"Cannot terminate when {handles.Length} thread handles owned by process {Id} are still open");
+            }
         }
 
         #region IDbgProcess
@@ -369,6 +505,9 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
+            Log.Debug<CordbProcess>("Disposing CordbProcess");
+
+            Threads.Dispose();
             DAC.Dispose();
             Symbols.Dispose();
 

@@ -90,13 +90,40 @@ namespace ChaosDbg.Cordb
         {
             get
             {
+                Win32Process process;
+
+                try
+                {
+                    process = Win32Process.GetProcessById(Process.Id);
+                }
+                catch
+                {
+                    return false;
+                }
+
                 /* When we receive the EXIT_THREAD_DEBUG_EVENT notification, the thread is still running, and is inside of NtTerminateThread.
                  * WaitForSingleObject is supposed to tell you when a thread ends, but it doesn't - maybe it's because what we have is a copy
                  * of the handle to the thread? GetExitCodeThread also apparently isn't reliable. Even calling GetThreadId on the handle of the
                  * terminated thread doesn't work. As such, we seem to have no choice but to enumerate the threads of the target process, and
                  * CreateToolhelp32Snapshot is very annoying to work with as it can sometimes spuriously fail; thus, we are forced to use
                  * System.Diagnostics.Process instead */
-                return Win32Process.GetProcessById(Process.Id).Threads.Cast<ProcessThread>().Any(t => t.Id == Id);
+                return process.Threads.Cast<ProcessThread>().Any(t => t.Id == Id);
+            }
+        }
+
+        /// <summary>
+        /// Gets the suspend count of this thread, or <see langword="null"/> if the suspend count could not be retrieved (indicating that the thread likely no longer exists).
+        /// </summary>
+        public int? SuspendCount
+        {
+            get
+            {
+                //If the thread or process has terminated, we may fail to query the suspend count
+
+                if (Ntdll.TryNtQueryInformationThread<int>(Handle, THREADINFOCLASS.ThreadSuspendCount, out var count) == NTSTATUS.STATUS_SUCCESS)
+                    return count;
+
+                return count;
             }
         }
 

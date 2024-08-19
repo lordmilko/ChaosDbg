@@ -10,5 +10,7 @@ namespace ChaosDbg
         IntPtr GetFunctionTableEntry(long address);
 
         bool TryGetNativeModuleBase(long address, out long moduleBase);
+
+        IDbgHelp UnsafeGetDbgHelp();
     }
 }

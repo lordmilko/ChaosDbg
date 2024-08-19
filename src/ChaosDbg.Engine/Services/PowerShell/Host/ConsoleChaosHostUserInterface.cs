@@ -62,11 +62,11 @@ namespace ChaosDbg.PowerShell.Host
 
             return;
 
-incompatible:
+        incompatible:
             WriteWarningLine("ChaosDbg is incompatible with the installed version of PSReadLine. Function key shortcuts will be unavailable");
         }
 
-        private static void SendEnter()
+        private void SendEnter()
         {
             var pushDown = new INPUT
             {
@@ -75,13 +75,13 @@ incompatible:
                 {
                     ki = new KEYBDINPUT
                     {
-                        wVk = (short) VirtualKey.Enter,
+                        wVk = VirtualKey.Enter,
                         wScan = 0,
                         dwFlags = KEYEVENTF.NONE,
                         time = 0,
                         dwExtraInfo = IntPtr.Zero
-    }
-}
+                    }
+                }
             };
 
             var letUp = new INPUT
@@ -91,7 +91,7 @@ incompatible:
                 {
                     ki = new KEYBDINPUT
                     {
-                        wVk = (short) VirtualKey.Enter,
+                        wVk = VirtualKey.Enter,
                         wScan = 0,
                         dwFlags = KEYEVENTF.KEYUP,
                         time = 0,
@@ -105,6 +105,10 @@ incompatible:
                 pushDown,
                 letUp
             };
+
+            terminal.SendInput(inputs, true);
+        }
+
         private static bool IsRunningInWindowsTerminal()
         {
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))

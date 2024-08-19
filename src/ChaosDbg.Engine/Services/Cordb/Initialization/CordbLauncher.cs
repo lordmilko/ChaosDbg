@@ -98,17 +98,17 @@ namespace ChaosDbg.Cordb
         protected void AttachCommon(bool hackClrInstanceId)
         {
             cb = new CordbManagedCallback();
-            InstallManagedStartupHook();
+            InstallManagedStartupHook(out var managedWait);
             corDebug.SetManagedHandler(cb);
 
-            ManualResetEventSlim wait = null;
+            ManualResetEventSlim unmanagedWait = null;
 
             if (options.UseInterop)
             {
                 ucb = new CordbUnmanagedCallback();
 
                 //Don't let unmanaged callbacks run free until we've signalled we're ready!
-                InstallInteropStartupHook(out wait);
+                InstallInteropStartupHook(out unmanagedWait);
 
                 corDebug.SetUnmanagedHandler(ucb);
             }
@@ -152,7 +152,8 @@ namespace ChaosDbg.Cordb
                     handle.Dispose();
             }
 
-            wait?.Set();
+            managedWait.Set();
+            unmanagedWait?.Set();
         }
 
         protected void GetCreateProcessArgs(
@@ -220,9 +221,14 @@ namespace ChaosDbg.Cordb
             return threadHandles.ToArray();
         }
 
-        protected void InstallManagedStartupHook()
+        protected void InstallManagedStartupHook(out ManualResetEventSlim wait)
         {
             EventHandler<CorDebugManagedCallbackEventArgs> onPreEvent = null;
+
+            wait = new ManualResetEventSlim(false);
+
+            //We can't use a ref variable in a lambda expression
+            var localWait = wait;
 
             onPreEvent = (s, e) =>
             {
@@ -232,6 +238,13 @@ namespace ChaosDbg.Cordb
                     Thread.CurrentThread.Name = $"Managed Callback Thread {engine.Session.EngineId}"; //Called the "Runtime Controller" thread in ICorDebug
 
                 Log.CopyContextFrom(engine.Session.EngineThread);
+
+                //I've seen a case where we're still in the CordbProcess ctor, and haven't assigned it to the ActiveProcess yet, and we got an ExitProcess
+                //event because I guess something went horribly wrong. Thus, we need to block waiting for managed events as well
+                Log.Debug<CordbLauncher>("Waiting for engine thread to signal that it is ready to receive managed events");
+                WaitHandle.WaitAny(new[] { launchCTS.Token.WaitHandle, localWait.WaitHandle });
+
+                Log.Debug<CordbLauncher>("Ready to receive managed events, or wait has been cancelled!");
 
                 cb.OnPreEvent -= onPreEvent;
             };
@@ -262,6 +275,7 @@ namespace ChaosDbg.Cordb
 
                 Log.Debug<CordbLauncher>("Waiting for engine thread to signal that it is ready to receive unmanaged events");
                 WaitHandle.WaitAny(new[] { launchCTS.Token.WaitHandle, localWait.WaitHandle });
+                Log.Debug<CordbLauncher>("Ready to receive unmanaged events, or wait has been cancelled!");
 
                 ucb.OnPreEvent -= onPreEvent;
 
@@ -306,10 +320,29 @@ namespace ChaosDbg.Cordb
             engine.RegisterUnmanagedCallbacks(ucb);
         }
 
+#if DEBUG
+        public delegate void Mscordbi_CordbWin32EventThread_ExitProcess_Delegate(IntPtr @this, bool fDetach);
+        public delegate void Mscordbi_CordbWin32EventThread_ExitProcess_DelegateHook(IntPtr @this, bool fDetach, Mscordbi_CordbWin32EventThread_ExitProcess_Delegate original);
+
+        public delegate void Mscordbi_ExitProcessWorkItem_Do_Delegate(IntPtr @this);
+        public delegate void Mscordbi_ExitProcessWorkItem_Do_DelegateHook(IntPtr @this, Mscordbi_ExitProcessWorkItem_Do_Delegate original);
+
+        public delegate bool Mscordbi_WindowsNativePipeline_TerminateProcess_Delegate(IntPtr @this, uint exitCode);
+        public delegate bool Mscordbi_WindowsNativePipeline_TerminateProcess_DelegateHook(IntPtr @this, uint exitCode, Mscordbi_WindowsNativePipeline_TerminateProcess_Delegate original);
+
+        public delegate bool DbgHelp_DoCallback_Delegate(IntPtr processEntry, CBA actionCode, IntPtr callbackData);
+        public delegate bool DbgHelp_DoCallback_DelegateHook(IntPtr processEntry, CBA actionCode, IntPtr callbackData, DbgHelp_DoCallback_Delegate original);
+
+        private static object hookLock = new object();
+        private static bool hooksInstalled;
+#endif
+
         protected void StoreSessionInfo(SafeThreadHandle[] threads)
         {
             try
             {
+                InstallDebugHooks();
+
                 engine.Session.CorDebug = corDebug;
                 engine.Session.ManagedCallback = cb;
                 engine.Session.UnmanagedCallback = ucb;
@@ -341,7 +374,7 @@ namespace ChaosDbg.Cordb
                 HRESULT hr;
 
                 /* In order to terminate the process, it first has to be synchronized. This must be done by calling CordbProcess::Stop(). StopInternal() will automatically
-                 * check whether the process has executed any managed code yet (m_initialized) and if so will simply set the process to synchronized and return early. Otherwise,
+                 * check whether the process has executed any managed code yet (m_initialized) and if not will simply set the process to synchronized and return early. Otherwise,
                  * CordbProcess::StartSyncFromWin32Stop() will be called. This method will do two things. First, it will call CordbWin32EventThread::SendUnmanagedContinue() which will
                  * need to be handled on the Win32 event thread. Secondly, it will attempt to send an IPC event to the target process to tell it that we want to stop.
                  *
@@ -389,6 +422,71 @@ namespace ChaosDbg.Cordb
                 throw;
             }
         }
+
+#if DEBUG
+        private void InstallDebugHooks()
+        {
+            lock (hookLock)
+            {
+                if (!hooksInstalled)
+                {
+                    //Hook ExitProcess infrastructure so that we can more effectively debug when we fail to shutdown properly
+                    NativeReflector.InstallHook<Mscordbi_CordbWin32EventThread_ExitProcess_Delegate, Mscordbi_CordbWin32EventThread_ExitProcess_DelegateHook>(
+                        "mscordbi!CordbWin32EventThread::ExitProcess",
+                        (@this, fDetach, original) =>
+                        {
+                            Log.Debug<CordbEngine>("Called CordbWin32EventThread::ExitProcess(fDetach: {fDetach})", fDetach);
+                            original(@this, fDetach);
+                        }
+                    );
+
+                    NativeReflector.InstallHook<Mscordbi_ExitProcessWorkItem_Do_Delegate, Mscordbi_ExitProcessWorkItem_Do_DelegateHook>(
+                        "mscordbi!ExitProcessWorkItem::Do",
+                        (@this, original) =>
+                        {
+                            Log.Debug<CordbEngine>("Called ExitProcessWorkItem::Do");
+                            original(@this);
+                        }
+                    );
+
+                    NativeReflector.InstallHook<Mscordbi_WindowsNativePipeline_TerminateProcess_Delegate, Mscordbi_WindowsNativePipeline_TerminateProcess_DelegateHook>(
+                        "mscordbi!WindowsNativePipeline::TerminateProcess",
+                        (@this, exitCode, original) =>
+                        {
+                            Log.Debug<CordbEngine>("Calling WindowsNativePipeline::TerminateProcess...");
+
+                            var result = original(@this, exitCode);
+
+                            Log.Debug<CordbEngine>("WindowsNativePipeline::TerminateProcess returned with value {result}", result);
+
+                            return result;
+                        }
+                    );
+
+                    NativeReflector.InstallHook<DbgHelp_DoCallback_Delegate, DbgHelp_DoCallback_DelegateHook>(
+                        "dbghelp!DoCallback",
+                        (processEntry, actionCode, callbackData, original) =>
+                        {
+                            if (processEntry != IntPtr.Zero)
+                            {
+                                var entry = NativeReflector.GetGlobal<WellKnownSymbol.DbgHelp.PROCESS_ENTRY>(processEntry);
+
+                                Log.Debug<CordbEngine>("Calling dbghelp!DoCallback for hProcess {hProcess}, PID {pid} ActionCode {actionCode}", entry.hProcess.ToString("X"), entry.ProcessId, actionCode);
+                            }
+                            else
+                            {
+                                Log.Debug<CordbEngine>("Got broadcast on dbghelp!DoCallback");
+                            }
+
+                            return original(processEntry, actionCode, callbackData);
+                        }
+                    );
+
+                    hooksInstalled = true;
+                }
+            }
+        }
+#endif
 
         protected byte[] GetEnvironmentBytes()
         {

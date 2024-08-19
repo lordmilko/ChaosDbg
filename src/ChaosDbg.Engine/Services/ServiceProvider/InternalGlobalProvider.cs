@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
@@ -25,13 +26,6 @@ namespace ChaosDbg
         //The service probider is lazily loaded on first access
         private static Lazy<IServiceProvider> serviceProvider;
 
-        //When running unit tests, in order to enable running multiple tests at once, we will store a unique global service provider
-        //on each thread. The only place the global provider should be used is on application entry points, so I don't think there should
-        //be any issues with multiple threads trying to access the same global provider. If that is the case, that means we have a a design
-        //issue and should fix it
-        [ThreadStatic]
-        internal static IServiceProvider TestServiceProvider;
-
         /// <summary>
         /// Gets the global <see cref="IServiceProvider"/> of the application.
         /// </summary>
@@ -41,9 +35,6 @@ namespace ChaosDbg
             {
                 if (serviceProvider == null)
                     throw new ObjectDisposedException(nameof(ServiceProvider));
-
-                if (TestServiceProvider != null)
-                    return TestServiceProvider;
 
                 return serviceProvider.Value;
             }
@@ -57,10 +48,12 @@ namespace ChaosDbg
 
         static InternalGlobalProvider()
         {
-            serviceProvider = new Lazy<IServiceProvider>(CreateServiceProvider);
+            //If a test is trying to re-initialize the service provider, it better be null already
+            Debug.Assert(serviceProvider == null);
+            serviceProvider = new Lazy<IServiceProvider>(() => CreateServiceProvider(ConfigureServices));
         }
 
-        private static IServiceProvider CreateServiceProvider()
+        internal static IServiceProvider CreateServiceProvider(Action<ServiceCollection> configureServices)
         {
             var services = new ServiceCollection
             {
@@ -72,8 +65,8 @@ namespace ChaosDbg
                 typeof(DbgEngEngineServices),
 
                 //Symbols
-                typeof(SymHelp),
                 typeof(MicrosoftPdbSourceFileProvider),
+                {  typeof(IDbgHelpProvider), typeof(DbgHelpProvider) },
 
                 //NativeLibrary
                 typeof(NativeLibraryProvider),
@@ -82,7 +75,6 @@ namespace ChaosDbg
                 {
                     typeof(DbgEngNativeLibraryLoadCallback),
                     typeof(DbgHelpNativeLibraryLoadCallback),
-                    typeof(MSDiaNativeLibraryLoadCallback),
                     typeof(SymSrvNativeLibraryLoadCallback)
                 }},
 
@@ -99,7 +91,7 @@ namespace ChaosDbg
                 { typeof(ISigReader), typeof(SigReader) }
             };
 
-            ConfigureServices?.Invoke(services);
+            configureServices?.Invoke(services);
 
             var provider = services.Build();
 
@@ -108,6 +100,10 @@ namespace ChaosDbg
 
         public static void Dispose()
         {
+            Log.Debug<InternalGlobalProvider>("Disposing service provider");
+
+            Debug.Assert(serviceProvider != null, "Service provider is either being double disposed, another thread disposed it underneath us, or after disposing it a test did not reinitialize it");
+
             if (serviceProvider.IsValueCreated)
             {
                 if (serviceProvider.Value is IDisposable d)

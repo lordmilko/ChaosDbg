@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Host;
-using ChaosDbg.DbgEng;
+using ChaosDbg.PowerShell.Cmdlets.Control;
 using ChaosDbg.Terminal;
-using ChaosLib;
-using ClrDebug;
-using ClrDebug.DbgEng;
 
 namespace ChaosDbg.PowerShell.Host
 {
@@ -16,11 +14,12 @@ namespace ChaosDbg.PowerShell.Host
     class ChaosDbgHost : PSHostBase
     {
         private IServiceProvider serviceProvider;
-        private string lastCommand;
 
-        private HashSet<string> bannedCommands = new HashSet<string>
+        private List<string> powerShellCommands = new List<string>
         {
-            "ls" //List Source Lines
+            "wt", //Windows Terminal
+            "gu", //Get-Unique
+            "r" //Invoke-History
         };
 
         public ChaosDbgHost(IServiceProvider serviceProvider, CommandLineParameterParser cpp) : base(serviceProvider.GetService<ITerminal>(), cpp)
@@ -39,100 +38,52 @@ namespace ChaosDbg.PowerShell.Host
 
         protected override bool TryExecuteDbgCommand(string command)
         {
-            //It is of utmost importance that debugger commands are executed as quickly as possible. This is particularly
-            //important when it comes to stepping. Waiting for all the gunk in System.Management.Automation to do its thing is unacceptable.
-            //Therefore, we will try and intercept any known commands and handle them directly
-
-            //Note that holding down enter when using DbgShell only "feels" faster because its prompt is two lines instead of one,
-            //so emits lines twice as fast
-
-            if (bannedCommands.Contains(command) || command.Contains("$"))
+            if (command == null)
                 return false;
 
-            if (command == string.Empty)
+            /* It is of utmost importance that debugger commands are executed as quickly as possible. This is particularly
+             * important when it comes to stepping. Waiting for all the gunk in System.Management.Automation to do its thing is unacceptable.
+             * Therefore, we will try and intercept any known commands and handle them directly
+             *
+             * Note that holding down enter when using DbgShell only "feels" faster because its prompt is two lines instead of one,
+             * so emits lines twice as fast */
+
+            switch (command)
             {
-                if (!string.IsNullOrEmpty(lastCommand))
-                    command = lastCommand;
-                else
+                case "t":
+                case "p":
+                    break;
+
+                default:
+                    //If it's a dx command, they might be typing @$cursession or something. PowerShell will interpret $cursession as being a variable, so we need to intercept this
+
+                    //There's several possibilities:
+                    //1. It's a sequence of PowerShell commands
+                    //2. It's a sequence of DbgEng commands
+                    //3. There's a combination of PowerShell and DbgEng commands
+                    //4. There's a DbgEng loop containing multiple commands
+                    //5. There's a PowerShell loop containing multiple commands
+                    //6. There's a PowerShell loop containing both PowerShell and DbgEng commands
+                    if (command.Contains(";")) //if they typed a ; they might be trying to chain multiple dbgeng or powershell commands. We need to split the input and process each command separately
+                        return false;
+
+                    if (command.StartsWith("dx "))
+                        break;
+
+                    if (powerShellCommands.Any(c => c == command || command.StartsWith($"{c} ")))
+                        break;
+
                     return false;
             }
 
-            var dbgEngEngineProvider = serviceProvider.GetService<DbgEngEngineProvider>();
-
-            var engine = dbgEngEngineProvider.ActiveEngine;
-
-            if (engine != null)
+            var invokeDbgCommand = new InvokeDbgCommand
             {
-                bool success = false;
+                Command = new[]{command}
+            };
 
-                //We've got a bit of an issue. If we do "g" we're going to go...but because PSReadLine disables the normal handling
-                //of Ctrl+C, we can't install a Ctrl+C hook to say to interrupt the target. In fact, it's even worse than that:
-                //PSReadLine's ReadKey Thread won't even begin listening for a key until _readKeyWaitHandle is signalled.
-                //We can potentially handle Ctrl+C ourselves, but then we'd have a race between the ReadKey Thread going back to sleep
-                //(it may be in the middle of calling ReadConsoleInput at the point that this code is running) and the code that runs
-                //on the engine thread.
+            invokeDbgCommand.Execute();
 
-                //If we're not stepping, restore the normal Ctrl+C handler so that we can stop the command if it's long running
-                var oldMode = terminal.GetInputConsoleMode();
-
-                var newMode = oldMode | ConsoleMode.ENABLE_PROCESSED_INPUT;
-
-                //If we're doing any kind of stepping, we may try and quickly do a step in while the current step
-                //is still processing. If we restore normal Ctrl+C behavior, this will also restore F11 full screen
-                //behavior. So only restore normal Ctrl+C behavior if we're not doing a step
-                if (oldMode != newMode && command != "p" && command != "t")
-                    terminal.SetInputConsoleMode(newMode);
-
-                try
-                {
-                    using (new CtrlCHandler(_ =>
-                    {
-                        engine.ActiveClient.Control.SetInterrupt(DEBUG_INTERRUPT.ACTIVE);
-                        return true;
-                    }))
-                    {
-                        engine.Session.EngineThread.Invoke(() =>
-                        {
-                            //We must write the output of the buffered command from within the engine thread so that, if the command
-                            //we executed resulted in the debugger continuing, we don't race between emitting the results of the command
-                            //we just executed and emitting whatever the debugger outputs next
-
-                            var result = engine.Session.ExecuteBufferedCommand(c =>
-                {
-                                if (c.Control.TryExecute(DEBUG_OUTCTL.THIS_CLIENT, command, DEBUG_EXECUTE.DEFAULT) == HRESULT.S_OK)
-                                    success = true;
-                            });
-
-                            if (success)
-                    {
-                                foreach (var line in result)
-                                    UI.WriteLine(line);
-                            }
-                        });
-
-                        if (success)
-                    {
-                            //If the command we executed resulted in the engine status changing, the break event will have been reset and
-                            //the input loop will break and the engine will automatically call WaitForEvent
-                            engine.WaitForBreak();
-
-                            if (lastCommand != "g")
-                                lastCommand = command;
-                            else
-                                lastCommand = null;
-
-                            return true;
-                        }
-                    }
-                }
-                finally
-                {
-                    if (oldMode != newMode)
-                        terminal.SetInputConsoleMode(oldMode);
-                }
-            }
-
-            return false;
+            return true;
         }
 
         private void OnCommandNotFound(object sender, CommandLookupEventArgs e)

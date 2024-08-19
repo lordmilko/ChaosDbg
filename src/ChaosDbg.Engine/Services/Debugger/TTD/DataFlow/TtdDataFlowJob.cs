@@ -235,9 +235,36 @@ namespace ChaosDbg.TTD
                 Debug.Assert(futureRegisterValue.Upper == (ulong) ctx.TargetValue || futureRegisterValue.Lower == (ulong) ctx.TargetValue);
             }
 
+            Debug.Assert(currentRegisterContext != null);
+
+            CrossPlatformContext previousRegisterContext = currentRegisterContext;
+
+            INativeInstruction currentInstr;
+
             while (true)
             {
-                var replayResult = ctx.Cursor.ReplayBackward(Position.Min, 1);
+                //We want to step back "over" instructions to find when a given value entered a given instruction. In the event we step over a function call,
+                //and lose the register value, this means the register got its value from the function we reverse stepped over, so we need to step forward
+                //into that function and then resume reverse stepping backwards
+
+                //We won't know whether the previous instruction is a call until we step back and find ourselves on a ret!
+                if (ReverseStepOverInstr(ctx, register, ref previousRegisterContext, futureRegisterValue, out currentInstr, cancellationToken))
+                    break;
+            }
+
+            //We found the point where the register value changed
+
+            //I don't think that any value we're tracing through registers would trace into a module unload, so I don't think we need to constantly
+            //update our loaded modules as we go
+            var name = ctx.SymbolManager.GetSymbol(previousRegisterContext);
+
+            var dataFlowItem = new TtdDataFlowItem(ctx.TargetValue, name, ctx.Cursor.GetThreadInfo(), ctx.Cursor.GetPosition(), currentInstr);
+
+            ctx.ParentToRegisterContext[dataFlowItem] = previousRegisterContext;
+
+            return new TtdDataFlowJob(dataFlowItem);
+        }
+
         private bool ReverseStepOverInstr(
             TtdDataFlowContext ctx,
             Register register,
@@ -259,9 +286,6 @@ namespace ChaosDbg.TTD
 
             ctx.Disassembler.BaseStream.Position = stepRegisterContext.IP;
             var instr = ctx.Disassembler.Disassemble();
-
-                //Has the value in our target register changed yet?
-                var pastRegisterValue = registerContext.GetRegisterValue<Int128>(register);
 
             if (stepRegisterContext.SP != previousContext.SP && instr.Instruction.Mnemonic == Mnemonic.Ret)
             {

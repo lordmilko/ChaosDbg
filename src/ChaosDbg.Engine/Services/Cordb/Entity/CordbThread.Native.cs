@@ -30,6 +30,9 @@ namespace ChaosDbg.Cordb
                  * kernel32!MarkThreadHandle is called to indicate that the thread needs to be cleaned up - but not yet!
                  * Only when the next kernel32!ContinueDebugEvent is called is the handle actually closed. Thus,
                  * it is perfectly safe for us to store the handle. Also DbgEng stores the handle in ThreadInfo too. */
+
+                //Note: we don't own this handle, Kernel32 does. When the EXIT_PROCESS_DEBUG_EVENT is received, Kernel32 will close
+                //all of the handles it dished out in CREATE_THREAD_DEBUG_EVENT notifications previously
                 Handle = handle;
             }
         }

@@ -55,7 +55,7 @@ namespace ChaosDbg.Logger
     }
 #endif
 
-    public class SerilogLogger : ILogger
+    public class SerilogLogger : ILogger, IDisposable
     {
         public static void Install()
         {
@@ -70,8 +70,9 @@ namespace ChaosDbg.Logger
 #if DEBUG
                 //Logging to Seq can be very slow, especially inside callbacks. Allow logging to a memory sink instead
                 //for intercepting debug events
-                //.AuditTo.Seq("http://127.0.0.1:5341", messageHandler: new RetryHttpClientHandler()) //Use IP instead of localhost so there isn't a delay while Windows tries to resolve IPv6 first
-                .AuditTo.Sink(MemoryLogEventSink.Instance, LogEventLevel.Debug)
+                .AuditTo.Seq("http://127.0.0.1:5341", messageHandler: new RetryHttpClientHandler()) //Use IP instead of localhost so there isn't a delay while Windows tries to resolve IPv6 first
+                //.WriteTo.Seq("http://127.0.0.1:5341", messageHandler: new RetryHttpClientHandler(), period: TimeSpan.FromTicks(1)) //Use IP instead of localhost so there isn't a delay while Windows tries to resolve IPv6 first
+                //.AuditTo.Sink(MemoryLogEventSink.Instance, LogEventLevel.Debug)
 #endif
                 .CreateLogger();
 
@@ -94,6 +95,9 @@ namespace ChaosDbg.Logger
 
         public IDisposable WithCategories(params Type[] categories) =>
             LogContext.Push(new CategoryEnricher(categories));
+
+        public void Dispose() =>
+            (rawLogger as IDisposable)?.Dispose();
 
         #region Verbose
 
@@ -177,6 +181,14 @@ namespace ChaosDbg.Logger
         private Dictionary<string, object> properties = new();
 
         public void UpdateProperty(string name, object value) => properties[name] = value;
+
+        public object GetProperty(string propertyName)
+        {
+            if (properties.TryGetValue(propertyName, out var value))
+                return value;
+
+            return null;
+        }
 
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {

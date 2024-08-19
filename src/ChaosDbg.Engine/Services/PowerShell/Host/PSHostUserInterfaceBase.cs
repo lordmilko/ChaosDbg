@@ -242,7 +242,7 @@ namespace ChaosDbg.PowerShell.Host
             }
         }
 
-        private static void SendLeftArrows(int length)
+        private void SendLeftArrows(int length)
         {
             var inputs = new INPUT[length * 2];
 
@@ -255,7 +255,7 @@ namespace ChaosDbg.PowerShell.Host
                     {
                         ki = new KEYBDINPUT
                         {
-                            wVk = (short) VirtualKey.Left,
+                            wVk = VirtualKey.Left,
                             wScan = 0,
                             dwFlags = KEYEVENTF.NONE,
                             time = 0,
@@ -271,7 +271,7 @@ namespace ChaosDbg.PowerShell.Host
                     {
                         ki = new KEYBDINPUT
                         {
-                            wVk = (short) VirtualKey.Left,
+                            wVk = VirtualKey.Left,
                             wScan = 0,
                             dwFlags = KEYEVENTF.KEYUP,
                             time = 0,
@@ -283,6 +283,10 @@ namespace ChaosDbg.PowerShell.Host
                 inputs[2 * i] = pushDown;
                 inputs[2 * i + 1] = letUp;
             }
+
+            terminal.SendInput(inputs, false);
+        }
+
         /// <summary>
         /// Strip nulls from a string.
         /// </summary>

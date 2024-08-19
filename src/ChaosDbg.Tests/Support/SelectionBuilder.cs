@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
+using ChaosLib;
 using FlaUI.Core.AutomationElements;
-using FlaUI.Core.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Dispatcher = System.Windows.Threading.Dispatcher;
 
 namespace ChaosDbg.Tests
 {
@@ -22,15 +24,17 @@ namespace ChaosDbg.Tests
         private TextCanvas canvas;
         private AutomationElement elm;
         private List<Action> actions = new List<Action>();
+        private FakeMouse fakeMouse;
 
-        public SelectionBuilder(TextCanvas canvas, AutomationElement elm)
+        public SelectionBuilder(App app, TextCanvas canvas, AutomationElement elm)
         {
-            dpi = VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip;
+            dpi = VisualTreeHelper.GetDpi(app.MainWindow).PixelsPerDip;
             startPoint = elm.BoundingRectangle.Location;
-            font = GlobalProvider.ServiceProvider.GetService<IThemeProvider>().GetTheme().ContentFont;
+            font = App.ServiceProvider.GetService<IThemeProvider>().GetTheme().ContentFont;
 
             this.canvas = canvas;
             this.elm = elm;
+            fakeMouse = new FakeMouse(canvas);
         }
 
         public SelectionBuilder Click(string skip, string after, int rowOffset = 0)
@@ -39,10 +43,10 @@ namespace ChaosDbg.Tests
             {
                 AddRow(rowOffset);
 
-                var point = GetDPIAwarePoint(skip + after);
+                var screenPoint = GetDPIAwarePoint(skip + after);
+                var clientPoint = GetClientPoint(screenPoint);
 
-                Application.Current.MainWindow.Activate();
-                Mouse.Click(point);
+                fakeMouse.Click(clientPoint.x, clientPoint.y);
             });
 
             return this;
@@ -54,11 +58,10 @@ namespace ChaosDbg.Tests
             {
                 AddRow(rowOffset);
 
-                var point = GetDPIAwarePoint(skip + after);
+                var screenPoint = GetDPIAwarePoint(skip + after);
+                var clientPoint = GetClientPoint(screenPoint);
 
-                Application.Current.MainWindow.Activate();
-                Mouse.Position = point;
-                Mouse.Down();
+                fakeMouse.Down(clientPoint.x, clientPoint.y);
             });
 
             return this;
@@ -66,7 +69,10 @@ namespace ChaosDbg.Tests
 
         public SelectionBuilder Up()
         {
-            actions.Add(() => Mouse.Up());
+            actions.Add(() =>
+            {
+                fakeMouse.Up(0, 0);
+            });
 
             return this;
         }
@@ -77,9 +83,10 @@ namespace ChaosDbg.Tests
             {
                 AddRow(rowOffset);
 
-                var point = GetDPIAwarePoint(skip + after);
+                var screenPoint = GetDPIAwarePoint(skip + after);
+                var clientPoint = GetClientPoint(screenPoint);
 
-                Mouse.MoveTo(point);
+                fakeMouse.Move(clientPoint.x, clientPoint.y);
             });
 
             return this;
@@ -142,6 +149,14 @@ namespace ChaosDbg.Tests
             }
 
             return new System.Drawing.Point(startPoint.X + 1 + (int) (xPos * dpi), startPoint.Y + 1 + (int) (yPos * dpi));
+        }
+
+        private POINT GetClientPoint(System.Drawing.Point screenPoint)
+        {
+            var clientPoint = new POINT(screenPoint.X, screenPoint.Y);
+            var hWnd = ((HwndSource) PresentationSource.FromVisual(canvas)).Handle;
+            User32.Native.ScreenToClient(hWnd, ref clientPoint);
+            return clientPoint;
         }
     }
 }

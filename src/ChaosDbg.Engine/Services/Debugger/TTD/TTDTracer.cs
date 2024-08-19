@@ -16,7 +16,7 @@ namespace ChaosDbg.TTD
     {
         public static void Hook(ReplayEngine initial)
         {
-            DetourBuilder.AddVtblHook(initial, ReplayEngineHook);
+            _ = new RawVtblHook(initial, ReplayEngineHook);
         }
 
         static unsafe object ReplayEngineHook(DetourContext ctx)
@@ -50,7 +50,7 @@ namespace ChaosDbg.TTD
 
                     var result = ctx.InvokeOriginal();
 
-                    DetourBuilder.AddVtblHook(new Cursor((IntPtr) result), CursorHook);
+                    _ = new RawVtblHook(new Cursor((IntPtr) result), CursorHook);
 
                     return result;
                 }
@@ -359,7 +359,7 @@ namespace ChaosDbg.TTD
                     {
                         var tv = new ThreadView(c);
 
-                        DetourBuilder.AddVtblHook(tv, ThreadViewHook);
+                        var hook = new RawVtblHook(tv, ThreadViewHook);
 
                         var cbRes = WithThreadView(() => callback(a, b, c));
 

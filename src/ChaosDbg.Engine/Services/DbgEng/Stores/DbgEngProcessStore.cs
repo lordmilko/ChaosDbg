@@ -17,6 +17,15 @@ namespace ChaosDbg.DbgEng
         private DbgEngSessionInfo session;
         private DbgEngEngineServices services;
 
+        public int Count
+        {
+            get
+            {
+                lock (processLock)
+                    return processes.Count;
+            }
+        }
+
         public DbgEngProcessStore(DbgEngSessionInfo session, DbgEngEngineServices services)
         {
             this.session = session;

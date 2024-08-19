@@ -51,6 +51,8 @@ namespace ChaosDbg.Tests
             {
                 var result = dis.Disassemble();
 
+                Assert.IsNotNull(result);
+
                 return dis.Format(result);
             }
 
@@ -65,10 +67,10 @@ namespace ChaosDbg.Tests
 
         private void WithProcess(Action<DebugClient> action)
         {
-            var dbgEngProvider = GetService<DbgEngEngineProvider>();
+            var engineProvider = GetService<DebugEngineProvider>();
 
             //Protect g_Machine from other threads
-            dbgEngProvider.WithDbgEng(services =>
+            engineProvider.WithDbgEng(services =>
             {
 #pragma warning disable CS0618
                 using var client = services.SafeDebugCreate(false);

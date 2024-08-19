@@ -21,17 +21,21 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		build\ClrDebug.props = build\ClrDebug.props
 		src\Directory.Build.props = src\Directory.Build.props
 		build\SingleFile.targets = build\SingleFile.targets
+		build\TerminateLockingProcesses.targets = build\TerminateLockingProcesses.targets
+		build\VsDock.props = build\VsDock.props
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{285EA220-1484-4F14-B9B3-EECD1A26D7BC}"
 	ProjectSection(SolutionItems) = preProject
-		build\ChaosDbg.MSBuild.props = build\ChaosDbg.MSBuild.props
-		build\ChaosDbg.MSBuild.targets = build\ChaosDbg.MSBuild.targets
 		build\ChaosLib.props = build\ChaosLib.props
 		build\ClrDebug.props = build\ClrDebug.props
+		build\SingleFile.targets = build\SingleFile.targets
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "chaos", "src\chaos\chaos.csproj", "{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4} = {F04FE7A7-10FA-4812-BD0C-CB1288477ED4}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Managed.x86", "src\TestApp\Managed.x86\Managed.x86.csproj", "{3604A798-6634-4ACE-B45C-AB1410EDA1CF}"
 EndProject
@@ -48,6 +52,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Native.x64", "src\TestApp\N
 	ProjectSection(ProjectDependencies) = postProject
 		{F994BB72-D1B7-490F-88EE-6FD6232F5B85} = {F994BB72-D1B7-490F-88EE-6FD6232F5B85}
 	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosLib", "..\ChaosLib\src\ChaosLib\ChaosLib.csproj", "{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -147,6 +153,18 @@ Global
 		{F0256BF0-C2FC-4E77-A0A1-E321B3859C47}.Release|Any CPU.ActiveCfg = Release|x64
 		{F0256BF0-C2FC-4E77-A0A1-E321B3859C47}.Release|x64.ActiveCfg = Release|x64
 		{F0256BF0-C2FC-4E77-A0A1-E321B3859C47}.Release|x86.ActiveCfg = Release|x64
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|x64.Build.0 = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Debug|x86.Build.0 = Debug|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|x64.ActiveCfg = Release|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|x64.Build.0 = Release|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|x86.ActiveCfg = Release|Any CPU
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

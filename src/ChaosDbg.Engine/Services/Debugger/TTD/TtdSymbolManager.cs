@@ -23,9 +23,12 @@ namespace ChaosDbg.TTD
 
         public unsafe TtdSymbolManager(Cursor cursor)
         {
-            originalOptions = new DbgHelpOptionsHolder();
+            //We make the assumption that we're in prod using regular DbgHelp, not using an OutOfProcDbgHelp and so don't need to worry about
+            //using whatever the "real" IDbgHelp in use would be
 
             dbgHelp = new FastDbgHelp((IntPtr) 100);
+
+            originalOptions = new DbgHelpOptionsHolder(dbgHelp);
 
             dbgHelp.SymInitialize(null, false);
 

@@ -175,7 +175,9 @@ namespace ChaosDbg.DbgEng
             {
                 //Do our best to cleanup. Specifically, we want to call DiscardTarget() so that globals like g_EngStatus
                 //are guaranteed to get set back to 0
-                EngineClient.TryEndSession(DEBUG_END.ACTIVE_TERMINATE);
+                var hr = EngineClient.TryEndSession(DEBUG_END.ACTIVE_TERMINATE);
+
+                Log.Debug<DbgEngEngine>("EndSession completed with {hr}", hr);
             }
         }
 
@@ -185,8 +187,9 @@ namespace ChaosDbg.DbgEng
         /// </summary>
         private void InputLoop()
         {
-            //We signal the break event here, rather than in the event callback, so that we can signify that we're 100% input
-            //for events and have emitted out current state as well
+            //We signal the break event here, rather than in the event callback, so that we can signify that we're 100% ready for input
+            //for events and have emitted out current state as well. This is also important because PrepareForCalls() will set the status to break
+            //before it starts running
             Session.BreakEvent.SetResult();
 
             while (!IsEngineCancellationRequested && Session.Status == EngineStatus.Break)

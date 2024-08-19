@@ -1,5 +1,5 @@
 ﻿using System;
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Threading;
 
 namespace ChaosDbg.Debugger
@@ -76,9 +76,10 @@ namespace ChaosDbg.Debugger
                                     //If the status was set to something else (e.g. we're set as the NextOperation on another operation that
                                     //we depend on, so are still pending) don't mark the operation as completed
                                     if (Status == DeferrableOperationStatus.Executing)
+                                    {
                                         Status = DeferrableOperationStatus.Completed;
                                         RaiseOnComplete();
-                                }
+                                    } 
                                 }
 
                                 //Some sub-operations may dispatch an async operation (such as symbol loading) and then return immediately, so that we can get multiple symbol loads

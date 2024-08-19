@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using ChaosLib;
 
 namespace ChaosDbg.Debugger
 {
@@ -22,23 +24,42 @@ namespace ChaosDbg.Debugger
 
         protected override void DoExecute(bool forceSynchronous)
         {
+            var thread = Thread.CurrentThread;
+
+            Debug.Assert(Log.HasContext(thread));
+
             Task = Task.Run(async () =>
             {
-                await DoExecuteAsync(forceSynchronous);
+                using var logContextHolder = new LogContextHolder(thread, CancellationToken);
 
-                Status = DeferrableOperationStatus.Completed;
-                RaiseOnComplete();
+                var isComplete = await DoExecuteAsync(forceSynchronous);
 
-                wait.Set();
+                /* If we're a SymbolDeferrableSubOperation, we failed to resolve symbols,
+                 * and have rescheduled symbol resolution for a low priority wait, we can't allow
+                 * this task to be marked as completed just yet. DeferrableOperation.Execute()
+                 * may be executing over all of its children, executing each one. If we mark ourselves
+                 * as completed, the PEFile task may attempt to run, which is dependent upon the symbol task
+                 * having fully completed first. */
 
-                //If we're loading symbols at low priority, we won't allow processing the next operation automatically, and will execute
-                //it ourselves when we're ready
-                if (!forceSynchronous && ProcessNextOperation)
-                    NextOperation?.Execute(false);
+                //We _must_ call this, else we might crash when the LogContextHolder is disposed, because DoExecuteAsync returned on a different thread
+                logContextHolder.Refresh();
+
+                if (isComplete)
+                {
+                    Status = DeferrableOperationStatus.Completed;
+                    RaiseOnComplete();
+
+                    wait.Set();
+
+                    //If we're loading symbols at low priority, we won't allow processing the next operation automatically, and will execute
+                    //it ourselves when we're ready
+                    if (!forceSynchronous && ProcessNextOperation)
+                        NextOperation?.Execute(false);
+                }
             }, CancellationToken);
         }
 
-        protected abstract Task DoExecuteAsync(bool forceSynchronous);
+        protected abstract Task<bool> DoExecuteAsync(bool forceSynchronous);
 
         public override void Abort()
         {

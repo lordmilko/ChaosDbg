@@ -68,34 +68,34 @@ namespace ChaosDbg.Cordb
         internal EventHandlerList EventHandlers { get; } = new EventHandlerList();
 
         private void RaiseEngineInitialized() =>
-            HandleUIEvent((EventHandler<EngineInitializedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineInitialized)], this, new EngineInitializedEventArgs(Session));
+            services.UserInterface.HandleEvent((EventHandler<EngineInitializedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineInitialized)], this, new EngineInitializedEventArgs(Session));
 
         private void RaiseEngineOutput(EngineOutputEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineOutput)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineOutputEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineOutput)], this, args);
 
         private void RaiseEngineStatusChanged(EngineStatusChangedEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineStatusChanged)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineStatusChangedEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineStatusChanged)], this, args);
 
         private void RaiseEngineFailure(EngineFailureEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineFailure)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineFailureEventArgs>) EventHandlers[nameof(DebugEngineProvider.EngineFailure)], this, args);
 
         private void RaiseModuleLoad(EngineModuleLoadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleLoad)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineModuleLoadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleLoad)], this, args);
 
         private void RaiseModuleUnload(EngineModuleUnloadEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleUnload)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineModuleUnloadEventArgs>) EventHandlers[nameof(DebugEngineProvider.ModuleUnload)], this, args);
 
         private void RaiseThreadCreate(EngineThreadCreateEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadCreate)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineThreadCreateEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadCreate)], this, args);
 
         private void RaiseThreadExit(EngineThreadExitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadExit)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineThreadExitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ThreadExit)], this, args);
 
         private void RaiseBreakpointHit(EngineBreakpointHitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.BreakpointHit)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineBreakpointHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.BreakpointHit)], this, args);
 
         private void RaiseExceptionHit(EngineExceptionHitEventArgs args) =>
-            HandleUIEvent((EventHandler<EngineExceptionHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ExceptionHit)], this, args);
+            services.UserInterface.HandleEvent((EventHandler<EngineExceptionHitEventArgs>) EventHandlers[nameof(DebugEngineProvider.ExceptionHit)], this, args);
 
         #endregion
         #region PreEvent
@@ -167,22 +167,7 @@ namespace ChaosDbg.Cordb
                 Session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
 
                 //Let's kick off a load for CLR symbols now so that they're ready for when we need them
-                var thread = new Thread(() =>
-                {
-                    try
-                    {
-                        Session.EngineCancellationToken.ThrowIfCancellationRequested();
-
-                        Process.Symbols.TryRegisterCLR();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error<IDbgHelp>(ex, "Failed to eagerly load CLR symbols: {message}", ex.Message);
-                    }
-                });
-                Log.CopyContextTo(thread);
-                thread.Name = "Eager CLR Symbols Thread";
-                thread.Start();
+                Process.Symbols.LoadCLRSymbols(Session.EngineId, Session.EngineCancellationToken);
             }
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
@@ -249,7 +234,7 @@ namespace ChaosDbg.Cordb
             //Ensure the process gets registered as a module too. This will also add the module event history item
             UnmanagedLoadModule(sender, new LOAD_DLL_DEBUG_INFO
             {
-                hFile = e.hFile,
+                hFile = e.hFile, //We'll close hFile in CordbUnmanagedCallback.DebugEvent()
                 lpBaseOfDll = e.lpBaseOfImage,
                 dwDebugInfoFileOffset = e.dwDebugInfoFileOffset,
                 nDebugInfoSize = e.nDebugInfoSize,
@@ -264,7 +249,20 @@ namespace ChaosDbg.Cordb
 
         private void UnmanagedExitProcess(object sender, EXIT_PROCESS_DEBUG_INFO e)
         {
+#if DEBUG
+            Session.IsPerformingExitProcess = true;
+#endif
+
+            //If there's an issue with DbgHelp which causes us to hang, we want to record this fact, as us not returning will block the managed ExitProcess being fired
+            Log.Debug<CordbEngine>("UnmanagedExitProcess: attempting to remove process module...");
+
             Process.Modules.RemoveProcessModule(Session.CallbackContext.UnmanagedEventProcessId);
+
+            Log.Debug<CordbEngine>("UnmanagedExitProcess: finished removing process module");
+
+#if DEBUG
+            Session.IsPerformingExitProcess = false;
+#endif
         }
 
         #endregion
@@ -372,6 +370,8 @@ namespace ChaosDbg.Cordb
         private void UnmanagedLoadModule(object sender, LOAD_DLL_DEBUG_INFO e)
         {
             var module = Process.Modules.Add(e);
+
+            //We'll close hFile in CordbUnmanagedCallback.DebugEvent()
 
             Session.EventHistory.Add(new CordbNativeModuleLoadEventHistoryItem(module));
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module, Session.CallbackContext.UnmanagedOutOfBand));
@@ -742,13 +742,15 @@ namespace ChaosDbg.Cordb
             if (disposed)
                 return;
 
+            var session = Session;
+
             //If another callback didn't add a more specific history item, add one now
-            if (Session.CallbackContext.NeedHistory)
-                Session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
+            if (session.CallbackContext.NeedHistory)
+                session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
 
             //Even when we call Stop() to break into the process, if we're in the middle of processing an event, we'll end up calling
-            //Continue() again here.
-            if ((!Session.StartupFailed && Process.HasQueuedCallbacks) || (Session.StartupFailed && e.Controller is CorDebugProcess p && p.HasQueuedCallbacks(null)))
+            //Continue() again here. Process could be null if we've crashed and have disposed it
+            if ((!session.StartupFailed && Process?.HasQueuedCallbacks == true) || (session.StartupFailed && e.Controller is CorDebugProcess p && p.HasQueuedCallbacks(null)))
             {
                 /* Should we call continue here? Yes absolutely
                  *
@@ -776,15 +778,16 @@ namespace ChaosDbg.Cordb
             else
             {
                 //At this point, if we're attaching, there are no more queued callbacks remaining, and we can now say that we're ready to go
-                if (Session.IsAttaching)
+                if (session.IsAttaching)
                 {
-                    if (!Session.StartupFailed)
+                    //If we're crashing, the process may have already been cleared during the shutdown process
+                    if (!session.StartupFailed && !session.IsCrashing)
                     {
                         //Now that we're no longer in the process of attaching, let's finally identify all of our special threads
                         Process.Threads.IdentifySpecialThreads(null);
                     }
-                    
-                    Session.IsAttaching = false;
+
+                    session.IsAttaching = false;
                 }
             }
 
@@ -797,25 +800,27 @@ namespace ChaosDbg.Cordb
             else
             {
                 //We may not even have a Process if we crashed during CordbLauncher, and the user's EngineStatusChanged event handler may depend on that
-                if (!Session.IsCrashing)
+                if (!session.IsCrashing)
                     OnStopping(false);
             }
         }
 
         private void AnyUnmanagedEvent(object sender, DebugEventCorDebugUnmanagedCallbackEventArgs e)
         {
+            var session = Session;
+
             //If another callback didn't add a more specific history item, add one now
-            if (Session.CallbackContext.NeedHistory)
-                Session.EventHistory.Add(CordbNativeEventHistoryItem.New(e));
+            if (session.CallbackContext.NeedHistory)
+                session.EventHistory.Add(CordbNativeEventHistoryItem.New(e));
 
             //If we're trying to do evil things like step through the CLR, we'll have modified the OOB status.
             //But if we're in the middle of crashing, we may not have set the callback context's UnmanagedOutOfBand
             //property properly, and since we won't be dispatching normal event callbacks anyway, just go with the "normal" OOB status
-            var outOfBand = Session.IsCrashing ? e.OutOfBand : Session.CallbackContext.UnmanagedOutOfBand;
+            var outOfBand = session.IsCrashing ? e.OutOfBand : session.CallbackContext.UnmanagedOutOfBand;
 
-            if (Session.IsCrashing || Session.CallbackContext.UnmanagedContinue)
+            if (session.IsCrashing || session.CallbackContext.UnmanagedContinue)
             {
-                DoContinue(Process?.CorDebugProcess ?? Session.CrashingProcess, outOfBand, isUnmanaged: true);
+                DoContinue(Process?.CorDebugProcess ?? session.CrashingProcess, outOfBand, isUnmanaged: true);
             }
             else
             {
@@ -823,7 +828,7 @@ namespace ChaosDbg.Cordb
                 //As soon as we stop processing unmanaged events, we'll actually stop
                 if (outOfBand)
                 {
-                    Session.CallbackStopCount++;
+                    session.CallbackStopCount++;
                     DoContinue(Process.CorDebugProcess, outOfBand: true, isUnmanaged: true);
                 }
                 else
@@ -836,6 +841,8 @@ namespace ChaosDbg.Cordb
 
         private void OnStopping(bool unmanaged)
         {
+            Debug.Assert(!disposed, "How are we disposed already if managed events are still being pumped? We need to cleanup mscordbi prior to disposing!");
+
             lock (Session.UserPauseCountLock)
             {
                 Log.Debug<CordbEngine>("Stopping");

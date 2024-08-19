@@ -3,40 +3,74 @@ using System.IO;
 using ChaosDbg.Cordb;
 using ChaosDbg.Debugger;
 using ChaosLib;
-using ChaosLib.Metadata;
-using ClrDebug.DbgEng;
+using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
+using ClrDebug;
 
 namespace ChaosDbg.Symbol
 {
     /// <summary>
     /// Provides facilities for resolving symbols for the modules within a process.
     /// </summary>
-    public partial class DebuggerSymbolProvider : IDisposable
+    public partial class DebuggerSymbolProvider : INativeStackWalkerFunctionTableProvider, IDisposable
     {
-        //A memory stream that can be used to read memory directly from the target process
-        private ProcessMemoryStream processMemoryStream;
-
-        //A lock that controls access to the processMemoryStream
-        private object processMemoryStreamLock = new object();
-
         public IntPtr hProcess => dbgHelp.hProcess;
 
         private IDebuggerSymbolProviderExtension extension;
+        private MicrosoftPdbSourceFileProvider sourceFileProvider;
 
-        internal DebuggerSymbolProvider(IntPtr hProcess, IDebuggerSymbolProviderExtension extension)
+        internal unsafe DebuggerSymbolProvider(
+            IntPtr hProcess,
+            int id,
+            IDebuggerSymbolProviderExtension extension,
+            IDbgHelpProvider dbgHelpProvider,
+            MicrosoftPdbSourceFileProvider sourceFileProvider)
         {
-            dbgHelp = new DbgHelpSession(hProcess);
+            //dbghelp!ReadInProcMemory won't attempt to call ReadProcessMemory if you have a callback
+            //specified. As such, we need to plug in a read handler ourselves
+            dbgHelp = dbgHelpProvider.Acquire(hProcess);
 
-            if (dbgHelp.GlobalOptions.HasFlag(SYMOPT.DEFERRED_LOADS))
-                throw new InvalidOperationException($"Cannot use {nameof(DebuggerSymbolProvider)} when {SYMOPT.DEFERRED_LOADS} is active. {nameof(DebuggerSymbolProvider)} design is currently predicated on doing eager loads on a background thread.");
+            if (dbgHelp is LegacyDbgHelp l)
+            {
+                l.GetProcesses = () =>
+                {
+                    var globals = NativeReflector.GetGlobal<WellKnownSymbol.DbgHelp.GLOBALS>("dbghelp!g");
+
+                    return Tuple.Create<object, int>(globals, (int) globals.NumProcesses);
+                };
+            }
+
+            using var dbgHelpHolder = new DisposeHolder(dbgHelp);
+
+            //Eagerly loading all symbols on a background thread sounds great and all, but the reality is that attempts to do anything on the UI thread will
+            //hang because a million things are all blocking trying to enter the DbgHelp lock. So what we really need is a priority queue: module loads add
+            //themselves to the queue, but if the UI wants to do something it jumps straight to the front
+
+            dbgHelp.Callback.OnReadMemory = data =>
+            {
+                return extension.TryReadVirtual(
+                    data->addr,
+                    data->buf,
+                    data->bytes,
+                    out *data->bytesread
+                ) == HRESULT.S_OK;
+            };
 
             this.extension = extension;
+            this.sourceFileProvider = sourceFileProvider;
 
             //Resolving symbols can be very slow, so we defer this to a background thread
-            symbolThread = new DispatcherThread("Symbol Resolution Thread", queue: new DispatcherPriorityQueue());
-            symbolThread.Start();
+            worker = new DispatcherPriorityQueueWorker($"Symbol Resolution Thread {id}");
 
-            processMemoryStream = new ProcessMemoryStream(hProcess);
+            workerContext = new SymbolDeferrableOperationContext(
+                dbgHelp,
+                worker,
+                this
+            );
+
+            nativeSymbolProvider = new NativeSymbolProvider(hProcess, dbgHelpProvider, sourceFileProvider);
+
+            dbgHelpHolder.SuppressDispose();
         }
 
         public bool TrySymFromAddr(long address, SymFromAddrOption options, out IDisplacedSymbol result)
@@ -112,7 +146,10 @@ namespace ChaosDbg.Symbol
 
         public void Dispose()
         {
-            symbolThread?.Dispose();
+            eagerCLRSymbolsThread?.Join();
+
+            nativeSymbolProvider?.Dispose();
+            worker?.Dispose();
             dbgHelp?.Dispose();
         }
     }

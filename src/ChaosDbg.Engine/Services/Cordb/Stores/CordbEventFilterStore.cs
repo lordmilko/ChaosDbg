@@ -54,10 +54,10 @@ namespace ChaosDbg.Cordb
          * - DEBUG_FILTER_GO_HANDLED          -> handled
          * - DEBUG_FILTER_GO_NOT_HANDLED      ->not handled
          *
-         * - DEBUG_FILTER_BREAK               -> break
-         * - DEBUG_FILTER_SECOND_CHANCE_BREAK -> second-chance break
-         * - DEBUG_FILTER_OUTPUT              -> output
-         * - DEBUG_FILTER_IGNORE              -> ignore
+         * - DEBUG_FILTER_BREAK               -> break (sxe)
+         * - DEBUG_FILTER_SECOND_CHANCE_BREAK -> second-chance break (sxd)
+         * - DEBUG_FILTER_OUTPUT              -> output (sxn)
+         * - DEBUG_FILTER_IGNORE              -> ignore (sxi)
          */
 
         private object eventFilterLock = new object();

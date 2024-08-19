@@ -14,9 +14,10 @@ namespace ChaosDbg.Debugger
         private object pendingOperationLock = new object();
         private Dictionary<long, DeferrableOperation> pendingOperations = new();
 
-        public DispatcherPriorityQueueWorker(string threadName, bool enableLog = false)
+        public DispatcherPriorityQueueWorker(string threadName)
         {
-            DispatcherThread = new DispatcherThread(threadName, queue: new DispatcherPriorityQueue(), enableLog: enableLog);
+            //As our operations may potentially attempt to log, we _must_ enable logging on the remote thread
+            DispatcherThread = new DispatcherThread(threadName, queue: new DispatcherPriorityQueue(), enableLog: true);
             DispatcherThread.Start();
         }
 
@@ -47,17 +48,27 @@ namespace ChaosDbg.Debugger
 
                 lock (pendingOperationLock)
                 {
+                    var bookeepingDone = new ManualResetEventSlim(false);
+
                     //Any async operations that we don't force to run synchronously (e.g. SymbolDeferrableSubOperation) will basically run immediately,
                     //kick off a Task on the thread pool that will actually handle the work of loading symbols, and then return. Thus, any time you try and force
                     //load symbols, a job is probably already executing and we just need to wait for it to finish
                     var dispatcherOperation = DispatcherThread.InvokeAsync(
-                        () => parentOperation.Execute(forceSynchronous: false),
+                        () =>
+                        {
+                            //I think it's possible for the async operation to complete before we've done our bookkeeping, which may result in us trying to call the OnCompleted method before we've
+                            //stored the data that RemovePendingOperation will need to mark the operation as completed
+                            bookeepingDone.Wait();
+                            parentOperation.Execute(forceSynchronous: false);
+                        },
                         priority: 1
                     );
 
                     parentOperation.DispatcherOperation = dispatcherOperation;
 
                     pendingOperations.Add(parentOperation.Key, parentOperation);
+
+                    bookeepingDone.Set();
                 }
             }
         }

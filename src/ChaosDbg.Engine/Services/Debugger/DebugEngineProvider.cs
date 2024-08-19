@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using ChaosDbg.Cordb;
@@ -13,7 +14,7 @@ namespace ChaosDbg
     /// Provides facilities for creating and accessing <see cref="IDbgEngine"/> instances.<para/>
     /// This type is the entry point for launching a debug target.
     /// </summary>
-    public partial class DebugEngineProvider
+    public partial class DebugEngineProvider : IDisposable
     {
         private bool disposed;
 
@@ -21,8 +22,10 @@ namespace ChaosDbg
         private object enginesLock = new object();
 
         //DbgEng is not thread safe. Attempting to create multiple machines concurrently will overwrite g_Machine which can cause other DbgEng instances
-        //to crash when the g_Machine gets nulled out
-        private static object dbgEngInstanceLock = new object();
+        //to crash when the g_Machine gets nulled out. g_Machine is overwritten all over the place while DbgEng is running. While you can have multiple DebugClient
+        //instances, you're only meant to be running a single debugger engine at a time
+        private static Semaphore dbgEngInstanceLock = new Semaphore(1, 1);
+        private static int dbgEngLockThreadId;
 
         private IDbgEngine activeEngine;
 
@@ -187,6 +190,11 @@ namespace ChaosDbg
             DbgEng = new DbgEngEngineLaunchExtensions(this);
         }
 
+        ~DebugEngineProvider()
+        {
+            Debug.Assert(engines.Count == 0, $"{nameof(DebugEngineProvider)} had {engines.Count} debug engines that were not disposed. DbgEng is a singleton, and failing to dispose {nameof(DbgEngEngine)} instances may cause a deadlock the next time someone tries to create a {nameof(DbgEngEngine)}");
+        }
+
         /// <summary>
         /// Creates a new <see cref="IDbgEngine"/> against a newly created process.
         /// </summary>
@@ -273,8 +281,10 @@ namespace ChaosDbg
 
                 case DbgEngineKind.DbgEng:
                 {
-                    if (Monitor.TryEnter(dbgEngInstanceLock))
+                    if (dbgEngInstanceLock.WaitOne(0))
                     {
+                        dbgEngLockThreadId = Kernel32.GetCurrentThreadId();
+
                         Log.Debug<DebugEngineProvider>("Acquired DbgEng instance lock");
 
                         var engine = new DbgEngEngine(dbgEngEngineServices, this);
@@ -287,8 +297,10 @@ namespace ChaosDbg
 
                     Log.Debug<DebugEngineProvider>("Waiting for DbgEng instance lock");
 
-                    Monitor.Enter(dbgEngInstanceLock);
+                    dbgEngInstanceLock.WaitOne();
                     {
+                        dbgEngLockThreadId = Kernel32.GetCurrentThreadId();
+
                         Log.Debug<DebugEngineProvider>("Acquired DbgEng instance lock after waiting");
 
                         var engine = new DbgEngEngine(dbgEngEngineServices, this);
@@ -308,14 +320,17 @@ namespace ChaosDbg
                 if (activeEngine != null && activeEngine.Equals(engine))
                     activeEngine = default;
 
-                engines.Remove(engine);
+                //If a double remove occurs, we might attempt to release the DbgEng instance lock twice
+                Debug.Assert(engines.Remove(engine));
             }
 
             if (engine is DbgEngEngine)
             {
                 Log.Debug<DebugEngineProvider>("Releasing DbgEng instance lock");
 
-                Monitor.Exit(dbgEngInstanceLock);
+                //If an exception occurs here, this probably means that the lock was taken from a thread different from the one we're now on
+                //todo: record the thread that takes and releases the lock and assert theyre the same
+                dbgEngInstanceLock.Release();
             }
         }
 
@@ -384,8 +399,8 @@ namespace ChaosDbg
 
             lock (enginesLock)
             {
-                foreach (var engine in engines)
-                    engine.Dispose();
+                foreach (var engine in engines.ToArray()) //Make a copy, as the engine list will be modified for each engine we remove
+                    engine.Dispose(); //Disposing the DbgEngEngine should cause it to call Remove and remove itself from the engine provider
             }
 
             disposed = true;

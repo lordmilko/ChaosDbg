@@ -927,33 +927,61 @@ namespace ChaosDbg.Tests
             Action<PEMetadataPhysicalModule> validate,
             bool liveNtdll = false)
         {
-            new NativeLibraryProvider().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+            //Ensure we're not using the system32 version
+            GetService<NativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+            var dbgHelpProvider = GetService<IDbgHelpProvider>();
 
-            var hProcess = Process.GetCurrentProcess().Handle;
+            var process = Process.GetCurrentProcess();
 
-            DbgHelpSession dbgHelp;
+            var hProcess = process.Handle;
+
+            IDbgHelp dbgHelp;
+
             string path;
             Stream stream;
 
             if (liveNtdll)
             {
-                dbgHelp = new DbgHelpSession(hProcess);
-                path = dbgHelp.LoadModule("ntdll.dll").FilePath;
+                dbgHelp = (LegacyDbgHelp) dbgHelpProvider.Acquire(hProcess);
+
+                using var holder = new DisposeHolder(dbgHelp);
+
+                path = dbgHelp.LoadModule("ntdll.dll").ModulePath;
                 stream = new ProcessMemoryStream(hProcess);
+
+                holder.SuppressDispose();
             }
             else
             {
-                dbgHelp = DbgHelpProvider.Acquire();
+                dbgHelp = FakeDbgHelpProvider.Acquire(dbgHelpProvider);
+
+                using var holder = new DisposeHolder(dbgHelp);
+
                 path = WellKnownTestModule.GetStoreFile(moduleKey);
-                dbgHelp.AddPhysicalModule(path);
+                Log.Debug<PEModuleMetadataTests>("Attempting to load symbols for file {path}", path);
+                var pe = PEFile.FromPath(path);
+                dbgHelp.SymLoadModuleEx(imageName: path, baseOfDll: pe.OptionalHeader.ImageBase, dllSize: pe.OptionalHeader.SizeOfImage);
                 var fileStream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var peFile = new PEFile(fileStream, false);
                 stream = new AbsoluteToRelativeStream(fileStream, peFile.OptionalHeader.ImageBase);
+
+                holder.SuppressDispose();
             }
+
+            using var dbgHelpHolder = new DisposeHolder(dbgHelp);
 
             try
             {
-                var dbgHelpModule = dbgHelp.Modules.First();
+                DbgHelpSymbolModule dbgHelpModule = null;
+
+                dbgHelp.SymEnumerateModules64((moduleName, baseOfDll, _) =>
+                {
+                    var size = dbgHelp.SymGetModuleInfo64(baseOfDll).ImageSize;
+                    dbgHelpModule = new DbgHelpSymbolModule(dbgHelp, moduleName, baseOfDll, size);
+                    return false;
+                });
+
+                Assert.IsNotNull(dbgHelpModule);
 
                 var metadataProvider = GetService<PEMetadataProvider>();
 

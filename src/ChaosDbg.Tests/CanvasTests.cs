@@ -9,17 +9,16 @@ using System.Windows.Threading;
 using ChaosDbg.Scroll;
 using ChaosDbg.Text;
 using ChaosDbg.Theme;
-using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
 using FlaUI.UIA3;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Dispatcher = System.Windows.Threading.Dispatcher;
 
 namespace ChaosDbg.Tests
 {
     //Unit tests for validating that we can properly detect things which happen on a canvas
 
     [TestClass]
-    [DoNotParallelize]
     public class CanvasTests : BaseTest
     {
         [TestMethod]
@@ -160,9 +159,9 @@ namespace ChaosDbg.Tests
         {
             var lines = Enumerable.Range(0, 60).Select(v => (ITextLine) new TextLine(new TextRun(v.ToString()))).ToArray();
 
-            AppRunner.WithInProcessApp(CreateTestWindow(lines), w =>
+            AppRunner.WithInProcessApp(CreateTestWindow(lines), (app, win) =>
             {
-                var group = w.GetDrawingGroup<TextCanvas>();
+                var group = win.GetDrawingGroup<TextCanvas>();
 
                 var verifiers = new List<Action<DrawingInfo>>();
 
@@ -174,7 +173,7 @@ namespace ChaosDbg.Tests
 
                 group.Verify(verifiers.ToArray());
 
-                var canvas = w.GetLogicalDescendant<TextCanvas>();
+                var canvas = win.GetLogicalDescendant<TextCanvas>();
 
                 action(canvas.ScrollManager);
 
@@ -205,22 +204,22 @@ namespace ChaosDbg.Tests
                 new TextLine(new TextRun("jumps over the lazy dog"))
             };
 
-            AppRunner.WithInProcessApp(CreateTestWindow(lines), w =>
+            AppRunner.WithInProcessApp(CreateTestWindow(lines), (app, win) =>
             {
-                var hwnd = new WindowInteropHelper(w).Handle;
+                var hwnd = new WindowInteropHelper(win).Handle;
 
                 using (var automation = new UIA3Automation())
                 {
-                    var flaWindow = automation.FromHandle(hwnd).AsWindow();
+                    var flaWindow = automation.CreateWindowSafe(hwnd);
 
-                    var canvas = w.GetVisualDescendant<TextCanvas>();
+                    var canvas = win.GetVisualDescendant<TextCanvas>();
 
                     var cf = new ConditionFactory(new UIA3PropertyLibrary());
 
                     //I think this is referencing the x:Name from the TextPaneControl
                     var ctrl = flaWindow.FindFirstDescendant(cf.ByAutomationId("Canvas"));
 
-                    var builder = new SelectionBuilder(canvas, ctrl);
+                    var builder = new SelectionBuilder(app, canvas, ctrl);
 
                     action(builder);
                 }
@@ -236,7 +235,7 @@ namespace ChaosDbg.Tests
                 var pane = new TextPaneControl();
 
                 //UiTextLine will get its font from the current ITheme, so we can't make up some random font to use for the test
-                var font = GlobalProvider.ServiceProvider.GetService<IThemeProvider>().GetTheme().ContentFont;
+                var font = App.ServiceProvider.GetService<IThemeProvider>().GetTheme().ContentFont;
 
                 pane.RawContent = new TextBuffer(font, lines);
                 window.Content = pane;

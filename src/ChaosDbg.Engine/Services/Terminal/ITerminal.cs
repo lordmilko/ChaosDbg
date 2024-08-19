@@ -36,6 +36,8 @@ namespace ChaosDbg.Terminal
 
         void RemoveBreakHandler(ConsoleCtrlHandlerRoutine handler);
 
+        void SendInput(INPUT[] inputs, bool activateWindow);
+
         void Clear();
     }
 }

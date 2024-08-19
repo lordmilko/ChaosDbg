@@ -69,7 +69,7 @@ namespace ChaosDbg.Cordb
 
         #region GetNativeModuleName
 
-        internal static string GetNativeModuleName(in LOAD_DLL_DEBUG_INFO loadDll)
+        internal static string GetNativeModuleName(in LOAD_DLL_DEBUG_INFO loadDll, int processId)
         {
             /* DbgEng does a number of fancy tricks to try and extract the module name out of the remote process: from reading
              * the provided lpImageName, various sections of the in memory or on disk PE File, and even from the module list
@@ -82,7 +82,7 @@ namespace ChaosDbg.Cordb
              * Visual Studio correctly identifies that pwsh.exe is not still called apphost.exe. Considering that we've been
              * given a handle to the module's file, why don't we just use it to lookup the name of the file? */
 
-            var fileHandle = HandleInfo.New<FileHandleInfo>(loadDll.hFile);
+            var fileHandle = HandleInfo.New<FileHandleInfo>(loadDll.hFile, processId);
 
             return fileHandle.Name;
         }

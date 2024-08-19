@@ -20,6 +20,8 @@ namespace ChaosDbg.DbgEng
 
         public DbgEngThread(int userId, int systemId, long handle, long tebAddress, DbgEngProcess process)
         {
+            //Kernel32 owns this thread, not us. So we don't need to dispose it. It will be closed
+            //after the EXIT_PROCESS_DEBUG_EVENT has been processed
             Handle = (IntPtr) handle;
             Teb = RemoteTeb.FromTeb(tebAddress, process.MemoryReader);
             UserId = userId;

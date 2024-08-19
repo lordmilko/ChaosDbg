@@ -14,7 +14,7 @@ namespace ChaosDbg
     public class ChildUserControl<T> : UserControl where T : ViewModelBase
     {
         /// <inheritdoc cref="GlobalProvider.ServiceProvider" />
-        protected IServiceProvider ServiceProvider => GlobalProvider.ServiceProvider;
+        protected IServiceProvider ServiceProvider => App.ServiceProvider;
 
         public T ViewModel { get; }
 

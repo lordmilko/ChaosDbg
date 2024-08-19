@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using ChaosDbg.PowerShell.Host;
+using ChaosDbg.Terminal;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests
@@ -80,11 +81,9 @@ namespace ChaosDbg.Tests
             Func<string>[] actions,
             Action<string[]> validate)
         {
-            MockTerminal terminal = null;
-
             var actionIndex = 0;
 
-            terminal = new MockTerminal
+            var terminal = new MockTerminal
             {
                 OnReadConsole = () =>
                 {
@@ -99,7 +98,9 @@ namespace ChaosDbg.Tests
                 }
             };
 
-            ChaosShell.Start(GlobalProvider.ServiceProvider, "-noprofile", "-noninteractive");
+            var serviceProvider = CreateServiceProvider(services => services.Add(typeof(ITerminal), terminal));
+
+            ChaosShell.Start(serviceProvider, "-noprofile", "-noninteractive");
 
             //Skip over the prompt at the start. The prompt at the end seems to not always be guaranteed based on our test (e.g. if we're doing a completion)
             var output = terminal.Output.Skip(1).ToArray();

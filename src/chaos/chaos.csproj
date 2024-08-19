@@ -8,6 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <SatelliteResourceLanguages>en-US</SatelliteResourceLanguages>
     <LangVersion>9.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,11 +19,14 @@
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
 
     <Reference Include="System.IO.Compression" />
+
+    <PackageReference Include="Serilog.Sinks.Seq" Version="7.0.0" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ChaosDbg.Engine\ChaosDbg.Engine.csproj" />
   </ItemGroup>
 
-  <Import Project="$(Build)SingleFile.targets" />
+  <!--<Import Project="$(Build)SingleFile.targets" />-->
 </Project>

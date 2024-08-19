@@ -1,9 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Linq;
+using VsDock;
+using VsDock.View;
 
 namespace ChaosDbg.Tests
 {
-    class DockContainerInfoProxy<T> where T : IDockContainerInfo
+    abstract class ViewElementInfoDebugView<T> where T : IViewElementInfo
     {
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         protected T info;
@@ -16,13 +18,13 @@ namespace ChaosDbg.Tests
 
         public IndependentRect Bounds => info.Bounds;
 
-        protected DockContainerInfoProxy(T info)
+        protected ViewElementInfoDebugView(T info)
         {
             this.info = info;
         }
     }
 
-    abstract class DockContainerInfo<T> : PaneItem<T>, IDockContainerInfo where T : DockContainer
+    abstract class ViewElementInfo<T> : PaneItem<T>, IViewElementInfo where T : ViewElement
     {
         public SplitterGripInfo SplitterGrip => Children.OfType<SplitterGripInfo>().SingleOrDefault();
 
@@ -30,7 +32,7 @@ namespace ChaosDbg.Tests
 
         public SplitPaneLength DockedHeight => Element.DockedHeight;
 
-        protected DockContainerInfo(T element, IPaneItem[] children) : base(element, children)
+        protected ViewElementInfo(T element, IPaneItem[] children) : base(element, children)
         {
         }
     }

@@ -1,29 +1,30 @@
 ﻿using System.Diagnostics;
 using System.Linq;
 using System.Windows.Controls;
+using VsDock.View;
 
 namespace ChaosDbg.Tests
 {
-    class SplitterItemsDockContainerInfoProxy : DockContainerInfoProxy<SplitterItemsDockContainerInfo>
+    class SplitViewInfoDebugView : ViewElementInfoDebugView<SplitViewInfo>
     {
         public SplitterItemsControlInfo ItemsControl => info.ItemsControl;
 
         public Orientation Orientation => info.Orientation;
 
-        public SplitterItemsDockContainerInfoProxy(SplitterItemsDockContainerInfo info) : base(info)
+        public SplitViewInfoDebugView(SplitViewInfo info) : base(info)
         {
         }
     }
 
-    [DebuggerTypeProxy(typeof(SplitterItemsDockContainerInfoProxy))]
+    [DebuggerTypeProxy(typeof(SplitViewInfoDebugView))]
     [DebuggerDisplay("{ToString(),nq}")]
-    class SplitterItemsDockContainerInfo : DockContainerInfo<SplitterItemsDockContainer>
+    class SplitViewInfo : ViewElementInfo<SplitView>
     {
         public SplitterItemsControlInfo ItemsControl => Children.OfType<SplitterItemsControlInfo>().Single();
         
         public Orientation Orientation => Element.Orientation;
 
-        public SplitterItemsDockContainerInfo(SplitterItemsDockContainer element, IPaneItem[] children) : base(element, children)
+        public SplitViewInfo(SplitView element, IPaneItem[] children) : base(element, children)
         {
         }
 

@@ -1,6 +1,9 @@
-﻿using System.CommandLine;
+﻿using System;
+using System.Diagnostics;
 using ChaosDbg;
-using ChaosDbg.Metadata;
+using ChaosDbg.PowerShell.Host;
+using ChaosLib;
+using Microsoft.Win32;
 
 namespace chaos
 {
@@ -8,11 +11,28 @@ namespace chaos
     {
         static void Main(string[] args)
         {
+            if (!HasMinimumFrameworkVersion())
+                return;
+
             //In single file builds, a zip file is embedded in the exe containing all managed/unmanaged assemblies,
             //making ChaosDbg easily portable as well as reducing the overall file size
             SingleFileProvider.ExtractChaosDbg();
 
-            Run(args);
+            //When the debugger is attached PowerShell is slower to start
+            if (Debugger.IsAttached)
+                Console.WriteLine("Starting PowerShell...");
+
+            try
+            {
+                ChaosShell.Start(GlobalProvider.ServiceProvider, "-noprofile", "-command", "open-dbgtracefile D:\\chaos12.run -hookttd");
+                //ChaosShell.Start(GlobalProvider.ServiceProvider, "-noprofile", "-command", "start-dbgprocess powershell -engine interop");
+                //ChaosShell.Start(GlobalProvider.ServiceProvider, "-noprofile");
+            }
+            finally
+            {
+                GlobalProvider.Dispose();
+                Log.Shutdown(); //This must be last; certain objects may attempt to log during their dispose
+            }
         }
 
         private static bool HasMinimumFrameworkVersion()
@@ -50,7 +70,7 @@ namespace chaos
             {
                 var result = User32.Native.MessageBoxW(
                     IntPtr.Zero,
-                    "This application requires one of the following versions of the .NET Framework:\n .NETFramework,Version=v4.7.2\n\nDo you want to install this .NET Framework version now?",
+                    "This application requires one of the following version of the .NET Framework:\n .NETFramework,Version=v4.7.2\n\nDo you want to install this .NET Framework version now?",
                     $"{Process.GetCurrentProcess().ProcessName}.exe - This application could not be started.",
                     MB.MB_ICONERROR | MB.MB_YESNO
                 );
@@ -64,6 +84,10 @@ namespace chaos
 
             return true;
         }
+
+#if FALSE
+        //I like the way that System.CommandLine shows help, and also like the idea of a mininalist debugger,
+        //so have kept this around for now
 
         private static void Run(string[] args)
         {
@@ -130,5 +154,6 @@ namespace chaos
             else
                 return engineKind.Value;
         }
+#endif
     }
 }

@@ -63,40 +63,56 @@ namespace ChaosDbg.Cordb
 
         private void DoContinue(CorDebugController controller, bool outOfBand, bool isUnmanaged = false)
         {
-            //If this is the last stop, we're about to decrement the stop count to 0,
-            //indicating that the process is now freely running
-            if (Session.CallbackStopCount == 1)
+            try
             {
-                if (!Session.IsCrashing)
+                //If this is the last stop, we're about to decrement the stop count to 0,
+                //indicating that the process is now freely running
+                if (Session.CallbackStopCount == 1)
                 {
-                    //These items are nice to haves, but if the engine is in the middle of crashing, don't bother with them, as
-                    //we can't guarantee whether we have an accurate picture of the processes state (not to mention we intentionally
-                    //skip event callbacks while in the middle of crashing)
-
-                    Process.Breakpoints.RestoreCurrentBreakpoint();
-
-                    if (isUnmanaged)
+                    if (!Session.IsCrashing && !Session.IsTerminating)
                     {
-                        //If this is an ExitThread event, the event thread won't exist anymore
+                        //These items are nice to haves, but if the engine is in the middle of crashing, don't bother with them, as
+                        //we can't guarantee whether we have an accurate picture of the processes state (not to mention we intentionally
+                        //skip event callbacks while in the middle of crashing)
 
-                        TryClearHardInterrupt();
+                        /* If the process is already terminated, it's entirely possible that we don't even have a Process object anymore.
+                         * e.g. suppose the UI thread is trying to cleanup the process. We're in the middle of handling the ExitProcess managed
+                         * debug event. We just set IsTerminated = true and signalled the WaitExitProcess event. The UI thread is like "great, I'm
+                         * going to remove the ActiveProcess now", however we then race with it and trip over it null being null */
+
+                        //And if we're in the middle of terminating (but not yet fully terminated), we already cleared out our threads, so we can't clear any interrupts or update register contexts
+
+                        Debug.Assert(Process != null, "Expected to have an active process");
+
+                        Process.Breakpoints.RestoreCurrentBreakpoint();
+
+                        if (isUnmanaged)
+                        {
+                            //If this is an ExitThread event, the event thread won't exist anymore
+
+                            TryClearHardInterrupt();
+                        }
+
+                        //Apply any modified register contexts
+                        Process.Threads.SaveRegisterContexts();
                     }
 
-                    //Apply any modified register contexts
-                    Process.Threads.SaveRegisterContexts();
+                    //Invalidate any data we collected while we were paused
+                    Session.PauseContext.Clear();
                 }
 
-                //Invalidate any data we collected while we were paused
-                Session.PauseContext.Clear();
+                //As soon as we call Continue(), another event may be dispatched by the runtime.
+                //As such, we must do all required bookkeeping beforehand
+                Session.CallbackStopCount--;
+                Session.TotalContinueCount++;
+
+                //This must be called _after_ updating the stop count, as the Status is automatically derived from it
+                NotifyEngineStatus();
             }
-
-            //As soon as we call Continue(), another event may be dispatched by the runtime.
-            //As such, we must do all required bookkeeping beforehand
-            Session.CallbackStopCount--;
-            Session.TotalContinueCount++;
-
-            //This must be called _after_ updating the stop count, as the Status is automatically derived from it
-            NotifyEngineStatus();
+            catch (Exception ex)
+            {
+                Debug.Assert(false, "We should never throw when attempting to call DoContinue(). When we're handling an unmanaged event like EXIT_PROCESS_DEBUG_EVENT, failing to continue means that the remaining thread handles won't be closed, which means the process won't ever terminate, and we'll hang forever");
+            }
 
             HRESULT hr;
 
@@ -117,6 +133,22 @@ namespace ChaosDbg.Cordb
                 case HRESULT.CORDBG_E_PROCESS_TERMINATED:
                     //If the process wasn't marked as terminated before, it is now!
                     Session.IsTerminated = true;
+                    break;
+
+                case HRESULT.CORDBG_E_SUPERFLOUS_CONTINUE:
+                    //If a managed callback crashed in its primary handler, it will raise a critical failure, and CordbProcess.Terminate() will call Continue() as many times as necessary from the critical
+                    //failure thread in order to get the target going. When the managed callback that crashed loses the race to try and Continue() itself (because the critical failure thread already did a continue
+                    //for it) it will fail with a superflous continue. This is OK; we just need to make sure we get the exit process event so that we can cleanup
+                    if (Session.IsTerminating)
+                    {
+                        //I don't think we can assert that we're necessarily crashing at this point. There can be a race between calling Terminate() and a managed event that was already
+                        //in the process of running (e.g. we had a LoadModule event that was still in progress). Upon doing a bunch of continues in Terminate(), the LoadModule event
+                        //goes to Continue and trips over the fact that we've continued too many times on purpose
+                        break;
+                    }
+
+                    //If we're not terminating, this is a bug
+                    hr.ThrowOnNotOK();
                     break;
 
                 default:
@@ -164,6 +196,7 @@ namespace ChaosDbg.Cordb
                  * This event is set in CordbWin32EventThread::HandleUnmanagedContinue() in response to the
                  * W32ETA_CONTINUE. But if the win32 event thread is hung up waiting for this callback to respond,
                  * it's going to deadlock! */
+                Debug.Assert(Session.UnmanagedCallback != null, "Didn't have an UnmanagedCallback set");
                 Session.UnmanagedCallback.InBandThread.InvokeAsync(() => controller.TryContinue(false));
                 return HRESULT.S_OK;
             }
@@ -214,6 +247,7 @@ namespace ChaosDbg.Cordb
         {
             CheckIfDisposed();
 
+            //We currently make the assumption that the debugger thread inside of the target won't be interrupted
             Process.CorDebugProcess.Stop(0);
             Session.EventHistory.Add(new CordbUserBreakPauseReason());
             OnStopping(false);

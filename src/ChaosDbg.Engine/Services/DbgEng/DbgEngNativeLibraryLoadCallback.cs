@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Detour;
 using ChaosLib.Memory;
@@ -36,18 +38,22 @@ namespace ChaosDbg.DbgEng
         };
 
         private IPEFileProvider peFileProvider;
+        private IDbgHelpProvider dbgHelpProvider;
         private static bool isDbgHelpHooked;
 
         private static object objLock = new object();
+
+        private static List<ImportHook> hooks = new List<ImportHook>();
 
         public bool AllowOverwriteSymbolOpts { get; set; }
 
         [ThreadStatic]
         public Func<DetourContext, object> HookCreateProcess;
 
-        public DbgEngNativeLibraryLoadCallback(IPEFileProvider peFileProvider)
+        public DbgEngNativeLibraryLoadCallback(IPEFileProvider peFileProvider, IDbgHelpProvider dbgHelpProvider)
         {
             this.peFileProvider = peFileProvider;
+            this.dbgHelpProvider = dbgHelpProvider;
         }
 
         public string GetInterestedModule() => WellKnownNativeLibrary.DbgEng;
@@ -60,10 +66,15 @@ namespace ChaosDbg.DbgEng
 
                 if (isDbgHelpHooked)
                 {
-                    if (ImportPatcher.TryRepairStaleImportHooks(WellKnownNativeLibrary.DbgEng, (long) (void*) hModule, new[] { typeof(DbgHelp.Native), typeof(Kernel32.Native) }, out needFullRepair))
-                        return;
+                    var didRepair = false;
 
-                    Log.Debug<DetourBuilder>("Rehooking DbgEng at new address {address}", hModule.ToString("X"));
+                    foreach (var hook in hooks)
+                        didRepair |= hook.Repair(hModule);
+
+                    if (didRepair)
+                        InstallAddRefHook();
+
+                    return;
                 }
 
                 var process = Process.GetCurrentProcess();
@@ -77,36 +88,39 @@ namespace ChaosDbg.DbgEng
 
                 Log.Debug<DetourBuilder>("Hooking DbgEng {module}", hModule.ToString("X"));
 
-                if (needFullRepair == null || needFullRepair.Contains(typeof(DbgHelp.Native)))
+                if (dbgHelpProvider is DbgHelpProvider)
                 {
-                    ImportPatcher.Patch(
-                        peFile: dbgEngPE,
-                        importedModule: WellKnownNativeLibrary.DbgHelp,
-                        pInvokeProvider: typeof(DbgHelp.Native),
-                        userHook: DbgHelpHook, //Ensure that all calls to DbgHelp are protected by our global lock
+                    var dbgHelpHook = new ImportHook(
+                        dbgEngPE,
+                        WellKnownNativeLibrary.DbgHelp,
+                        typeof(DbgHelp.Native),
+                        DbgHelpHook, //Ensure that all calls to DbgHelp are protected by our global lock
                         exclude: SafeDbgHelpImports
                     );
+
+                    hooks.Add(dbgHelpHook);
                 }
 
-                if (needFullRepair == null || needFullRepair.Contains(typeof(Kernel32.Native)))
-                {
-                    ImportPatcher.Patch(
-                        peFile: dbgEngPE,
-                        importedModule: null,
-                        typeof(Kernel32.Native),
-                        Kernel32Hook,
-                        include: new[] { "QueueUserAPC", "CreateProcessW" }
-                    );
+                //These methods are split across imports/API sets, so we need separate hooks
 
-                    ImportPatcher.Patch(
-                        peFile: dbgEngPE,
-                        importedModule: null,
-                        typeof(Kernel32.Native),
-                        Kernel32Hook,
-                        include: new[] { "Sleep" }
-                    );
-                }
+                var kernel32Hook1 = new ImportHook(
+                    dbgEngPE,
+                    typeof(Kernel32.Native),
+                    Kernel32Hook,
+                    include: new[] { "QueueUserAPC", "CreateProcessW" }
+                );
 
+                var kernel32Hook2 = new ImportHook(
+                    dbgEngPE,
+                    typeof(Kernel32.Native),
+                    Kernel32Hook,
+                    include: new[] { "Sleep" }
+                );
+
+                hooks.Add(kernel32Hook1);
+                hooks.Add(kernel32Hook2);
+
+                InstallAddRefHook();
                 isDbgHelpHooked = true;
             }
         }
@@ -144,7 +158,7 @@ namespace ChaosDbg.DbgEng
 
                 case "SymInitialize":
                 case "SymInitializeW":
-                    DbgHelpProvider.Acquire(ctx.Arg<IntPtr>("hProcess")); //todo: if we just created the session, we dont need to increase the refcount twice!
+                    dbgHelpProvider.Acquire(ctx.Arg<IntPtr>("hProcess")); //todo: if we just created the session, we dont need to increase the refcount twice!
                     result = true;
                     return true;
 
@@ -336,6 +350,41 @@ namespace ChaosDbg.DbgEng
             Debug.Assert(false, $"Don't know how to handle {ctx.Name}");
             return ctx.InvokeOriginal();
         }
+
+#if DEBUG
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate int AddRefDelegate(IntPtr self);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate int AddRefDelegateHook(IntPtr self, AddRefDelegate original);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate int ReleaseDelegate(IntPtr self);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate int ReleaseDelegateHook(IntPtr self, ReleaseDelegate original);
+
+        private void InstallAddRefHook()
+        {
+            /*NativeReflector.InstallHook<AddRefDelegate, AddRefDelegateHook>("dbgeng!DebugClient::AddRef", (@this, original) =>
+            {
+                var newRef = original(@this);
+
+                //Debug.WriteLine("DebugClient 0x{0} AddRef {1} -> {2}", @this.ToString("X"), newRef - 1, newRef);
+
+                return newRef;
+            });
+
+            NativeReflector.InstallHook<ReleaseDelegate, ReleaseDelegateHook>("dbgeng!DebugClient::Release", (@this, original) =>
+            {
+                var newRef = original(@this);
+
+                //Debug.WriteLine("DebugClient 0x{0} Release {1} -> {2}", @this.ToString("X"), newRef + 1, newRef);
+
+                return newRef;
+            });*/
+        }
+#endif
 
         public void NotifyUnload(IntPtr hModule)
         {

@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using ChaosDbg.Cordb;
+using ChaosLib;
 using ChaosLib.Symbols;
 using ClrDebug;
 using static ClrDebug.HRESULT;
@@ -24,6 +26,8 @@ namespace ChaosDbg.Symbol
 
         private ProcessModule clrModule;
         private IUnmanagedSymbolModule clrSymbolModule;
+
+        private Thread eagerCLRSymbolsThread;
 
         private bool TryManagedSymFromAddr(long address, out IDisplacedSymbol result)
         {
@@ -379,6 +383,29 @@ namespace ChaosDbg.Symbol
                 return d;
 
             return new SOSDisplacedSymbol(0, (SOSSymbol) symbol);
+        }
+
+        internal void LoadCLRSymbols(int engineId, CancellationToken cancellationToken)
+        {
+            //When managed debugging, symbols for the CLR will not normally be loaded. However, it can often
+            //be useful to have these when we invoke special CLR internal methods. Thus, we eagerly attempt
+            //to load these so that they're available when we need them
+            eagerCLRSymbolsThread = new Thread(() =>
+            {
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    TryRegisterCLR();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error<IDbgHelp>(ex, "Failed to eagerly load CLR symbols: {message}", ex.Message);
+                }
+            });
+            Log.CopyContextTo(eagerCLRSymbolsThread);
+            eagerCLRSymbolsThread.Name = $"Eager CLR Symbols Thread {engineId}";
+            eagerCLRSymbolsThread.Start();
         }
 
         //Only called when adding native modules through DbgHelp. We may get an IUnmanagedSymbolModule representation of managed modules as well

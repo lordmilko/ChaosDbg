@@ -138,7 +138,7 @@ namespace ChaosDbg
             var elementPos = element.PointToScreen(new Point(0, 0));
 
             //Get the absolute position of the main window on the entire screen
-            var mainWindowPos = Application.Current.MainWindow.PointToScreen(new Point(0, 0));
+            var mainWindowPos = App.Current.MainWindow.PointToScreen(new Point(0, 0));
 
             //Get the relative offset of the element within the main window
             var relativePos = new Point(elementPos.X - mainWindowPos.X, elementPos.Y - mainWindowPos.Y);

@@ -1,7 +1,9 @@
-﻿using ChaosLib;
+﻿using System.Diagnostics;
+using ChaosLib;
 
 namespace ChaosDbg.DbgEng
 {
+    [DebuggerDisplay("[{Id}] {ToString(),nq}")]
     public class DbgEngProcess : IDbgProcess
     {
         #region Overview

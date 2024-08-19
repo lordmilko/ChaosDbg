@@ -17,7 +17,7 @@ namespace ChaosDbg
             get
             {
                 if (theme == null)
-                    theme = GlobalProvider.ServiceProvider.GetService<IThemeProvider>().GetTheme();
+                    theme = App.ServiceProvider.GetService<IThemeProvider>().GetTheme();
 
                 return theme;
             }

@@ -202,7 +202,7 @@ namespace ChaosDbg.Cordb
                 );
 
                 //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(symbolProvider.hProcess, accessor.Handle, frames[0].Context).ToArray();
+                var nativeFrames = walker.Walk(accessor.Handle, frames[0].Context).ToArray();
 
                 //Concat our native and ICorDebug derived frames together. The stack pointer of each frame should increase
                 //as you go from more recent function calls to older function calls. I'm not sure if this solution of merging
@@ -261,7 +261,7 @@ namespace ChaosDbg.Cordb
                 );
 
                 //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(symbolProvider.hProcess, accessor.Handle, accessor.Thread.RegisterContext).ToArray();
+                var nativeFrames = walker.Walk(accessor.Handle, accessor.Thread.RegisterContext).ToArray();
 
                 return nativeFrames.Select(v =>
                 {

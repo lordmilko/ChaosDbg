@@ -14,14 +14,17 @@ namespace ChaosDbg.DbgEng
 
         internal DbgEngNativeLibraryLoadCallback DbgEngNativeLibraryLoadCallback { get; }
 
+        public IUserInterface UserInterface { get; }
+
         internal DbgEngEngineServices(
             NativeLibraryProvider nativeLibraryProvider,
             IPEFileProvider peFileProvider,
-            DbgEngNativeLibraryLoadCallback dbgEngNativeLibraryLoadCallback)
+            DbgEngNativeLibraryLoadCallback dbgEngNativeLibraryLoadCallback, IUserInterface userInterface)
         {
             NativeLibraryProvider = nativeLibraryProvider;
             PEFileProvider = peFileProvider;
             DbgEngNativeLibraryLoadCallback = dbgEngNativeLibraryLoadCallback;
+            UserInterface = userInterface;
         }
 
         [Obsolete("DbgEng is not thread safe. Attempting to use multiple debuggers concurrently will cause g_Machine to be overwritten. Ensure only a single thread utilizes a DebugClient at a time")]

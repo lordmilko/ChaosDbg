@@ -3,6 +3,9 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 
     <Build>$(MSBuildThisFileDirectory)..\build\</Build>
+
+    <!-- The .NET CLI does not define SolutionDir -->
+    <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)..\</SolutionDir>
 	
     <Copyright>(c) 2023 lordmilko. All rights reserved.</Copyright>
 
@@ -25,11 +28,13 @@
 
   <PropertyGroup>
     <EnvDTEVersion>8.0.3</EnvDTEVersion>
-    <ClrDebugVersion>0.3.0</ClrDebugVersion>
+    <ClrDebugVersion>0.3.2</ClrDebugVersion>
     <ChaosLibVersion>0.1.0</ChaosLibVersion>
+    <VsDockVersion>0.1.0</VsDockVersion>
     <DbgEngVersion>20230731.1609.0</DbgEngVersion>
     <DbgShimVersion>8.0.452401</DbgShimVersion>
     <FlaUIVersion>4.0.0</FlaUIVersion>
+    <TraceEventVersion>1.0.23</TraceEventVersion>
 
     <TestSDKVersion>16.9.4</TestSDKVersion>
     <MSTestVersion>2.2.3</MSTestVersion>

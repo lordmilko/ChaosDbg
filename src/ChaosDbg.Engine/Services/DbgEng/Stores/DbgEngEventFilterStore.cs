@@ -150,15 +150,18 @@ namespace ChaosDbg.DbgEng
             {
                 var control = session.EngineClient.Control;
 
-                control.SetExceptionFilterParameters(1, new[]
+                if (execOption != null || continueOption != null)
                 {
-                    new DEBUG_EXCEPTION_FILTER_PARAMETERS
+                    control.SetExceptionFilterParameters(1, new[]
                     {
-                        ExceptionCode = eventFilter.Code,
-                        ExecutionOption = execOption ?? eventFilter.ExecutionOption,
-                        ContinueOption = continueOption ?? eventFilter.ContinueOption
-                    }
-                });
+                        new DEBUG_EXCEPTION_FILTER_PARAMETERS
+                        {
+                            ExceptionCode = eventFilter.Code,
+                            ExecutionOption = execOption ?? eventFilter.ExecutionOption,
+                            ContinueOption = continueOption ?? eventFilter.ContinueOption
+                        }
+                    });
+                }
 
                 if (command != null)
                     control.SetEventFilterCommand(eventFilter.Index, command == string.Empty ? null : command);
@@ -166,6 +169,26 @@ namespace ChaosDbg.DbgEng
                 if (secondCommand != null)
                     control.SetExceptionFilterSecondCommand(eventFilter.Index, secondCommand);
             });
+        }
+
+        public void SetEventFilter(
+            WellKnownEventFilter kind,
+            DEBUG_FILTER_EXEC_OPTION? execOption = null,
+            DEBUG_FILTER_CONTINUE_OPTION? continueOption = null,
+            string argument = null,
+            string command = null,
+            string secondCommand = null)
+        {
+            var eventFilter = this[kind];
+
+            if (eventFilter is DbgExceptionEventFilter e)
+            {
+                SetEventFilter(e, execOption, continueOption, command, secondCommand);
+            }
+            else
+            {
+                SetEventFilter((DbgEngineEventFilter) eventFilter, execOption, continueOption, argument, secondCommand);
+            }
         }
 
         private DbgEventFilter GetExceptionFilter(DebugControl control, in DEBUG_EXCEPTION_FILTER_PARAMETERS filter, int index)
@@ -188,6 +211,7 @@ namespace ChaosDbg.DbgEng
             return result;
         }
 
+        //Note: if you want to break on this argument, you also need to update the filter execution option
         public void SetArgument(WellKnownEventFilter kind, string argumentValue)
         {
             //This method will call the ChangeEngineState() event callback, which will dispatch to our Refresh() method and

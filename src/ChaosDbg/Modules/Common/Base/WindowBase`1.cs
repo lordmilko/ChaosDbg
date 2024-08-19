@@ -6,7 +6,7 @@ namespace ChaosDbg
 {
     public class WindowBase<T> : Window where T : ViewModelBase
     {
-        protected IServiceProvider ServiceProvider => GlobalProvider.ServiceProvider;
+        protected IServiceProvider ServiceProvider => App.ServiceProvider;
 
         protected TService GetRequiredService<TService>() => ServiceProvider.GetService<TService>();
 

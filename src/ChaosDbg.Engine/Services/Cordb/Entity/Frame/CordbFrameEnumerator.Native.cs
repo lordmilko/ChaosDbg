@@ -28,7 +28,7 @@ namespace ChaosDbg.Cordb
                     (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );
 
-                var rawFrames = walker.Walk(process.Handle, thread.Handle, thread.RegisterContext);
+                var rawFrames = walker.Walk(thread.Handle, thread.RegisterContext);
 
                 foreach (var rawFrame in rawFrames)
                 {

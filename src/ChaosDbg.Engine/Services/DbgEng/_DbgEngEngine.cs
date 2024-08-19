@@ -8,7 +8,7 @@ namespace ChaosDbg.DbgEng
 {
     //Engine startup/state/general code
 
-    public partial class DbgEngEngine : IDbgEngineInternal, IDisposable
+    public partial class DbgEngEngine : IDbgEngineInternal
     {
         public DbgEngProcess ActiveProcess => Session.ActiveProcess;
 

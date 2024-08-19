@@ -19,11 +19,11 @@ namespace ChaosDbg.Cordb
 
         public CordbProcess ActiveProcess
         {
-            get => Processes.ActiveProcess;
+            get => Processes?.ActiveProcess;
             set
             {
                 if (value == null)
-                    Processes.Remove(value);
+                    Processes?.Remove(null);
                 else
                 {
                     if (Processes == null)
@@ -76,6 +76,13 @@ namespace ChaosDbg.Cordb
             get => currentStopCount;
             set => Interlocked.Exchange(ref currentStopCount, value);
         }
+
+#if DEBUG
+        /// <summary>
+        /// Gets the "real" stop count of the <see cref="ICorDebugProcess"/> in mscordbi.
+        /// </summary>
+        public int DbiStopCount => (int) (uint) ActiveProcess.TypedProcess["m_stopCount"].Value;
+#endif
 
         internal readonly object UserPauseCountLock = new object();
 
@@ -193,6 +200,14 @@ namespace ChaosDbg.Cordb
 
         public int EngineId { get; }
 
+#if DEBUG
+        //Attempting to remove the process module can block for a long time during unit tests when a lot of other tests
+        //are trying to do DbgHelp stuff at the same time. This can cause CordbProcess.Terminate() to get upset because
+        //we timeout waiting for the event to be signalled, and think there's a bug. This flag allows us to see that there is
+        //no bug, we're just stuck waiting for DbgHelp, and wait again
+        internal bool IsPerformingExitProcess { get; set; }
+#endif
+
         public CordbEngineServices Services { get; }
 
         private static int cordbEngineCount;
@@ -278,6 +293,8 @@ namespace ChaosDbg.Cordb
             //The critical failure thread may have already disposed everything
             if (disposed)
                 return;
+
+            Log.Debug<CordbSessionInfo>("Disposing CordbSessionInfo");
 
             //First, cancel the CTS if we have one
             EngineCancellationTokenSource?.Cancel();

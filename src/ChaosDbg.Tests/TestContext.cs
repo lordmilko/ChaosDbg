@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace ChaosDbg.Tests
 {
     public class TestContext : IDisposable
     {
-        public CordbEngine CordbEngine => cordbEngineProvider.ActiveEngine;
+        public CordbEngine CordbEngine { get; internal set; } //Can't rely on getting it from the DebugEngineProvider, because once we've disposed it, all that will remain will be the DbgEngEngine, and we'll get an InvalidCastException
 
         public CordbProcess Process => CordbEngine.Process;
 
@@ -32,11 +33,12 @@ namespace ChaosDbg.Tests
         public INativeInstruction CurrentInstruction =>
             Process.ProcessDisassembler.Disassemble(ActiveThread.RegisterContext.IP);
 
-        private CordbEngineProvider cordbEngineProvider;
+        private DebugEngineProvider engineProvider;
         private ManualResetEventSlim breakpointHit;
         private ManualResetEventSlim hadFatalException = new ManualResetEventSlim(false);
         private ManualResetEventSlim engineFailureComplete = new ManualResetEventSlim(false);
         private string moduleName;
+        private bool disposed;
 
         public Lazy<DbgEngEngine> InProcDbgEng { get; set; }
 
@@ -65,19 +67,23 @@ namespace ChaosDbg.Tests
             get => lastFatalException;
             set
             {
+                //We get told of a null exception when we receive the ShutdownSuccess notification
+                if (value == null)
+                    return;
+
                 lastFatalException = value;
 
                 hadFatalException.Set();
             }
         }
 
-        public TestContext(CordbEngineProvider cordbEngineProvider, string exePath)
+        public TestContext(DebugEngineProvider engineProvider, string exePath)
         {
-            this.cordbEngineProvider = cordbEngineProvider;
+            this.engineProvider = engineProvider;
 
             breakpointHit = new ManualResetEventSlim(false);
-            cordbEngineProvider.BreakpointHit += (s, e) => breakpointHit.Set();
-            cordbEngineProvider.ExceptionHit += (s, e) => breakpointHit.Set();
+            engineProvider.BreakpointHit += (s, e) => breakpointHit.Set();
+            engineProvider.ExceptionHit += (s, e) => breakpointHit.Set();
 
             //cordbEngineProvider.ModuleLoad += (s, e) => Debug.WriteLine($"[ModLoad] {e.Module}");
             //cordbEngineProvider.ModuleUnload += (s, e) => Debug.WriteLine($"[ModUnload] {e.Module}");
@@ -159,15 +165,27 @@ namespace ChaosDbg.Tests
 
         public void Dispose()
         {
-            CordbEngine?.Dispose();
-            breakpointHit.Dispose();
-            engineFailureComplete?.Dispose();
+            if (disposed)
+                return;
 
-            if (InProcDbgEng != null && InProcDbgEng.IsValueCreated)
-                InProcDbgEng.Value.Dispose();
+            try
+            {
+                CordbEngine?.Dispose();
+                breakpointHit.Dispose();
+                engineFailureComplete?.Dispose();
 
-            if (OutOfProcDbgEng != null && OutOfProcDbgEng.IsValueCreated)
-                OutOfProcDbgEng.Value.Dispose();
+                if (InProcDbgEng != null && InProcDbgEng.IsValueCreated)
+                    InProcDbgEng.Value.Dispose();
+
+                if (OutOfProcDbgEng != null && OutOfProcDbgEng.IsValueCreated)
+                    OutOfProcDbgEng.Value.Dispose();
+
+                disposed = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.Assert(false, $"An exception occurred while disposing a TestContext. This is illegal. {ex.Message}");
+            }
         }
     }
 }

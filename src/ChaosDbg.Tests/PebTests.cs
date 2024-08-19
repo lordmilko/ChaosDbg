@@ -31,8 +31,9 @@ namespace ChaosDbg.Tests
                 {
                     //Ensure we're not using the system32 version
                     GetService<NativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
+                    var dbgHelpProvider = GetService<IDbgHelpProvider>();
 
-                    using var dbgHelp = DbgHelpProvider.Acquire(process.Handle, invadeProcess: true);
+                    using var dbgHelp = dbgHelpProvider.Acquire(process.Handle, invadeProcess: true);
 
                     var reader = new MemoryReader(process.Handle);
                     var remotePeb = new RemotePeb(process);

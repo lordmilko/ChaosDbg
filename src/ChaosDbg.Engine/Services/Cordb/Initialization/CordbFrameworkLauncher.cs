@@ -15,10 +15,10 @@ namespace ChaosDbg.Cordb
 
             //Setup callbacks
             cb = new CordbManagedCallback();
-            InstallManagedStartupHook();
+            InstallManagedStartupHook(out var managedWait);
             corDebug.SetManagedHandler(cb);
 
-            ManualResetEventSlim wait = null;
+            ManualResetEventSlim unmanagedWait = null;
 
             if (options.UseInterop)
             {
@@ -26,7 +26,7 @@ namespace ChaosDbg.Cordb
 
                 //It seems that even during Create, the Win32 Event Thread may immediately call WaitForDebugEvent, so we need to block
                 //until we're ready to receive it
-                InstallInteropStartupHook(out wait);
+                InstallInteropStartupHook(out unmanagedWait);
 
                 corDebug.SetUnmanagedHandler(ucb);
             }
@@ -94,7 +94,8 @@ namespace ChaosDbg.Cordb
                     Kernel32.CloseHandle(pi.hThread);
             }
 
-            wait?.Set();
+            managedWait.Set();
+            unmanagedWait?.Set();
         }
 
         protected override void AttachInternal()

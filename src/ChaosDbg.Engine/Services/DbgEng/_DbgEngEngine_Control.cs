@@ -46,6 +46,9 @@ namespace ChaosDbg.DbgEng
 
             if (Session.Status != EngineStatus.Break)
                 Session.BreakEvent.Wait(cancellationToken);
+
+            //We're broken; reset the event for next time. We can't rely on the engine thread to do this, it only resets the event after there's no more input
+            Session.BreakEvent.Reset();
         }
 
         public void Continue() => Invoke(c => c.Control.ExecutionStatus = DEBUG_STATUS.GO);

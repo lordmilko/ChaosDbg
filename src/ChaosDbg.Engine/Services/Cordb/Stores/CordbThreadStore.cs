@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -22,7 +23,7 @@ namespace ChaosDbg.Cordb
 
     [DebuggerDisplay("Count = {Threads.Count}")]
     [DebuggerTypeProxy(typeof(CordbThreadStoreDebugView))]
-    public class CordbThreadStore : IDbgThreadStoreInternal, IEnumerable<CordbThread>
+    public class CordbThreadStore : IDbgThreadStoreInternal, IEnumerable<CordbThread>, IDisposable
     {
         private object threadLock = new object();
 
@@ -53,6 +54,7 @@ namespace ChaosDbg.Cordb
 
         private CordbProcess process;
         private int nextUserId;
+        private bool disposed;
 
         //Stores the active thread the user has explicitly specified, if applicable.
         private CordbThread explicitActiveThread;
@@ -119,6 +121,11 @@ namespace ChaosDbg.Cordb
 
             lock (threadLock)
             {
+                //In V3 mode, we might open a thread handle in the ManagedAccessor upon creating the object. So if we throw
+                //prior to creating the object, we have nothing to dispose
+                if (disposed)
+                    throw new ObjectDisposedException(nameof(CordbThreadStore));
+
                 /* In "hosted" scenarios (I suppose such as SQL Server) a managed thread may run on multiple
                  * native threads. Another possible scenario is that we're running on fibers instead of threads,
                  * however the debugger explicitly prohibits creating a CorDebugProcess when fibers are in use
@@ -159,8 +166,17 @@ namespace ChaosDbg.Cordb
         {
             Debug.Assert(process.Session.IsInterop);
 
+            //Everything needs to be inside the lock, because we lock when we dispose so we need to make sure there's no race between adding and disposing,
+            //else we might add a thread that won't get disposed
             lock (threadLock)
             {
+                if (disposed)
+                {
+                    //CREATE_THREAD_DEBUG_EVENT thread handles are not owned by us, they're owned by Kernel32.
+                    //It's not our responsibility to close the thread handle
+                    throw new ObjectDisposedException(nameof(CordbThreadStore));
+                }
+
                 var userId = nextUserId;
                 nextUserId++;
 
@@ -192,7 +208,10 @@ namespace ChaosDbg.Cordb
             get
             {
                 lock (threadLock)
+                {
+                    CheckIfDisposed();
                     return Threads[id];
+                }
             }
         }
 
@@ -208,6 +227,8 @@ namespace ChaosDbg.Cordb
                      * ManagedAccessor.VolatileOSThreadID for more information */
 
                     Threads.Remove(thread.Id);
+
+                    thread.Dispose();
 
                     thread.Exited = true;
 
@@ -280,6 +301,9 @@ namespace ChaosDbg.Cordb
 
         private CordbThread CalculateMainThread(CordbThread[] localThreads)
         {
+            if (localThreads.Length == 0)
+                return null;
+
             if (process.Session.IsInterop)
             {
                 /* When interop debugging, DbgkpPostFakeThreadMessages does seem to notify us of thread creation
@@ -293,7 +317,8 @@ namespace ChaosDbg.Cordb
             //Managed
 
             //This may be a managed process, or a native process that spun up the CLR. And the CLR may have been spun up on the actual main thread,
-            //or a background thread created by the native process. Either way, because we're 
+            //or a background thread created by the native process. Either way, because we're in managed code now, we'll go for a thread that is executing
+            //managed code
 
             var managedCandidates = localThreads.Where(v => v.IsManaged && v.SpecialType == null).ToArray();
 
@@ -410,5 +435,32 @@ namespace ChaosDbg.Cordb
 
         IEnumerator<IDbgThread> IDbgThreadStoreInternal.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private void CheckIfDisposed()
+        {
+            if (disposed)
+                throw new ObjectDisposedException(nameof(CordbThreadStore));
+        }
+
+        public void Dispose()
+        {
+            //Native objects have nothing to dispose (their handles are owned by Kernel32)
+            //but in V3 our ManagedAccessors may have opened a thread handle
+
+            lock (threadLock)
+            {
+                if (disposed)
+                    return;
+
+                foreach (var thread in threads.Values)
+                {
+                    thread.Dispose();
+                }
+
+                Threads.Clear();
+
+                disposed = true;
+            }
+        }
     }
 }

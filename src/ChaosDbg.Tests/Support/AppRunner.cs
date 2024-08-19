@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -8,7 +9,6 @@ using System.Windows.Markup;
 using System.Windows.Threading;
 using ChaosDbg.Engine;
 using ChaosLib;
-using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 using FlaUIWindow = FlaUI.Core.AutomationElements.Window;
 using Window = System.Windows.Window;
@@ -25,19 +25,22 @@ namespace ChaosDbg.Tests
             Application.ResourceAssembly = typeof(App).Assembly;
         }
 
-        private static object lockObj = new object();
+        private static object appLock = new object();
 
-        public static Thread Run(CancellationToken token) =>
-            Run(null, token);
+        public static (App app, Thread thread) Run(CancellationToken token) =>
+            Run(null, null, token);
 
-        public static Thread Run(Func<Window> createWindow, CancellationToken token)
+        public static (App app, Thread thread) Run(Func<Window> createWindow, Action<ServiceCollection> configureServices, CancellationToken token)
         {
+            App app = null;
+            var appCreated = new ManualResetEventSlim(false);
+
             var thread = new Thread(() =>
             {
                 Log.Debug<AppRunner>("Creating app");
 
-                typeof(Application).GetField("_appCreatedInThisAppDomain", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, false);
-                var app = new App();
+                app = CreateApp(configureServices);
+                appCreated.Set();
                 app.InitializeComponent();
 
                 using (new PreloadedPackageProtector())
@@ -74,37 +77,26 @@ namespace ChaosDbg.Tests
 
             thread.Start();
 
-            token.Register(() =>
-            {
-                if ((bool) typeof(Application).GetProperty("IsShuttingDown", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null))
-                    return;
+            token.Register(()=> StopApp(app));
 
-                Invoke(a =>
-                {
-                    try
-                    {
-                        Debug.WriteLine("calling shutdown");
-                        a?.Shutdown();
-                    }
-                    catch
-                    {
-                    }
-                });
-            });
+            WaitHandle.WaitAny(new[] {appCreated.WaitHandle, token.WaitHandle});
+            token.ThrowIfCancellationRequested();
 
-            return thread;
+            Debug.Assert(app != null);
+
+            return (app, thread);
         }
 
-        public static void Invoke(Action<Application> action)
+        public static void Invoke(App app, Action<App> action)
         {
             Exception outerEx = null;
 
-            Application.Current.Dispatcher.Invoke(() =>
+            app.Dispatcher.Invoke(() =>
             {
                 try
                 {
                     Log.Debug<AppRunner>("Executing action on dispatcher thread");
-                    action(Application.Current);
+                    action(app);
                 }
                 catch (Exception ex)
                 {
@@ -113,30 +105,30 @@ namespace ChaosDbg.Tests
             }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
 
             if (outerEx != null)
-                throw outerEx;
+                ExceptionDispatchInfo.Capture(outerEx).Throw();
         }
 
-        private static T Invoke<T>(Func<Application, T> func) =>
+        private static T Invoke<T>(App app, Func<App, T> func) =>
             Application.Current.Dispatcher.Invoke(() =>
             {
                 Log.Debug<AppRunner>("Executing func on dispatcher thread");
-                return func(Application.Current);
+                return func(app);
             }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
 
         #region WPF
 
-        public static void WithInProcessApp(Action<MainWindow> action, Action<ServiceCollection> configureServices = null) =>
+        public static void WithInProcessApp(Action<App, MainWindow> action, Action<ServiceCollection> configureServices = null) =>
             WithInProcessApp(null, action, configureServices);
 
         public static void WithInProcessApp<T>(
             Func<T> createWindow,
-            Action<T> action,
+            Action<App, T> action,
             Action<ServiceCollection> configureServices = null,
             Func<T, bool> waitFor = null) where T : Window
         {
-            WithInProcessAppInternal(createWindow, _ =>
+            WithInProcessAppInternal(createWindow, (_, app) =>
             {
-                Invoke(a => action((T) a.MainWindow));
+                Invoke(app, a => action(app, (T) a.MainWindow));
             }, configureServices, waitFor == null ? (Func<Window, bool>) null : w => waitFor((T) w));
         }
 
@@ -156,11 +148,11 @@ namespace ChaosDbg.Tests
             Action<FlaUIWindow> action,
             Action<ServiceCollection> configureServices = null)
         {
-            WithInProcessAppInternal(createWindow, hwnd =>
+            WithInProcessAppInternal(createWindow, (hwnd, _) =>
             {
                 using (var automation = new UIA3Automation())
                 {
-                    var flaWindow = automation.FromHandle(hwnd).AsWindow();
+                    var flaWindow = automation.CreateWindowSafe(hwnd);
 
                     action(flaWindow);
                 }
@@ -171,91 +163,73 @@ namespace ChaosDbg.Tests
 
         private static void WithInProcessAppInternal(
             Func<Window> createWindow,
-            Action<IntPtr> action,
+            Action<IntPtr, App> action,
             Action<ServiceCollection> configureServices = null,
             Func<Window, bool> waitFor = null)
         {
-            lock (lockObj)
+            var cts = new CancellationTokenSource();
+            var (app, thread) = Run(createWindow, configureServices, cts.Token);
+
+            if (!thread.IsAlive)
+                throw new InvalidOperationException("Application thread ended prematurely");
+
+            bool mainWindowLoaded = false;
+            IntPtr hwnd = IntPtr.Zero;
+
+            var attempts = 0;
+
+            while (!mainWindowLoaded)
             {
-                GlobalProvider.ConfigureServices = configureServices;
+                attempts++;
 
-                var cts = new CancellationTokenSource();
-                var thread = Run(createWindow, cts.Token);
+                if (attempts > 100)
+                    throw new TimeoutException("MainWindow did not load in a timely manner");
 
-                var attempts = 0;
-
-                while (Application.Current == null)
+                Invoke(app, a =>
                 {
-                    attempts++;
+                    if (a.MainWindow == null)
+                        return;
 
-                    if (attempts > 100)
-                        throw new TimeoutException("Application did not load in a timely manner");
+                    hwnd = new WindowInteropHelper(a.MainWindow).Handle;
 
-                    cts.Token.WaitHandle.WaitOne(10);
-                }
+                    if (hwnd != IntPtr.Zero)
+                        mainWindowLoaded = true;
+                });
 
-                if (!thread.IsAlive)
-                    throw new InvalidOperationException("Application thread ended prematurely");
+                cts.Token.WaitHandle.WaitOne(10);
+            }
 
-                bool mainWindowLoaded = false;
-                IntPtr hwnd = IntPtr.Zero;
+            if (waitFor != null)
+            {
+                var conditionMet = false;
 
-                attempts = 0;
-
-                while (!mainWindowLoaded)
+                while (!conditionMet)
                 {
-                    attempts++;
-
-                    if (attempts > 100)
-                        throw new TimeoutException("MainWindow did not load in a timely manner");
-
-                    Invoke(a =>
+                    Invoke(app, a =>
                     {
-                        if (a.MainWindow == null)
-                            return;
-
-                        hwnd = new WindowInteropHelper(a.MainWindow).Handle;
-
-                        if (hwnd != IntPtr.Zero)
-                            mainWindowLoaded = true;
+                        if (waitFor(a.MainWindow))
+                            conditionMet = true;
                     });
 
-                    cts.Token.WaitHandle.WaitOne(10);
+                    if (!conditionMet)
+                        cts.Token.WaitHandle.WaitOne(10);
                 }
+            }
 
-                if (waitFor != null)
-                {
-                    var conditionMet = false;
-
-                    while (!conditionMet)
-                    {
-                        Invoke(a =>
-                        {
-                            if (waitFor(a.MainWindow))
-                                conditionMet = true;
-                        });
-
-                        if (!conditionMet)
-                            cts.Token.WaitHandle.WaitOne(10);
-                    }
-                }
-
+            try
+            {
+                action(hwnd, app);
+            }
+            finally
+            {
                 try
                 {
-                    action(hwnd);
+                    //It's the responsibility of the registration that was made on the CancellationToken to stop the app.
+                    //We don't want to complicate things by having two avenues for calling stop
+                    cts.Cancel();
                 }
-                finally
+                catch
                 {
-                    GlobalProvider.ConfigureServices = null;
-
-                    try
-                    {
-                        Invoke(a => a?.Shutdown());
-                        cts.Cancel();
-                    }
-                    catch
-                    {
-                    }
                 }
 
                 thread.Join();
@@ -269,28 +243,25 @@ namespace ChaosDbg.Tests
         /// <param name="debug">Whether to attach the Visual Studio debugger to the process.</param>
         public static void WithOutOfProcessApp(Action<FlaUIWindow> action, bool debug = false)
         {
-            lock (lockObj)
+            var path = typeof(App).Assembly.Location;
+
+            var app = FlaUI.Core.Application.Launch(path);
+
+            try
             {
-                var path = typeof(App).Assembly.Location;
+                if (debug)
+                    VsDebugger.Attach(Process.GetProcessById(app.ProcessId), VsDebuggerType.Managed);
 
-                var app = FlaUI.Core.Application.Launch(path);
-
-                try
+                using (var automation = new UIA3Automation())
                 {
-                    if (debug)
-                        VsDebugger.Attach(Process.GetProcessById(app.ProcessId), VsDebuggerType.Managed);
+                    var window = app.GetMainWindowSafe(automation);
 
-                    using (var automation = new UIA3Automation())
-                    {
-                        var window = app.GetMainWindow(automation);
-
-                        action(window);
-                    }
+                    action(window);
                 }
-                finally
-                {
-                    app.Close();
-                }
+            }
+            finally
+            {
+                app.Close();
             }
         }
 
@@ -299,7 +270,7 @@ namespace ChaosDbg.Tests
         /// </summary>
         /// <param name="element">The content to include in the window.</param>
         /// <param name="action">The action to perform during the lifetime of the application.</param>
-        public static void WithCustomXaml(XamlElement element, Action<Window> action)
+        public static void WithCustomXaml(XamlElement element, Action<App, Window> action)
         {
             Func<Window> createWindow = () =>
             {
@@ -311,7 +282,8 @@ namespace ChaosDbg.Tests
                     {
                         { string.Empty, "http://schemas.microsoft.com/winfx/2006/xaml/presentation" },
                         { "x", "http://schemas.microsoft.com/winfx/2006/xaml" },
-                        { "local", "clr-namespace:ChaosDbg;assembly=ChaosDbg" }
+                        { "local", "clr-namespace:ChaosDbg;assembly=ChaosDbg" },
+                        { "view", "clr-namespace:VsDock.View;assembly=VsDock" }
                     }
                 };
 
@@ -323,6 +295,72 @@ namespace ChaosDbg.Tests
             };
 
             WithInProcessApp(createWindow, action);
+        }
+
+        private static App CreateApp(Action<ServiceCollection> configureServices)
+        {
+            lock (appLock)
+            {
+                var serviceProvider = GlobalProvider.CreateServiceProvider(configureServices);
+                var app = new App(serviceProvider);
+                typeof(Application).GetField("_appCreatedInThisAppDomain", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, false);
+                typeof(Application).GetField("_appInstance", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, null);
+                return app;
+            }
+        }
+
+        private static void StopApp(App app)
+        {
+            //IsShuttingDown is static
+
+            lock (appLock)
+            {
+                var isShuttingDownPropertyInfo = typeof(Application).GetProperty("IsShuttingDown", BindingFlags.Static | BindingFlags.NonPublic);
+
+                if ((bool) isShuttingDownPropertyInfo.GetValue(null))
+                    return;
+
+                Invoke(app, a =>
+                {
+                    try
+                    {
+                        /* During WPF shutdown, the method Application.DoShutdown() iterates over all windows in Application.WindowsInternal.
+                         * If a given window has not been disposed yet, it calls InternalClose() on it, which ultimately results in a WM_DESTROY
+                         * message being dispatched, leading to the window removing itself from the WindowCollection in Window.UpdateWindowListsOnClose().
+                         * However, this only occurs when the window sees that Application.Current is not null. In the event that the window is already destroyed,
+                         * but is still in the WindowsInternal list, DoShutdown() attempts to call WindowCollection.RemoveAt(0) on it. However, WindowCollection.RemoveAt
+                         * contains a bug, wherein it then attempts to pass this index as the "object" to remove in ArrayList.Remove(). Because we clear out Application.Current
+                         * in order to run multiple applications in parallel, we'll never correctly remove the window from WindowsInternal and always get stuck in the bug path.
+                         * Thus, we pre-emptively close all our windows prior to requesting that the application shutdown */
+                        
+                        if (a != null)
+                        {
+                            var remove = typeof(WindowCollection).GetMethodInfo("Remove");
+
+                            //The Application.Windows property creates a clone. We want to modify the internal collection
+                            var windows = (WindowCollection) typeof(Application).GetPropertyInfo("WindowsInternal").GetValue(a);
+
+                            while (windows.Count > 0)
+                            {
+                                var window = windows[0];
+                                window.Close();
+
+                                //We call Remove instead of RemoveAt which WPF will do during shutdown which erroneously then calls ArrayList.Remove with the object being the index
+                                remove.Invoke(windows, new[] {window});
+                            }
+
+                            Debug.Assert(a.Windows.Count == 0);
+                        }
+
+                        a?.Shutdown();
+                    }
+                    catch
+                    {
+                    }
+                });
+
+                isShuttingDownPropertyInfo.SetValue(null, false);
+            }
         }
     }
 }
