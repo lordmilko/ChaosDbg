@@ -67,7 +67,6 @@ namespace ChaosDbg.Cordb
                 if (disassembly == null)
                 {
                     var process = Module.Process;
-                    var nativeDisasmProvider = process.Session.Services.NativeDisasmProvider;
 
                     var nativeCode = CorDebugFunction.NativeCode;
 
@@ -85,7 +84,7 @@ namespace ChaosDbg.Cordb
 
                     //Note that when we implement support for having multiple chunks, we'll likely need some kind of intelligent stream
                     //that updates the current Position to be the start of the next chunk when the bytes of the current chunk have been exhausted
-                    var nativeDisassembler = nativeDisasmProvider.CreateDisassembler(nativeBytes, codeChunk.startAddr, process.Is32Bit, new CordbDisasmSymbolResolver(process));
+                    var nativeDisassembler = NativeDisassembler.FromByteArray(nativeBytes, codeChunk.startAddr, process.Is32Bit, new CordbDisasmSymbolResolver(process));
 
                     //Decode all of the bytes that comprise the function into instructions
                     disassembly = nativeDisassembler.EnumerateInstructions().ToArray();

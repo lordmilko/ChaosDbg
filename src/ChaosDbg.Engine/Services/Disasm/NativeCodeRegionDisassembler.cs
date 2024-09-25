@@ -8,7 +8,7 @@ using Iced.Intel;
 namespace ChaosDbg.Disasm
 {
     /// <summary>
-    /// Provides facilities for disassembling a <see cref="NativeCodeRegionCollection"/> that approximately resembles a function from an <see cref="INativeDisassembler"/>.
+    /// Provides facilities for disassembling a <see cref="NativeCodeRegionCollection"/> that approximately resembles a function from an <see cref="NativeDisassembler"/>.
     /// </summary>
     class NativeCodeRegionDisassembler
     {
@@ -20,7 +20,7 @@ namespace ChaosDbg.Disasm
         //Stores all unresolved references within each region. Allows unwinding bad regions and iterating over the references between regions when processing jump tables
         private Dictionary<NativeCodeRegion, Dictionary<long, INativeInstruction>> regionToRefAddresses = new Dictionary<NativeCodeRegion, Dictionary<long, INativeInstruction>>();
 
-        private INativeDisassembler nativeDisassembler;
+        private NativeDisassembler nativeDisassembler;
         private long functionAddress;
         private DisasmFunctionResolutionContext context;
 
@@ -31,7 +31,7 @@ namespace ChaosDbg.Disasm
         private NativeCodeDiscoveryError badFunctionReason;
 
         internal NativeCodeRegionDisassembler(
-            INativeDisassembler nativeDisassembler,
+            NativeDisassembler nativeDisassembler,
             long address,
             DisasmFunctionResolutionContext context)
         {

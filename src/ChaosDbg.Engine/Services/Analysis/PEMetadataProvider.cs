@@ -12,13 +12,6 @@ namespace ChaosDbg.Analysis
 {
     class PEMetadataProvider
     {
-        private INativeDisassemblerProvider nativeDisassemblerProvider;
-
-        public PEMetadataProvider(INativeDisassemblerProvider nativeDisassemblerProvider)
-        {
-            this.nativeDisassemblerProvider = nativeDisassemblerProvider;
-        }
-
         /// <summary>
         /// Gets an object describing the PE Metadata for a <see cref="CordbNativeModule"/>.
         /// </summary>
@@ -36,8 +29,8 @@ namespace ChaosDbg.Analysis
 
             var processStream = new MemoryReaderStream((IMemoryReader) module.Process.DataTarget);
 
-            INativeDisassembler createDisassembler(Stream stream) =>
-                nativeDisassemblerProvider.CreateDisassembler(stream ?? processStream, module.Process.Is32Bit, new CordbDisasmSymbolResolver(module.Process));
+            NativeDisassembler createDisassembler(Stream stream) =>
+                NativeDisassembler.FromStream(stream ?? processStream, module.Process.Is32Bit, new CordbDisasmSymbolResolver(module.Process));
 
             var metadataModule = new PEMetadataVirtualModule(
                 modulePath,
@@ -67,8 +60,8 @@ namespace ChaosDbg.Analysis
 
             var fileStream = File.Open(modulePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            INativeDisassembler CreateDisassembler(Stream stream) =>
-                nativeDisassemblerProvider.CreateDisassembler(stream ?? fileStream, physicalPEFile.OptionalHeader.Magic == PEMagic.PE32, disasmSymbolResolver);
+            NativeDisassembler CreateDisassembler(Stream stream) =>
+                NativeDisassembler.FromStream(stream ?? fileStream, physicalPEFile.OptionalHeader.Magic == PEMagic.PE32, disasmSymbolResolver);
 
             var metadataModule = new PEMetadataPhysicalModule(
                 modulePath,
@@ -99,8 +92,8 @@ namespace ChaosDbg.Analysis
 
             GetPEFiles(processStream, (long) (void*) hModule, modulePath, peSymbolResolver, peFileTestHook, out var physicalPEFile, out var virtualPEFile);
 
-            INativeDisassembler CreateDisassembler(Stream stream) =>
-                nativeDisassemblerProvider.CreateDisassembler(stream ?? processStream, virtualPEFile.OptionalHeader.Magic == PEMagic.PE32, disasmSymbolResolver);
+            NativeDisassembler CreateDisassembler(Stream stream) =>
+                NativeDisassembler.FromStream(stream ?? processStream, virtualPEFile.OptionalHeader.Magic == PEMagic.PE32, disasmSymbolResolver);
 
             var metadataModule = new PEMetadataVirtualModule(
                 modulePath,

@@ -12,7 +12,9 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public class ManagedAccessor : ICordbThreadAccessor, IDisposable
         {
-            public string Name { get; private set; }
+            private string name;
+
+            public string Name => name ?? Kernel32.GetThreadDescription(Handle);
 
             public CordbThread Thread { get; set; }
 
@@ -27,6 +29,50 @@ namespace ChaosDbg.Cordb
             /// the managed thread ID.
             /// </summary>
             public int Id { get; }
+
+            private CordbValue managedThread;
+
+            /// <summary>
+            /// Gets a <see cref="CordbValue"/> that enables interacting with the System.Threading.Thread of the remote process.<para/>
+            /// If the System.Threading.Thread has not yet been created, the <see cref="CordbValue.IsNull"/> property of the returned value will be <see langword="true" />
+            /// </summary>
+            public CordbValue ManagedThread
+            {
+                get
+                {
+                    if (managedThread == null || managedThread.IsStale)
+                        managedThread = CordbValue.New(CorDebugThread.Object, Thread, null);
+
+                    return managedThread;
+                }
+            }
+
+            private int? managedThreadId;
+
+            /// <summary>
+            /// Gets the ManagedThreadId of the System.Threading.Thread.<para/>
+            /// This value is cached after the first time it is successfully retrieved. If the System.Threading.Thread has not yet been created,
+            /// or is no longer available the first time this value is retrieved, this value will return <see langword="null"/>.
+            /// </summary>
+            public int? ManagedThreadId
+            {
+                get
+                {
+                    if (managedThreadId == null)
+                    {
+                        var thread = ManagedThread;
+
+                        if (thread.IsNull)
+                            return null;
+
+                        var fieldValue = (CordbPrimativeValue) ((CordbObjectValue) thread)["m_ManagedThreadId"];
+
+                        managedThreadId = (int) fieldValue.ClrValue;
+                    }
+
+                    return managedThreadId;
+                }
+            }
 
             /// <summary>
             /// Gets the true OS thread that this managed thread is bound to. If the managed thread moves to a different
@@ -79,13 +125,21 @@ namespace ChaosDbg.Cordb
 
             internal void RefreshName()
             {
-                //todo: if we cant get a clr name try an OS one? or maybe reserve that for the native accessor only?
-                var value = CordbValue.New(CorDebugThread.Object, Thread);
+                var value = CordbValue.New(CorDebugThread.Object, Thread, null);
 
                 if (!value.IsNull)
-                    Name = ((CordbStringValue) ((CordbObjectValue) value)["m_Name"]).ClrValue;
+                {
+                    var fieldValue = ((CordbObjectValue) value)["m_Name"];
+
+                    if (fieldValue is CordbStringValue s)
+                        name = s.ClrValue;
+                    else if (fieldValue.IsNull)
+                        name = null; //Name will fallback to kernel32!GetThreadDescription (if applicable)
+                    else
+                        throw new NotImplementedException($"Don't know how to handle a value of type '{fieldValue.GetType().Name}'");
+                }
                 else
-                    Name = null;
+                    name = null;
             }
 
             public void Dispose()

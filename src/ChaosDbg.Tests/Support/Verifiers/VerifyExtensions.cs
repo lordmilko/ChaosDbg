@@ -13,7 +13,7 @@ namespace ChaosDbg.Tests
 {
     static class VerifyExtensions
     {
-        public static void Verify(this INativeDisassembler engine, string defaultFormat, string customFormat)
+        public static void Verify(this NativeDisassembler engine, string defaultFormat, string customFormat)
         {
             var result = engine.Disassemble(0, 1);
 

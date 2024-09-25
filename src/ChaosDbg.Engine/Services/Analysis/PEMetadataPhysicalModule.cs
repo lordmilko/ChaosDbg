@@ -32,7 +32,7 @@ namespace ChaosDbg.Analysis
             string fileName,
             IUnmanagedSymbolModule symbolModule,
             PEFile physicalPEFile,
-            Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, createDisassembler)
+            Func<Stream, NativeDisassembler> createDisassembler) : base(fileName, symbolModule, createDisassembler)
         {
             PhysicalPEFile = physicalPEFile;
         }

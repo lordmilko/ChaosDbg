@@ -202,8 +202,7 @@ namespace ChaosDbg.Tests
         {
             var path = "C:\\windows\\SysWOW64\\ntdll.dll";
 
-            var disasmProvider = GetService<INativeDisassemblerProvider>();
-            var nativeDisassembler = disasmProvider.CreateDisassembler(path);
+            var nativeDisassembler = NativeDisassembler.FromPath(path);
 
             var pe = PEFile.FromPath(path);
 

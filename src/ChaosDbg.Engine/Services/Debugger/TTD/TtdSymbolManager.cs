@@ -22,32 +22,9 @@ namespace ChaosDbg.TTD
 
         public unsafe TtdSymbolManager(INativeLibraryProvider nativeLibraryProvider, ISymSrv symSrv, Cursor cursor)
         {
-            //We make the assumption that we're in prod using regular DbgHelp, not using an OutOfProcDbgHelp and so don't need to worry about
-            //using whatever the "real" IDbgHelp in use would be
-
             symbolProvider = new SymbolProvider(nativeLibraryProvider, symSrv, new TtdCursorMemoryReader(cursor));
 
             this.cursor = cursor;
-
-            //In order to read the PE header information from the trace (you can't just assume that your DLLs on disk match those that were used in the trace)
-            //we have to provide a read memory callback for DbgHelp to use
-
-            //When DbgHelp goes to read the memory of the target process in order to read the PE File's headers, dbghelp!modloadWorker will call
-            //imgReadLoadedEx -> ReadImageData -> ReadInProcMemory, which will use the specified callback to read the memory. Inside DbgDng, this
-            //is dbgeng!SymbolCallbackFunction which then calls TargetInfo::ReadVirtual
-            dbgHelp.Callback.OnReadMemory = data =>
-            {
-                cursor.QueryMemoryBuffer(data->addr, data->buf, data->bytes, out var bytesRead, QueryMemoryPolicy.Default);
-                *data->bytesread = (int) bytesRead;
-
-                if (bytesRead == 0)
-                    return false;
-
-                //Not sure what I should return if we only manage to do a partial read
-                Debug.Assert(data->bytes == bytesRead);
-
-                return true;
-            };
         }
 
         public unsafe void Update()

@@ -7,7 +7,7 @@ namespace ChaosDbg.Disasm
     {
         private readonly SymbolProvider symbolProvider;
 
-        public INativeDisassembler ProcessDisassembler { get; set; }
+        public NativeDisassembler ProcessDisassembler { get; set; }
 
         public SymbolProviderDisasmSymbolResolver(SymbolProvider symbolProvider)
         {

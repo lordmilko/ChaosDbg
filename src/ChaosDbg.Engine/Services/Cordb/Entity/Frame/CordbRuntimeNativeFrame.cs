@@ -13,6 +13,16 @@ namespace ChaosDbg.Cordb
     {
         protected override string DebuggerDisplay => "[Runtime] " + base.DebuggerDisplay;
 
+        /// <summary>
+        /// Gets the display name of this frame.
+        /// </summary>
+        public override string Name { get; }
+
+        /// <summary>
+        /// Gets the symbol that is associated with this frame, if one exists.
+        /// </summary>
+        public IDisplacedSymbol Symbol { get; }
+
         public override CordbVariable[] Variables => throw new System.NotImplementedException();
 
         internal CordbRuntimeNativeFrame(CorDebugNativeFrame corDebugFrame, CordbThread thread, CordbModule module, CrossPlatformContext context) : base(corDebugFrame, thread, module, context)

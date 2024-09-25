@@ -1,6 +1,8 @@
 ﻿using System;
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
+using ChaosLib.Memory;
+using ChaosLib.PortableExecutable;
 using Iced.Intel;
 using Decoder = Iced.Intel.Decoder;
 
@@ -9,9 +11,76 @@ namespace ChaosDbg.Disasm
     /// <summary>
     /// Represents an engine capable of disassembling native code.
     /// </summary>
-    public class NativeDisassembler : INativeDisassembler
+    public class NativeDisassembler
     {
-        /// <inheritdoc />
+        #region Static
+
+        /// <summary>
+        /// Creates a <see cref="NativeDisassembler"/> capable of reading instructions from a file.<para/>
+        /// The file is opened until the <see cref="NativeDisassembler"/> is disposed.
+        /// </summary>
+        /// <param name="path">The file to read.</param>
+        /// <param name="symbolResolver">A type capable of reading symbols for the instructions found in the stream.
+        /// If <see langword="null"/>, symbols will not be resolved.</param>
+        /// <returns>A <see cref="NativeDisassembler"/> capable of reading the specified file.</returns>
+        public static NativeDisassembler FromPath(string path, ISymbolResolver symbolResolver = null)
+        {
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
+            var fileStream = File.OpenRead(path);
+            var peFile = PEFile.FromStream(fileStream, false);
+
+            var is32Bit = peFile.OptionalHeader.Magic == PEMagic.PE32;
+            var entryPoint = peFile.OptionalHeader.AddressOfEntryPoint;
+
+            if (entryPoint == 0)
+                entryPoint = peFile.OptionalHeader.BaseOfCode;
+
+            var rvaStream = new PERvaToPhysicalStream(fileStream, peFile);
+
+            rvaStream.Seek(entryPoint, SeekOrigin.Begin);
+
+            return new NativeDisassembler(rvaStream, is32Bit, symbolResolver);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="NativeDisassembler"/> capable of reading instructions
+        /// from a stream.
+        /// </summary>
+        /// <param name="stream">The stream to read the instructions from.</param>
+        /// <param name="is32Bit">Whether to disassemble 32-bit code. If false, 64-bit code is disassembled.</param>
+        /// <param name="symbolResolver">A type capable of reading symbols for the instructions found in the stream.
+        /// If <see langword="null"/>, symbols will not be resolved.</param>
+        /// <returns>A <see cref="NativeDisassembler"/> capable of reading the specified stream.</returns>
+        public static NativeDisassembler FromStream(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null)
+        {
+            if (stream is MemoryStream)
+                throw new ArgumentException($"Cannot create an {nameof(NativeDisassembler)} using a stream of type '{nameof(MemoryStream)}'. Consider encapsulating this stream in an {nameof(AbsoluteToRelativeStream)}, specifying the module base.", nameof(stream));
+
+            return new NativeDisassembler(stream, is32Bit, symbolResolver);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="NativeDisassembler"/> capable of reading instructions from a byte array.
+        /// </summary>
+        /// <param name="bytes">The byte array of instructions to be disassembled.</param>
+        /// <param name="baseAddress">The base address that the instructions in the byte array start from.</param>
+        /// <param name="is32Bit">Whether to disassemble 32-bit code. If false, 64-bit code is disassembled.</param>
+        /// <param name="symbolResolver">A type capable of reading symbols for the instructions found in the stream.
+        /// If <see langword="null"/>, symbols will not be resolved.</param>
+        /// <returns>A <see cref="NativeDisassembler"/> capable of reading the specified byte array.</returns>
+        public static NativeDisassembler FromByteArray(
+            byte[] bytes,
+            long baseAddress,
+            bool is32Bit,
+            ISymbolResolver symbolResolver = null) => FromStream(new AbsoluteToRelativeStream(new MemoryStream(bytes), baseAddress), is32Bit, symbolResolver);
+
+        #endregion
+
+        /// <summary>
+        /// Gets the underlying stream of this <see cref="NativeDisassembler"/>.
+        /// </summary>
         public Stream BaseStream { get; }
 
         /// <summary>
@@ -44,7 +113,7 @@ namespace ChaosDbg.Disasm
         /// <param name="is32Bit">Whether to disassemble 32-bit code. If false, 64-bit code is disassembled.</param>
         /// <param name="symbolResolver">A type capable of reading symbols for the instructions found in the stream.
         /// If <see langword="null"/>, symbols will not be resolved.</param>
-        public NativeDisassembler(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null)
+        private NativeDisassembler(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null)
         {
             BaseStream = stream;
             Bitness = is32Bit ? 32 : 64;
@@ -54,7 +123,11 @@ namespace ChaosDbg.Disasm
             formatter = symbolResolver == null ? DbgEngFormatter.Default : new DbgEngFormatter(symbolResolver);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Creates an enumeration that disassembles instructions starting from the current position until
+        /// an invalid instruction is encountered.
+        /// </summary>
+        /// <returns>An enumeration of disassembled instructions.</returns>
         public IEnumerable<INativeInstruction> EnumerateInstructions()
         {
             decoder.IP = (ulong) disasmStream.Position;
@@ -99,7 +172,12 @@ namespace ChaosDbg.Disasm
             }
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Creates an enumeration that disassembles instructions starting from the specified position until
+        /// an invalid instruction is encontered.
+        /// </summary>
+        /// <param name="address">The address to start disassembling from.</param>
+        /// <returns>An enumeration of disassembled instructions.</returns>
         public IEnumerable<INativeInstruction> EnumerateInstructions(long address)
         {
             if (address == 0)
@@ -113,6 +191,13 @@ namespace ChaosDbg.Disasm
 
         //Formatting relies on the symbol resolver, thus it must be part of the disassembler and cannot simply
         //be a static/standalone type
+
+        /// <summary>
+        /// Formats a given instruction as a string.
+        /// </summary>
+        /// <param name="instruction">The instruction to format.</param>
+        /// <param name="format">A set of options that allow customizing how the instruction is formatted.</param>
+        /// <returns>The formatted instruction.</returns>
         public string Format(INativeInstruction instruction, DisasmFormatOptions format = null) => formatter.Format(instruction, format);
 
         public void Format(INativeInstruction instruction, FormatterOutput formatWriter, DisasmFormatOptions format = null) => formatter.Format(instruction, formatWriter, format);

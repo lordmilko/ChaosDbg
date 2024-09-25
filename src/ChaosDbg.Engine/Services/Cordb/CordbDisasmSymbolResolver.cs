@@ -24,7 +24,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets or sets the disassembler to use for resolving indirect symbol addresses.
         /// </summary>
-        public INativeDisassembler ProcessDisassembler { get; set; }
+        public NativeDisassembler ProcessDisassembler { get; set; }
 
         public CordbDisasmSymbolResolver(CordbProcess process)
         {

@@ -6,7 +6,6 @@ using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.IL;
-using ChaosDbg.Symbols;
 
 #nullable enable
 

@@ -10,7 +10,7 @@ namespace ChaosDbg.Tests
             if (testMethodAttribute is AppDomainTestMethodAttribute)
                 return testMethodAttribute;
 
-            return new AppDomainTestMethodAttribute(testMethodAttribute);
+            return new AppDomainTestMethodAttribute();
         }
     }
 }

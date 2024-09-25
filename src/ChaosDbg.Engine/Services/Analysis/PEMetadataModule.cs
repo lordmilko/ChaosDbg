@@ -22,12 +22,12 @@ namespace ChaosDbg.Analysis
         /// the module type is <see cref="PEMetadataVirtualModule"/> or the physical file (when the module
         /// type is <see cref="PEMetadataPhysicalModule"/>).
         /// </summary>
-        internal INativeDisassembler RemoteDisassembler { get; }
+        internal NativeDisassembler RemoteDisassembler { get; }
 
         protected PEMetadataModule(
             string fileName,
             IUnmanagedSymbolModule symbolModule,
-            Func<Stream, INativeDisassembler> createDisassembler)
+            Func<Stream, NativeDisassembler> createDisassembler)
         {
             FileName = fileName;
             SymbolModule = symbolModule;

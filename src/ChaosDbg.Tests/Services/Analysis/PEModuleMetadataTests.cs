@@ -990,9 +990,7 @@ namespace ChaosDbg.Tests
                     symbolModule = diaSymbolModule;
                 else
                 {
-                    var nativeDisassemblerProvider = GetService<INativeDisassemblerProvider>();
-
-                    var disassembler = nativeDisassemblerProvider.CreateDisassembler(stream, is32Bit, symbolResolver);
+                    var disassembler = NativeDisassembler.FromStream(stream, is32Bit, symbolResolver);
 
                     symbolModule = moduleMocker.CreateMockSymbolModule(diaSymbolModule, disassembler);
                     peFileTestHook = moduleMocker.GetPEFileTestHook();
@@ -1121,8 +1119,8 @@ namespace ChaosDbg.Tests
         class ModuleMocker
         {
             private string[] allowedSymbols;
-            private Action<PEFile, MockSymbolModule, INativeDisassembler> configurePEFile;
-            private INativeDisassembler nativeDisassembler;
+            private Action<PEFile, MockSymbolModule, NativeDisassembler> configurePEFile;
+            private NativeDisassembler nativeDisassembler;
             private MockSymbolModule mockSymbolModule;
 
             public ModuleMocker(string[] allowedSymbols, Action<PEFile, MockSymbolModule, INativeDisassembler> configurePeFile)
@@ -1136,7 +1134,7 @@ namespace ChaosDbg.Tests
                 this.allowedSymbols = allowedSymbols;
             }
 
-            public MockSymbolModule CreateMockSymbolModule(IUnmanagedSymbolModule symbolModule, INativeDisassembler nativeDisassembler)
+            public MockSymbolModule CreateMockSymbolModule(IUnmanagedSymbolModule symbolModule, NativeDisassembler nativeDisassembler)
             {
                 this.nativeDisassembler = nativeDisassembler;
                 mockSymbolModule = new MockSymbolModule(symbolModule, allowedSymbols);

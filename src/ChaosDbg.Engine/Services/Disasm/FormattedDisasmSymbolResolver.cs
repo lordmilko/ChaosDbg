@@ -11,7 +11,7 @@ namespace ChaosDbg.Disasm
         private NumberFormattingOptions displacementOpts;
         private NumberFormattingOptions addressOpts;
 
-        public INativeDisassembler ProcessDisassembler
+        public NativeDisassembler ProcessDisassembler
         {
             get => (symbolResolver as IIndirectSymbolResolver)?.ProcessDisassembler;
             set

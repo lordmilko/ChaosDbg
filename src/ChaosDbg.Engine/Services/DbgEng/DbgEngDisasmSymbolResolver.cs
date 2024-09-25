@@ -9,7 +9,7 @@ namespace ChaosDbg.DbgEng
     {
         private readonly DebugClient client;
 
-        public INativeDisassembler ProcessDisassembler { get; set; }
+        public NativeDisassembler ProcessDisassembler { get; set; }
 
         public DbgEngDisasmSymbolResolver(DebugClient client)
         {

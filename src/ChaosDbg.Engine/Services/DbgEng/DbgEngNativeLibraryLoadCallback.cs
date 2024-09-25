@@ -317,6 +317,16 @@ namespace ChaosDbg.DbgEng
                  * indefinitely. There is no reason we should ever need to notify a DebugClient of anything that isn't the client on the engine thread.
                  * Thus, fail such requests immediately */
 
+                //DbgEng is going to wait for g_EventStatusReady, which is an auto-reset event, thus we need to play nice with the double event system
+
+                //Wait for DbgEng to be ready for us
+                var g_EventStatusWaiting = NativeReflector.GetGlobal<IntPtr>("dbgeng!g_EventStatusWaiting");
+                Kernel32.WaitForSingleObject(g_EventStatusWaiting, -1);
+
+                var g_EventStatusReady = NativeReflector.GetGlobal<IntPtr>("dbgeng!g_EventStatusReady");
+
+                Kernel32.SetEvent(g_EventStatusReady);
+
                 return 0;
             }
             else if (ctx.Name == "CreateProcessW")

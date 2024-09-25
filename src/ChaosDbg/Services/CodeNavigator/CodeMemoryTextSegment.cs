@@ -21,13 +21,13 @@ namespace ChaosDbg
 
         public int SegmentEnd { get; }
 
-        private INativeDisassembler nativeDisassembler;
+        private NativeDisassembler nativeDisassembler;
         private long moduleBase;
         private long lastValidAddress;
 
         public CodeMemoryTextSegment(
             in ImageSectionHeader sectionHeader,
-            INativeDisassembler nativeDisassembler,
+            NativeDisassembler nativeDisassembler,
             long moduleBase,
             int start,
             int end)

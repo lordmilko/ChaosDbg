@@ -29,7 +29,7 @@ namespace ChaosDbg.Analysis
             IUnmanagedSymbolModule symbolModule,
             PEFile physicalPEFile,
             PEFile virtualPEFile,
-            Func<Stream, INativeDisassembler> createDisassembler) : base(fileName, symbolModule, physicalPEFile, createDisassembler)
+            Func<Stream, NativeDisassembler> createDisassembler) : base(fileName, symbolModule, physicalPEFile, createDisassembler)
         {
             Address = address;
             VirtualPEFile = virtualPEFile;

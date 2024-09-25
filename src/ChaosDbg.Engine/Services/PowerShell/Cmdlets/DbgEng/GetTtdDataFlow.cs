@@ -54,7 +54,7 @@ namespace ChaosDbg.PowerShell.Cmdlets
             var registerContext = cursor.GetCrossPlatformContext();
 
             var stream = new MemoryReaderStream(new TtdCursorMemoryReader(cursor));
-            var disassembler = GetService<INativeDisassemblerProvider>().CreateDisassembler(stream, ActiveEngine.ActiveProcess.Is32Bit, new DbgEngDisasmSymbolResolver(ActiveEngine.ActiveClient));
+            var disassembler = NativeDisassembler.FromStream(stream, ActiveEngine.ActiveProcess.Is32Bit, new DbgEngDisasmSymbolResolver(ActiveEngine.ActiveClient));
 
             var evaluationContext = new TtdMasmEvaluatorContext(cursor, registerContext);
 

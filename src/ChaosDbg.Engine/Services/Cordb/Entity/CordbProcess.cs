@@ -7,6 +7,7 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Evaluator.Masm;
 using ChaosLib;
 using ChaosLib.Handle;
+using ChaosLib.Memory;
 using ChaosLib.Symbols;
 using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
@@ -156,7 +157,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets a disassembler capable of disassembling any instruction in this process.
         /// </summary>
-        public INativeDisassembler ProcessDisassembler { get; }
+        public NativeDisassembler ProcessDisassembler { get; }
 
         #endregion
         #region Debugger State
@@ -222,7 +223,11 @@ namespace ChaosDbg.Cordb
             using var dbgHelpHolder = new DisposeHolder(Symbols);
 
             var resolver = new CordbDisasmSymbolResolver(this);
-            ProcessDisassembler = session.Services.NativeDisasmProvider.CreateDisassembler(this, resolver);
+            ProcessDisassembler = NativeDisassembler.FromStream(
+                new MemoryReaderStream((IMemoryReader) DataTarget),
+                Is32Bit,
+                resolver
+            );
             resolver.ProcessDisassembler = ProcessDisassembler;
 
 #if DEBUG

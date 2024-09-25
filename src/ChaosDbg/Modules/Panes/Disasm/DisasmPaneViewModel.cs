@@ -20,15 +20,13 @@ namespace ChaosDbg.ViewModel
 
         private DebugEngineProvider engineProvider;
         private IDbgEngine engine => engineProvider.ActiveEngine;
-        private INativeDisassemblerProvider nativeDisassemblerProvider;
 
         public event EventHandler<AddressChangedEventArgs> AddressChanged;
 
-        public DisasmPaneViewModel(IThemeProvider themeProvider, DebugEngineProvider engineProvider, INativeDisassemblerProvider nativeDisassemblerProvider)
+        public DisasmPaneViewModel(IThemeProvider themeProvider, DebugEngineProvider engineProvider)
         {
             font = themeProvider.GetTheme().ContentFont;
             this.engineProvider = engineProvider;
-            this.nativeDisassemblerProvider = nativeDisassemblerProvider;
 
             engineProvider.EngineStatusChanged += Engine_EngineStatusChanged;
         }
@@ -64,7 +62,7 @@ namespace ChaosDbg.ViewModel
 
             var peFile = PEFile.FromStream(relativeStream, true);
 
-            var disasmEngine = nativeDisassemblerProvider.CreateDisassembler(dbgEngStream, engine.ActiveProcess.Is32Bit);
+            var disasmEngine = NativeDisassembler.FromStream(dbgEngStream, engine.ActiveProcess.Is32Bit);
 
             var nav = new CodeNavigator(baseAddress, peFile, disasmEngine);
 

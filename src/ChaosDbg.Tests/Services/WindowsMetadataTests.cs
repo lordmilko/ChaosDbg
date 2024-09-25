@@ -1,5 +1,4 @@
-﻿using ChaosDbg.WinMD;
-using ChaosLib.Metadata;
+﻿using ChaosLib.Metadata;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Unit = Microsoft.VisualStudio.TestTools.UnitTesting;
 

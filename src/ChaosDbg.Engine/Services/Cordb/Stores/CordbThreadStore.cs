@@ -385,6 +385,12 @@ namespace ChaosDbg.Cordb
                     .First().Thread;
             }
 
+            //If we're a native application, the main thread may simply say that it's in a Transition Frame, while a secondary thread that it started says that it's a nativeExeCandidate.
+            //This isn't correct. So at this stage, if we have any managed candidates, take the first managed candidate
+
+            if (managedCandidates.Length > 0)
+                return managedCandidates[0];
+
             if (nativeExeCandidates.Count > 0)
                 throw new NotImplementedException($"Don't know how to choose the best native entry point from {nativeExeCandidates.Count} potential candidates");
 

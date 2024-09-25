@@ -15,7 +15,7 @@ namespace ChaosDbg
         private int currentSegmentIndex = 0;
         private IMemoryTextSegment currentSegment => Segments[currentSegmentIndex];
 
-        public CodeNavigator(long baseAddress, PEFile pe, INativeDisassembler nativeDisassembler)
+        public CodeNavigator(long baseAddress, PEFile pe, NativeDisassembler nativeDisassembler)
         {
             this.pe = pe;
             BaseAddress = baseAddress;

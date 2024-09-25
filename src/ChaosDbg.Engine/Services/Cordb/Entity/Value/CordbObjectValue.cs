@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using ChaosLib.Metadata;
 using ClrDebug;
@@ -12,7 +15,7 @@ namespace ChaosDbg.Cordb
     /// </summary>
     class CordbObjectValue : CordbValue
     {
-        private MetadataType metadataType;
+        private readonly MetadataType metadataType;
 
         public MetadataType MetadataType
         {
@@ -23,8 +26,10 @@ namespace ChaosDbg.Cordb
             }
         }
 
+        private Dictionary<string, CordbValue> fieldMap = new();
         private CordbValue[]? fields;
 
+        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
         public CordbValue[] Fields
         {
             get
@@ -49,6 +54,8 @@ namespace ChaosDbg.Cordb
 
                             fields[i] = New(fieldValue, Thread, this, metadataFields[i]);
                         }
+
+                        fieldMap = fields.ToDictionary(f => f.Symbol.Name, f => f);
                     }
                 }
 
@@ -68,20 +75,19 @@ namespace ChaosDbg.Cordb
             this.metadataType = (MetadataType) Module.MetadataModule.ResolveType(corDebugClass.Token);
         }
 
-        public CordbValue this[string fieldName]
+        public override CordbValue this[string fieldName]
         {
             get
             {
                 ThrowIfStale();
 
-                var field = (MetadataFieldInfo) MetadataType.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+                //Ensure that the fieldMap is initialized
+                _ = Fields;
 
-                if (field == null)
+                if (!fieldMap.TryGetValue(fieldName, out var value))
                     throw new InvalidOperationException($"Could not find field '{fieldName}' on type '{MetadataType.Name}'.");
 
-                var fieldValue = CorDebugValue.GetFieldValue(CorDebugValue.Class.Raw, field.Token);
-
-                return New(fieldValue, Thread, this, field);
+                return value;
             }
         }
 

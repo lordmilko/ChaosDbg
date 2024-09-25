@@ -82,8 +82,7 @@ namespace ChaosDbg
 
                 typeof(DbgEngRemoteClientProvider),
 
-                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) }
+                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) }
             };
 
             configureServices?.Invoke(services);

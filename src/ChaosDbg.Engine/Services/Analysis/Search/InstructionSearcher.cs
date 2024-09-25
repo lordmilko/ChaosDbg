@@ -35,7 +35,7 @@ namespace ChaosDbg.Analysis
         /// <summary>
         /// Gets the disassembler that reads instructions from <see cref="memoryStream"/> inside this current process.
         /// </summary>
-        public INativeDisassembler Disassembler { get; }
+        public NativeDisassembler Disassembler { get; }
 
         public PEFile PEFile { get; }
 
@@ -72,7 +72,7 @@ namespace ChaosDbg.Analysis
             PEMetadataSearchOptions options,
             PEMetadataModule module,
             PEFile peFile,
-            Func<Stream, INativeDisassembler> createDisassembler)
+            Func<Stream, NativeDisassembler> createDisassembler)
         {
             Options = options;
             Module = module;

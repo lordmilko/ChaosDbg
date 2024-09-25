@@ -7,7 +7,6 @@ using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
-using ChaosDbg.Symbols;
 using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace chaos

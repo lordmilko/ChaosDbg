@@ -14,8 +14,6 @@ namespace ChaosDbg.Cordb
 
         public INativeLibraryProvider NativeLibraryProvider { get; }
 
-        public INativeDisassemblerProvider NativeDisasmProvider { get; }
-
         public ISymSrv SymSrv { get; }
 
         public IUserInterface UserInterface { get; }
@@ -23,13 +21,11 @@ namespace ChaosDbg.Cordb
         public CordbEngineServices(
             IFrameworkTypeDetector frameworkTypeDetector,
             INativeLibraryProvider nativeLibraryProvider,
-            INativeDisassemblerProvider nativeDisasmProvider,
             ISymSrv symSrv,
             IUserInterface userInterface)
         {
             FrameworkTypeDetector = frameworkTypeDetector;
             NativeLibraryProvider = nativeLibraryProvider;
-            NativeDisasmProvider = nativeDisasmProvider;
             SymSrv = symSrv;
             UserInterface = userInterface;
         }

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosDbg.Symbols;
 using ChaosLib;
 using ClrDebug;
 using Iced.Intel;

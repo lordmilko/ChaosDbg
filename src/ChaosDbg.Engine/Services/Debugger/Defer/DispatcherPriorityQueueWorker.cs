@@ -111,31 +111,6 @@ namespace ChaosDbg.Debugger
             }
         }
 
-        public bool TryGetOperation(string name, out DeferrableOperation operation)
-        {
-            lock (pendingOperationLock)
-            {
-                foreach (var pendingOp in pendingOperations)
-                {
-                    if (pendingOp.Value is SymbolDeferrableOperation s)
-                    {
-                        var fileName = Path.GetFileNameWithoutExtension(s.Name);
-
-                        if (fileName.Equals(name, StringComparison.OrdinalIgnoreCase))
-                        {
-                            operation = pendingOp.Value;
-                            return true;
-                        }
-                    }
-                    else
-                        throw new NotImplementedException($"Don't know how to handle an operation of type {pendingOp.Value.GetType().Name}");
-                }
-            }
-
-            operation = null;
-            return false;
-        }
-
         /// <summary>
         /// Waits for the specified <see cref="DeferrableOperation"/> to naturally be executed on the dispatcher queue, and for any <see cref="AsyncDeferrableSubOperation"/> children to have completed as well.<para/>
         /// If the dispatcher queue is currently blocked, this method will hang until it gets to processing this operation.

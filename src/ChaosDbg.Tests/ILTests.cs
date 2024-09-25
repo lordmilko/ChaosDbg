@@ -1,5 +1,8 @@
+﻿using System.Collections.Generic;
 ﻿using System.IO;
 using System.Linq;
+using System.Reflection.Emit;
+using ChaosDbg.Decompiler;
 using ChaosDbg.IL;
 using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
@@ -11,6 +14,22 @@ namespace ChaosDbg.Tests
     [TestClass]
     public class ILTests : BaseTest
     {
+        class MatchInfo
+        {
+            public string FileName { get; }
+
+            public string CSharp { get; }
+
+            public ILInstruction[] Instructions { get; }
+
+            public MatchInfo(string fileName, string csharp, ILInstruction[] instructions)
+            {
+                FileName = fileName;
+                CSharp = csharp;
+                Instructions = instructions;
+            }
+        }
+
         [TestMethod]
         public void IL_StressTest()
         {

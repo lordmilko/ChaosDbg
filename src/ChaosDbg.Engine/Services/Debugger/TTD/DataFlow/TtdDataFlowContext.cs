@@ -13,7 +13,7 @@ namespace ChaosDbg.TTD
 
         public TtdSymbolManager SymbolManager { get; }
 
-        public INativeDisassembler Disassembler { get; }
+        public NativeDisassembler Disassembler { get; }
 
         public Dictionary<TtdDataFlowItem, CrossPlatformContext> ParentToRegisterContext { get; } = new Dictionary<TtdDataFlowItem, CrossPlatformContext>();
 
@@ -21,7 +21,7 @@ namespace ChaosDbg.TTD
 
         public int ValueSize { get; }
 
-        public TtdDataFlowContext(Cursor cursor, TtdSymbolManager symbolManager, INativeDisassembler disassembler, long targetValue, int valueSize)
+        public TtdDataFlowContext(Cursor cursor, TtdSymbolManager symbolManager, NativeDisassembler disassembler, long targetValue, int valueSize)
         {
             Cursor = cursor;
             SymbolManager = symbolManager;

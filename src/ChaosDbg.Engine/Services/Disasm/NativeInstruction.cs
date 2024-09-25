@@ -7,7 +7,7 @@ namespace ChaosDbg.Disasm
     /// <summary>
     /// Represents a native CPU instruction and its corresponding bytes.
     /// </summary>
-    public interface INativeInstruction : IInstruction
+    public interface INativeInstruction : IInstruction //We need this because we have MockInstruction for graph tests
     {
         long IP { get; }
 

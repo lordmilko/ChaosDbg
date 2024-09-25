@@ -42,15 +42,28 @@ namespace ChaosDbg.Cordb
                     return (symbol, m.SymbolModule);
                 }
 
-                if (process.Symbols.TrySymFromAddr(addr, SymFromAddrOption.Native, out var symbolResult))
-                    throw new InvalidOperationException($"Found symbol {symbolResult} in module {symbolResult.Module.Address:X} which ChaosDbg wasn't able to detect as having symbols.");
-
+                //If a module is not native, it should be managed. We don't want to resolve managed symbols at this point in time; we'll display managed symbols when we
+                //merge our native stack trace with a managed stack trace
                 return default;
             }
             else
             {
-                //Odds are it's a module that we haven't received a native load event for yet (or even a module that was loaded, but then suddenly unloaded after we stopped the debugger?)
-                //Either way, we don't have a module to show for it
+                /* We don't know what module it's for. Possibilities include:
+                 * - it's a module that we haven't received a native load event for yet
+                 * - it's a module that _was_ loaded, but was unloaded after we broke into the debugger (which can happen at any time when interop debugging)
+                 * - it's part of the CLR (e.g. a helper frame or a P/Invoke transition stub)
+                 *
+                 * Let's just try and resolve something and see how we go */
+
+                //Whatever it is, it's not native or module addressed (both of these require knowing what the module is, which we don't!)
+                var options = SymFromAddrOption.All & ~(SymFromAddrOption.Native | SymFromAddrOption.ModuleAddressed);
+
+                if (process.Symbols.TryGetSymbolFromAddress(addr, options, out var symbol))
+                {
+                    return (symbol, symbol.Module);
+                }
+
+                //We don't know what this address is
                 return default;
             }
         }

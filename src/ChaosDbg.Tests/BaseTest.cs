@@ -57,16 +57,13 @@ namespace ChaosDbg.Tests
                 typeof(DbgEngEngineServices),
 
                 //Symbols
-                { typeof(IDbgHelpProvider), dbgHelpProviderType },
 
                 //Native Library
-                typeof(NativeLibraryProvider),
-                { typeof(INativeLibraryLoadCallback[]), new[]
-                {
-                    typeof(DbgEngNativeLibraryLoadCallback),
-                    typeof(DbgHelpNativeLibraryLoadCallback),
-                    typeof(MSDiaNativeLibraryLoadCallback)
-                }},
+                { typeof(INativeLibraryProvider), NoDisposeNativeLibraryProvider.Instance },
+                { typeof(DbgEngNativeLibraryLoadCallback), ServiceSingletons.DbgEngNativeLibraryLoadCallback },
+                { typeof(DbgHelpNativeLibraryLoadCallback), ServiceSingletons.DbgHelpNativeLibraryLoadCallback },
+                { typeof(MSDiaNativeLibraryLoadCallback), ServiceSingletons.MSDiaNativeLibraryLoadCallback },
+                { typeof(ISymSrv), ServiceSingletons.SymSrv },
 
                 //Console
 
@@ -77,8 +74,7 @@ namespace ChaosDbg.Tests
                 typeof(DbgEngRemoteClientProvider),
 
                 { typeof(IUserInterface), typeof(NullUserInterface) },
-                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) }
+                { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) }
             };
 
             configureServices?.Invoke(serviceCollection);
@@ -196,8 +192,24 @@ namespace ChaosDbg.Tests
             }
         }
 
-        //Launch a process via CordbEngine.CreateProcess, and have it signal an event to inform us it ran all the way to a point
-        //where it can signal an event
+        /// <summary>
+        /// Launch a process via <see cref="CordbEngine.CreateProcess"/>. If the process launched is [Native|Managed].[x86|x64], have it signal an event
+        /// to inform us that it's ready to be inspected.
+        /// </summary>
+        /// <param name="testType">The test scenario that [Native|Managed].[x86|x64] should perform. If <paramref name="customExe"/> is specified, this parameter
+        /// has no effect.</param>
+        /// <param name="action">The action to perform on the debuggee when it reaches a point where it is ready to be debugged.</param>
+        /// <param name="matchCurrentProcess">Whether the architecture of the launched process should match the architecture of the test host (i.e. x86/x64).</param>
+        /// <param name="netCore">Whether the .NET Core version of the debuggee should be launched.</param>
+        /// <param name="useInterop">Whether to use interop debugging.</param>
+        /// <param name="nativeTestApp">Whether to use Native.[x86|x64] instead of Managed.[x86|x64]</param>
+        /// <param name="frameworkKind">The .NET Framework kind that the engine should use for launching the debug target, instead of trying to perform auto-detection.</param>
+        /// <param name="waitForSignal">Whether to wait for the debuggee to signal that it is ready for inspection prior to <paramref name="action"/> being invoked.
+        /// If <paramref name="customExe"/> is specified, this value should be <see langword="false"/>.</param>
+        /// <param name="handleLoaderBP">Whether this method should automatically handle the loader breakpoint prior to invoking <paramref name="action"/>.
+        /// If this value is not specified, and <paramref name="waitForSignal"/> is set, this value will automatically be set to <see langword="true"/>.</param>
+        /// <param name="customExe">A custom executable that should be launched instead of [Native|Managed].[x86|x64]</param>
+        /// <param name="hookEvents">A callback that can be used to augment the events of the <see cref="DebugEngineProvider"/> prior to launching the debug target.</param>
         protected void TestSignalledDebugCreate(
             Either<TestType, NativeTestType> testType,
             Action<TestContext> action,
@@ -431,6 +443,11 @@ namespace ChaosDbg.Tests
             }
         }
 
+        /// <summary>
+        /// Invokes Native.[x86|x64].exe, waits for the loader BP, moves to the start of wmain
+        /// and invokes the specified callback <paramref name="action"/>.
+        /// </summary>
+        /// <param name="action">The action to invoke in the context of Native.[x86|x64]|wmain.</param>
         protected void TestNativeMain(Action<TestContext> action)
         {
             TestSignalledDebugCreate(
