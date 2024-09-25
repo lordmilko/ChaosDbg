@@ -39,7 +39,7 @@ namespace ChaosDbg.Tests
                 is32Bit,
                 process =>
                 {
-                    var reader = new MemoryReader(process.Handle);
+                    var reader = new LiveProcessMemoryReader(process.Handle);
 
                     var thread = process.Threads.Cast<ProcessThread>().First();
 

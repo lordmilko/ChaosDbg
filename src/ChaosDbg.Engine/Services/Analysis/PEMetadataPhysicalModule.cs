@@ -10,12 +10,16 @@ namespace ChaosDbg.Analysis
 {
     public class PEMetadataPhysicalModule : PEMetadataModule
     {
+#pragma warning disable RS0030 //It's physical so it's OK
         public override CORDB_ADDRESS Address => PhysicalPEFile.OptionalHeader.ImageBase;
+#pragma warning restore RS0030
 
         /// <summary>
         /// Gets the original on-disk base address of the module.
         /// </summary>
+#pragma warning disable RS0030 //It's physical so it's OK
         public CORDB_ADDRESS PhysicalAddress => (long) PhysicalPEFile.OptionalHeader.ImageBase;
+#pragma warning restore RS0030
 
         /// <summary>
         /// Gets basic information about the PE File as it exists on disk.<para/>
@@ -39,7 +43,9 @@ namespace ChaosDbg.Analysis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsPhysicalAddress(long address)
         {
-            var start = (long) PhysicalPEFile.OptionalHeader.ImageBase;
+#pragma warning disable RS0030 //We're physical so it's OK
+            var start = PhysicalPEFile.OptionalHeader.ImageBase;
+#pragma warning restore RS0030
             var end = start + PhysicalPEFile.OptionalHeader.SizeOfImage;
 
             if (address >= start && address <= end)

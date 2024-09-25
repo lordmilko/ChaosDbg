@@ -25,6 +25,12 @@ namespace ChaosDbg.SymStore
             if (File.Exists(cacheFile))
             {
                 Stream fileStream = File.OpenRead(cacheFile);
+
+                //If the length is 0, assume that we previously attempted to download the file and that it got corrupt.
+                //Try and download the file again
+                if (fileStream.Length == 0)
+                    return Task.FromResult<SymbolStoreFile>(null);
+
                 result = new SymbolStoreFile(fileStream, cacheFile);
             }
             return Task.FromResult(result);
@@ -33,8 +39,20 @@ namespace ChaosDbg.SymStore
         protected override async Task WriteFileInner(SymbolStoreKey key, SymbolStoreFile file)
         {
             string cacheFile = GetCacheFilePath(key);
-            if (cacheFile != null && !File.Exists(cacheFile))
+
+            if (cacheFile != null)
             {
+                if (File.Exists(cacheFile))
+                {
+                    //If the file already exists, if the length is not the same, we need to rewrite the file
+
+                    using (var fs = File.OpenRead(cacheFile))
+                    {
+                        if (fs.Length == file.Stream.Length)
+                            return;
+                    }
+                }
+
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(cacheFile));

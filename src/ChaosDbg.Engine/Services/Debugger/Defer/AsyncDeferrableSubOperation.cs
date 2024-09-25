@@ -26,7 +26,7 @@ namespace ChaosDbg.Debugger
         {
             var thread = Thread.CurrentThread;
 
-            Debug.Assert(Log.HasContext(thread));
+            Debug.Assert(Log.HasContext(thread), "Thread did not have a log context");
 
             Task = Task.Run(async () =>
             {

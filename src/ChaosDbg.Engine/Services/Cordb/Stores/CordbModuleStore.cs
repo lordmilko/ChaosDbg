@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using ChaosLib;
 using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
 using ClrDebug;
+using Win32Process = System.Diagnostics.Process;
 
 namespace ChaosDbg.Cordb
 {
@@ -22,26 +23,29 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (!process.IsV3)
+                if (!Process.IsV3)
                     return managedModules;
 
-                return process.CorDebugProcess.AppDomains.SelectMany(a => a.Assemblies).SelectMany(a => a.Modules)
-                    .ToDictionary(m => m.BaseAddress, m => new CordbManagedModule(m, process, null));
+                return Process.CorDebugProcess.AppDomains.SelectMany(a => a.Assemblies).SelectMany(a => a.Modules)
+                    .ToDictionary(m => m.BaseAddress, m => new CordbManagedModule(m, Process, null));
             }
         }
+
+        public CordbModuleMetadataStore MetadataStore { get; }
 
         private Dictionary<CORDB_ADDRESS, CordbNativeModule> nativeModules = new Dictionary<CORDB_ADDRESS, CordbNativeModule>();
         private Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule> managedProcessModules = new Dictionary<ICorDebugProcess, CordbManagedProcessPseudoModule>();
         private Dictionary<int, CordbNativeModule> nativeProcessModules = new Dictionary<int, CordbNativeModule>();
 
-        private CordbProcess process;
+        internal CordbProcess Process { get; }
 
         public CordbModuleStore(CordbProcess process)
         {
             //We don't need to worry about attach; we'll receive fake module load messages for both
             //native and managed modules
 
-            this.process = process;
+            Process = process;
+            MetadataStore = new CordbModuleMetadataStore(this);
         }
 
         /// <summary>
@@ -59,17 +63,19 @@ namespace ChaosDbg.Cordb
             RelativeToAbsoluteStream stream = null;
             var needFullPELoad = false;
 
+            var peFlags = PEFileDirectoryFlags.ExportDirectory;
+
             if (!corDebugModule.IsDynamic)
             {
-                stream = CordbMemoryStream.CreateRelative(process.DataTarget, corDebugModule.BaseAddress);
+                stream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, corDebugModule.BaseAddress);
 
-                if (process.Session.IsInterop)
+                if (Process.Session.IsInterop)
                     preferNativePE = true;
                 else
                 {
                     //Defer querying the non-essential directories until we access the CordbModule.PEFile.
                     //We'll also try and asynchronously eagerly load them on the Symbol Resolution Thread
-                    peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+                    peFile = PEFile.FromStream(stream, true, peFlags);
                     needFullPELoad = true;
                 }
             }
@@ -80,7 +86,7 @@ namespace ChaosDbg.Cordb
             {
                 CordbNativeModule native = null;
 
-                if (process.Session.IsInterop)
+                if (Process.Session.IsInterop)
                 {
                     if (nativeModules.TryGetValue(corDebugModule.BaseAddress, out native))
                     {
@@ -93,18 +99,17 @@ namespace ChaosDbg.Cordb
                 {
                     if (native != null)
                     {
-                        //Don't ask for the public PEFile, as that will force symbol resolution which we're not ready for
-                        peFile = native.GetRawPEFile();
+                        peFile = native.PEFile;
                     }
                     else
                     {
                         //Uh oh, need to resolve the PEFile under the lock!
-                        peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true);
+                        peFile = PEFile.FromStream(stream, true, peFlags);
                         needFullPELoad = true;
                     }
                 }
 
-                module = new CordbManagedModule(corDebugModule, process, peFile);
+                module = new CordbManagedModule(corDebugModule, Process, peFile);
 
                 if (native != null)
                 {
@@ -117,10 +122,10 @@ namespace ChaosDbg.Cordb
 
             //We don't need to add a managed module to our symbol store; we only resolve managed symbols when we see them
 
-            process.Assemblies.LinkModule(module);
+            Process.Assemblies.LinkModule(module);
 
             if (needFullPELoad)
-                process.Symbols.DeferCalculateModuleInfoAsync(module.Name, corDebugModule.BaseAddress, peFile, resolvePESymbols: false);
+                Process.Symbols.LoadModule(module.FullName, corDebugModule.BaseAddress, corDebugModule.Size, peFile);
 
             return module;
         }
@@ -138,13 +143,13 @@ namespace ChaosDbg.Cordb
             var baseAddress = (long) (void*) loadDll.lpBaseOfDll;
 
             //Unfortunately, the LOAD_DLL_DEBUG_INFO does not tell us the size of the image, so we're forced to read the bare minimum from memory
-            var memoryStream = CordbMemoryStream.CreateRelative(process.DataTarget, baseAddress);
+            var memoryStream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, baseAddress);
 
             //We'll need to defer querying for the rest of the PEFile until later (inside CordbModule.PEFile), as PESymbolResolver will need to use symbols
             //in order to resolve any exception handlers
-            var peFile = process.Session.Services.PEFileProvider.ReadStream(memoryStream, true);
+            var peFile = PEFile.FromStream(memoryStream, true, PEFileDirectoryFlags.ExportDirectory);
 
-            var name = CordbNativeModule.GetNativeModuleName(loadDll, process.Id);
+            var name = CordbNativeModule.GetNativeModuleName(loadDll, Process.Id);
 
             CordbNativeModule native;
 
@@ -153,7 +158,7 @@ namespace ChaosDbg.Cordb
                 //The only way to get the image size is to read the PE header; DbgEng does that too
                 //Symbol resolution is deferred to the Symbol Resolution Thread, which will try and access
                 //CordbNativeModule.SymbolModule
-                native = new CordbNativeModule(name, baseAddress, process, peFile);
+                native = new CordbNativeModule(name, baseAddress, Process, peFile);
 
                 nativeModules.Add(baseAddress, native);
 
@@ -167,7 +172,10 @@ namespace ChaosDbg.Cordb
                 }
             }
 
-            process.Symbols.DeferCalculateModuleInfoAsync(name, native.BaseAddress, peFile, resolvePESymbols: true);
+            //It's important to note that you cannot rely on the PEFile's ImageBase to know where a given module has been loaded. A LOAD_DLL_DEBUG_EVENT event occurs
+            //whenever a process calls kernel32!MapViewOfFile with a section that created by kernel32!CreateFileMapping with SEC_IMAGE. The CLR will sometimes map two copies of
+            //mscorlib, do something, and then unload one. 
+            Process.Symbols.LoadModule(name, native.BaseAddress, native.Size, peFile);
 
             return native;
         }
@@ -181,20 +189,20 @@ namespace ChaosDbg.Cordb
         /// <returns>A <see cref="CordbManagedProcessPseudoModule"/> that represents the process' module.</returns>
         internal unsafe CordbManagedProcessPseudoModule Add(CorDebugProcess corDebugProcess)
         {
-            var win32Process = Process.GetProcessById(corDebugProcess.Id);
+            var win32Process = Win32Process.GetProcessById(corDebugProcess.Id);
             var address = (long) (void*) win32Process.MainModule.BaseAddress;
-            var stream = CordbMemoryStream.CreateRelative(process.DataTarget, address);
+            var stream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, address);
 
-            var peFile = process.Session.Services.PEFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All);
+            var peFile = PEFile.FromStream(stream, true, PEFileDirectoryFlags.All);
 
             //There is no CorDebugModule for a process, so we have to fake it
-            var module = new CordbManagedProcessPseudoModule(win32Process.MainModule.FileName, corDebugProcess, process, peFile);
+            var module = new CordbManagedProcessPseudoModule(win32Process.MainModule.FileName, corDebugProcess, Process, peFile);
 
             lock (moduleLock)
             {
                 managedProcessModules.Add(corDebugProcess.Raw, module);
 
-                if (process.Session.IsInterop)
+                if (Process.Session.IsInterop)
                 {
                     if (nativeModules.TryGetValue(module.BaseAddress, out var native))
                     {
@@ -223,7 +231,7 @@ namespace ChaosDbg.Cordb
                     module.IsLoaded = false;
                     ManagedModules.Remove(module.BaseAddress);
 
-                    if (process.Session.IsInterop)
+                    if (Process.Session.IsInterop)
                     {
                         if (nativeModules.TryGetValue(baseAddress, out var native))
                         {
@@ -232,7 +240,7 @@ namespace ChaosDbg.Cordb
                         }
                     }
 
-                    process.Assemblies.UnlinkModule(module);
+                    Process.Assemblies.UnlinkModule(module);
                 }
 
                 return module;
@@ -255,7 +263,7 @@ namespace ChaosDbg.Cordb
             if (nativeModules.TryGetValue(baseAddress, out var native))
             {
                 native.IsLoaded = false;
-                process.Symbols.RemoveNativeModule(baseAddress);
+                Process.Symbols.UnloadModule(baseAddress);
                 nativeModules.Remove(baseAddress);
 
                 if (ManagedModules.TryGetValue(baseAddress, out var managed))

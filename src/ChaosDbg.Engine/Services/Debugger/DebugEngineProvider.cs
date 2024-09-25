@@ -336,8 +336,16 @@ namespace ChaosDbg
 
         internal void WithDbgEng(Action<DbgEngEngineServices> action)
         {
-            lock (dbgEngInstanceLock)
+            dbgEngInstanceLock.WaitOne();
+
+            try
+            {
                 action(dbgEngEngineServices);
+            }
+            finally
+            {
+                dbgEngInstanceLock.Release();
+            }
         }
 
         protected void CheckRequiredEventHandlers(DbgEngineKind engineKind)

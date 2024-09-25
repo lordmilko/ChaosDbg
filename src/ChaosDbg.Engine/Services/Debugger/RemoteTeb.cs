@@ -99,17 +99,17 @@ namespace ChaosDbg
         /// </summary>
         public long Address { get; }
 
-        private MemoryReader memoryReader;
+        private IMemoryReader memoryReader;
 
-        public static RemoteTeb FromThread(IntPtr hThread, MemoryReader memoryReader) => new RemoteTeb(hThread, memoryReader);
+        public static RemoteTeb FromThread(IntPtr hThread, IMemoryReader memoryReader) => new RemoteTeb(hThread, memoryReader);
 
-        public static RemoteTeb FromTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader) => new RemoteTeb(tebAddress, memoryReader);
+        public static RemoteTeb FromTeb(CLRDATA_ADDRESS tebAddress, IMemoryReader memoryReader) => new RemoteTeb(tebAddress, memoryReader);
 
-        private RemoteTeb(IntPtr hThread, MemoryReader memoryReader) : this(GetTebAddress(hThread), memoryReader)
+        private RemoteTeb(IntPtr hThread, IMemoryReader memoryReader) : this(GetTebAddress(hThread), memoryReader)
         {
         }
 
-        private RemoteTeb(CLRDATA_ADDRESS tebAddress, MemoryReader memoryReader)
+        private RemoteTeb(CLRDATA_ADDRESS tebAddress, IMemoryReader memoryReader)
         {
             if (memoryReader.Is32Bit && IntPtr.Size == 8)
             {

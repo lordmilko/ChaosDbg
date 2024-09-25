@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if FALSE
+using System;
 using System.Threading;
 using ChaosLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -32,3 +33,4 @@ namespace ChaosDbg.Tests
         }
     }
 }
+#endif

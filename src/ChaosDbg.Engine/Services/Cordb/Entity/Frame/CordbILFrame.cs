@@ -39,9 +39,9 @@ namespace ChaosDbg.Cordb
                     var home = homes[i];
 
                     if (home.TryGetArgumentIndex(out _) == HRESULT.S_OK)
-                        results[i] = new CordbManagedParameterVariable(home, Module);
+                        results[i] = new CordbManagedParameterVariable(home, this, Module);
                     else
-                        results[i] = new CordbManagedLocalVariable(home, Module);
+                        results[i] = new CordbManagedLocalVariable(home, this, Module);
                 }
 
                 //Each variable knows its relative offset within memory. In order to get its absolute address, we need to take into consideration

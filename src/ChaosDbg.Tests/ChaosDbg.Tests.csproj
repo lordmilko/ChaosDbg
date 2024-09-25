@@ -23,6 +23,11 @@
     <PackageReference Include="Serilog.Sinks.Seq" Version="7.0.1" />
 
     <Reference Include="System.Net.Http" />
+
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="$(BannedApiAnalyzersVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

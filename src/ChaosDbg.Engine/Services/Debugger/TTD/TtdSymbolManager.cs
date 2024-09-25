@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using ChaosLib;
-using ClrDebug;
+using ChaosLib.Symbols;
+using ChaosLib.TTD;
 using ClrDebug.TTD;
 
 namespace ChaosDbg.TTD
@@ -14,25 +14,18 @@ namespace ChaosDbg.TTD
     /// </summary>
     class TtdSymbolManager : IDisposable
     {
-        private DbgHelpOptionsHolder originalOptions;
-        private FastDbgHelp dbgHelp;
+        private SymbolProvider symbolProvider;
 
         private Cursor cursor;
 
         private HashSet<ModuleInstance> loadedModules = new HashSet<ModuleInstance>();
 
-        public unsafe TtdSymbolManager(Cursor cursor)
+        public unsafe TtdSymbolManager(INativeLibraryProvider nativeLibraryProvider, ISymSrv symSrv, Cursor cursor)
         {
             //We make the assumption that we're in prod using regular DbgHelp, not using an OutOfProcDbgHelp and so don't need to worry about
             //using whatever the "real" IDbgHelp in use would be
 
-            dbgHelp = new FastDbgHelp((IntPtr) 100);
-
-            originalOptions = new DbgHelpOptionsHolder(dbgHelp);
-
-            dbgHelp.SymInitialize(null, false);
-
-            dbgHelp.GlobalOptions |= ClrDebug.DbgEng.SYMOPT.DEFERRED_LOADS;
+            symbolProvider = new SymbolProvider(nativeLibraryProvider, symSrv, new TtdCursorMemoryReader(cursor));
 
             this.cursor = cursor;
 
@@ -67,7 +60,7 @@ namespace ChaosDbg.TTD
             {
                 if (!activeModules.Contains(m))
                 {
-                    dbgHelp.SymUnloadModule64(m.Module->address);
+                    symbolProvider.UnloadModule(m.Module->address);
                     return true;
                 }
 
@@ -84,7 +77,7 @@ namespace ChaosDbg.TTD
                     var imageName = Path.GetFileName(fullPath);
                     var moduleName = Path.GetFileNameWithoutExtension(fullPath);
 
-                    dbgHelp.SymLoadModuleEx(imageName: imageName, moduleName: moduleName, baseOfDll: instance.Module->address, dllSize: (int) instance.Module->size);
+                    symbolProvider.LoadModule(imageName, instance.Module->address, (int) instance.Module->size);
                     loadedModules.Add(instance);
                 }
             }
@@ -92,44 +85,32 @@ namespace ChaosDbg.TTD
 
         public unsafe string GetSymbol(CrossPlatformContext registerContext)
         {
-            IMAGEHLP_MODULE64 moduleInfo;
-
-            if (dbgHelp.TrySymFromAddr(registerContext.IP, out var symbol) == HRESULT.S_OK)
+            //This will include both native and module addressed
+            if (symbolProvider.TryGetSymbolFromAddress(registerContext.IP, out var symbol))
             {
-                moduleInfo = dbgHelp.SymGetModuleInfo64(registerContext.IP);
-
-                if (symbol.SymbolInfo.Name == "memcpy")
+                if (symbol.Name == "memcpy")
                 {
                     //Saying that a random memcpy was responsible for our value is not very helpful. Try and retrieve the calling function as well.
                     //There's no guarantee that the value returned from memcpy in rax will actually be the value that is used; e.g. in TTDReplay, QueryMemoryBuffer
                     //gets the memory value from a memcpy, but the pointer in rax is ignored; the value retrieved is still in rcx and is used from there
                     var returnAddress = (long) (void*) cursor.QueryMemoryBuffer<IntPtr>(registerContext.SP, QueryMemoryPolicy.Default);
 
-                    if (dbgHelp.TrySymFromAddr(returnAddress, out var parentSymbol) == HRESULT.S_OK)
+                    if (symbolProvider.TryGetSymbolFromAddress(returnAddress, out var parentSymbol))
                     {
-                        var parentModuleInfo = dbgHelp.SymGetModuleInfo64(returnAddress);
-
-                        return $"{parentModuleInfo.ModuleName}!{parentSymbol} -> {moduleInfo.ModuleName}!{symbol}";
+                        return $"{parentSymbol}-> {symbol}";
                     }
                 }
 
-                return $"{moduleInfo.ModuleName}!{symbol}";
+                return symbol.ToString();
             }
 
-            if (dbgHelp.TrySymGetModuleInfo64(registerContext.IP, out moduleInfo) == HRESULT.S_OK)
-            {
-                var rva = registerContext.IP - moduleInfo.BaseOfImage;
-
-                return $"{moduleInfo.ModuleName}+0x{rva:X}";
-            }
-
+            //No symbol, just use address
             return "0x" + registerContext.IP.ToString("X");
         }
 
         public void Dispose()
         {
-            dbgHelp.Dispose();
-            originalOptions.Dispose();
+            symbolProvider.Dispose();
         }
     }
 }

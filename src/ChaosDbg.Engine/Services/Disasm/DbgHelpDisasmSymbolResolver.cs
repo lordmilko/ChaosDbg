@@ -1,9 +1,13 @@
-﻿using ChaosLib;
+﻿#if FALSE
+using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
+    /// <summary>
+    /// Represents an <see cref="ISymbolResolver"/> capable of resolving disasm symbols using an <see cref="IDbgHelp"/>.
+    /// </summary>
     class DbgHelpDisasmSymbolResolver : IIndirectSymbolResolver
     {
         private readonly IDbgHelp dbgHelp;
@@ -39,3 +43,4 @@ namespace ChaosDbg.Disasm
         }
     }
 }
+#endif

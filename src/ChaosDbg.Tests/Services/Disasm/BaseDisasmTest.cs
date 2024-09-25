@@ -16,7 +16,9 @@ namespace ChaosDbg.Tests
                 {
                     OptionalHeader = new ImageOptionalHeader
                     {
+#pragma warning disable RS0030 //Fake physical stream
                         ImageBase = ip
+#pragma warning restore RS0030
                     }
                 },
                 SectionHeaders = new[]

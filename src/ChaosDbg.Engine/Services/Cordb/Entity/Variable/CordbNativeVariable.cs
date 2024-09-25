@@ -1,5 +1,5 @@
 ﻿using ChaosLib.Symbols;
-using ChaosLib.TypedData;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {
@@ -7,17 +7,19 @@ namespace ChaosDbg.Cordb
     {
         public IUnmanagedSymbol Symbol { get; }
 
-        public IDbgRemoteValue Value { get; }
+        public ITypedValueSource ValueSource { get; }
 
-        protected CordbNativeVariable(IUnmanagedSymbol symbol, IDbgRemoteValue value)
+        public ITypedValue Value => ValueSource.Value;
+
+        protected CordbNativeVariable(IUnmanagedSymbol symbol, ITypedValueSource valueSource)
         {
             Symbol = symbol;
-            Value = value;
+            ValueSource = valueSource;
         }
 
         public override string ToString()
         {
-            return $"{Symbol} = {Value}";
+            return Value.ToString();
         }
     }
 }

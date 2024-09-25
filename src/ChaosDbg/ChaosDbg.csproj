@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <PackageReference Include="t4gen" Version="0.1.0" />
+
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="$(BannedApiAnalyzersVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

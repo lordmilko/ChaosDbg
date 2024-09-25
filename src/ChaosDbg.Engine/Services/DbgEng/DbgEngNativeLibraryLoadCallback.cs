@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Detour;
@@ -37,8 +36,6 @@ namespace ChaosDbg.DbgEng
             "SymSetParentWindow",
         };
 
-        private IPEFileProvider peFileProvider;
-        private IDbgHelpProvider dbgHelpProvider;
         private static bool isDbgHelpHooked;
 
         private static object objLock = new object();
@@ -49,12 +46,6 @@ namespace ChaosDbg.DbgEng
 
         [ThreadStatic]
         public Func<DetourContext, object> HookCreateProcess;
-
-        public DbgEngNativeLibraryLoadCallback(IPEFileProvider peFileProvider, IDbgHelpProvider dbgHelpProvider)
-        {
-            this.peFileProvider = peFileProvider;
-            this.dbgHelpProvider = dbgHelpProvider;
-        }
 
         public string GetInterestedModule() => WellKnownNativeLibrary.DbgEng;
 
@@ -84,26 +75,25 @@ namespace ChaosDbg.DbgEng
                 var stream = new ProcessMemoryStream(hProcess);
 
                 stream.Position = (long) (void*) hModule;
-                var dbgEngPE = peFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.ImportDirectory);
+                var dbgEngPE = PEFile.FromStream(stream, true, PEFileDirectoryFlags.ImportDirectory);
 
                 Log.Debug<DetourBuilder>("Hooking DbgEng {module}", hModule.ToString("X"));
 
-                if (dbgHelpProvider is DbgHelpProvider)
-                {
-                    var dbgHelpHook = new ImportHook(
-                        dbgEngPE,
-                        WellKnownNativeLibrary.DbgHelp,
-                        typeof(DbgHelp.Native),
-                        DbgHelpHook, //Ensure that all calls to DbgHelp are protected by our global lock
-                        exclude: SafeDbgHelpImports
-                    );
+                var dbgHelpHook = new ImportHook(
+                    hModule,
+                    dbgEngPE,
+                    WellKnownNativeLibrary.DbgHelp,
+                    typeof(DbgHelp.Native),
+                    DbgHelpHook, //Ensure that all calls to DbgHelp are protected by our global lock
+                    exclude: SafeDbgHelpImports
+                );
 
-                    hooks.Add(dbgHelpHook);
-                }
+                hooks.Add(dbgHelpHook);
 
                 //These methods are split across imports/API sets, so we need separate hooks
 
                 var kernel32Hook1 = new ImportHook(
+                    hModule,
                     dbgEngPE,
                     typeof(Kernel32.Native),
                     Kernel32Hook,
@@ -111,6 +101,7 @@ namespace ChaosDbg.DbgEng
                 );
 
                 var kernel32Hook2 = new ImportHook(
+                    hModule,
                     dbgEngPE,
                     typeof(Kernel32.Native),
                     Kernel32Hook,

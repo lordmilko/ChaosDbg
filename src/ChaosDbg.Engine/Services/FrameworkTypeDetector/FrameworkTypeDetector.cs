@@ -22,15 +22,6 @@ namespace ChaosDbg.Metadata
 
     public class FrameworkTypeDetector : IFrameworkTypeDetector
     {
-        private readonly IPEFileProvider peFileProvider;
-        private readonly ISigReader sigReader;
-
-        public FrameworkTypeDetector(IPEFileProvider peFileProvider, ISigReader sigReader)
-        {
-            this.peFileProvider = peFileProvider;
-            this.sigReader = sigReader;
-        }
-
         public FrameworkKind Detect(string commandLine)
         {
             var args = Shell32.CommandLineToArgvW(commandLine);
@@ -43,12 +34,12 @@ namespace ChaosDbg.Metadata
             //Is this a .NET executable? And if so what kind of .NET executable is it?
 
             //Does it have an IMAGE_COR20_HEADER?
-            var pe = peFileProvider.ReadFile(filePath, flags: PEFileDirectoryFlags.ImportDirectory | PEFileDirectoryFlags.Cor20Header);
+            var pe = PEFile.FromPath(filePath, flags: PEFileDirectoryFlags.ImportDirectory | PEFileDirectoryFlags.Cor20Header);
 
             if (pe.Cor20Header != null)
                 return DetectDotnetType(filePath);
 
-            if (pe.ImportDirectory != null && pe.ImportDirectory.Any(v => v.Name.Equals("mscoree.dll", StringComparison.OrdinalIgnoreCase)))
+            if (pe.ImportDirectory != null && pe.ImportDirectory.Any(v => v.Name?.Equals("mscoree.dll", StringComparison.OrdinalIgnoreCase) == true))
                 return FrameworkKind.NetFramework;
 
             var directory = Path.GetDirectoryName(filePath);

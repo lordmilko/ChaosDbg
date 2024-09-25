@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using ChaosDbg.Analysis;
 using ChaosDbg.Disasm;
 using ChaosLib;
-using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug.DIA;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -97,9 +97,6 @@ namespace ChaosDbg.Tests
                     chaos.MoveToNextFunction();
 
                     var name = ((InstructionDiscoverySource) chaos.CurrentRegion.Metadata).Symbol.Name;
-
-                    if (name.StartsWith("_"))
-                        name = "_" + name;
 
                     Assert.AreEqual(name, ida.CurrentCollapsedFunction.Name);
                     var chaosSize = chaos.CurrentRegion.EndAddress - chaos.CurrentRegion.StartAddress + 1;
@@ -282,14 +279,14 @@ namespace ChaosDbg.Tests
 
             if (chaosFunctionMetadata.Symbol != null)
             {
-                var chaosSymbol = (IHasDiaSymbol) chaosFunctionMetadata.Symbol;
+                var chaosSymbol = (MicrosoftPdbSymbol) chaosFunctionMetadata.Symbol;
 
                 //Functions can be exported with different names than their underlying symbol name
                 if (chaosSymbol.Name.TrimStart('_') == idaName.TrimStart('_') || chaosFunctionMetadata.Export?.Name == idaName)
                     return;
 
                 //Compare the decorated symbol names
-                if (chaosSymbol.DiaSymbol.Name == idaName)
+                if (chaosSymbol.SafeDiaSymbol.Name == idaName)
                     return;
 
                 //There could be duplicates
@@ -326,7 +323,7 @@ namespace ChaosDbg.Tests
                     UNDNAME.UNDNAME_NO_ECSU              | //struct
                     UNDNAME.UNDNAME_NO_PTR64;              //__ptr64
 
-                var chaosUndecorated = ((IHasDiaSymbol) chaosFunctionMetadata.Symbol).DiaSymbol.GetUndecoratedNameEx(decorationFlags);
+                var chaosUndecorated = ((MicrosoftPdbSymbol) chaosFunctionMetadata.Symbol).SafeDiaSymbol.GetUndecoratedNameEx(decorationFlags);
 
                 if (chaosUndecorated == idaName)
                     return;

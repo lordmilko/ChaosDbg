@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Threading;
 using ChaosLib;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -63,6 +64,11 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool IsInterop { get; set; }
 
+        /// <summary>
+        /// Gets whether this debug engine is debugging .NET Core.
+        /// </summary>
+        public bool IsCoreCLR { get; set; }
+
         private int currentStopCount;
 
         /// <summary>
@@ -81,7 +87,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the "real" stop count of the <see cref="ICorDebugProcess"/> in mscordbi.
         /// </summary>
-        public int DbiStopCount => (int) (uint) ActiveProcess.TypedProcess["m_stopCount"].Value;
+        public int DbiStopCount => (int) (uint) ActiveProcess.TypedProcess["m_stopCount"].GetPrimativeValue();
 #endif
 
         internal readonly object UserPauseCountLock = new object();
@@ -198,6 +204,10 @@ namespace ChaosDbg.Cordb
 
         public bool IsCLRLoaded => EventHistory.ManagedEventCount > 0;
 
+        /// <summary>
+        /// Gets the unique identifier of this session within the current process.<para/>
+        /// This value is used to tag threads created by the debugger as belonging to a specific engine.
+        /// </summary>
         public int EngineId { get; }
 
 #if DEBUG
@@ -250,6 +260,7 @@ namespace ChaosDbg.Cordb
                     return;
 
                 criticalFailureThread = new Thread(action);
+                criticalFailureThread.IsBackground = true;
                 Log.CopyContextTo(criticalFailureThread);
                 criticalFailureThread.Name = $"Fatal Shutdown Thread {EngineId}";
                 criticalFailureThread.Start();

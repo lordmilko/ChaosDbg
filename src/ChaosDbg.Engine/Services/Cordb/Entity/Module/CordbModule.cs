@@ -1,4 +1,6 @@
-﻿using ChaosLib.PortableExecutable;
+﻿using System.IO;
+using ChaosLib.PortableExecutable;
+using ChaosLib.Symbols;
 using ClrDebug;
 
 #nullable enable
@@ -15,6 +17,8 @@ namespace ChaosDbg.Cordb
 
         public string Name { get; }
 
+        public string FullName { get; }
+
         public CORDB_ADDRESS BaseAddress { get; }
 
         public int Size { get; }
@@ -26,25 +30,10 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public CordbProcess Process { get; }
 
-        protected readonly PEFile? peFile;
-        private bool hasFullPEFile;
-
         /// <inheritdoc />
-        public PEFile? PEFile
-        {
-            get
-            {
-                if (!hasFullPEFile && peFile != null)
-                {
-                    Process.Symbols.EnsureModuleLoaded(BaseAddress, false);
-                    hasFullPEFile = true;
-                }
+        public PEFile? PEFile { get; }
 
-                return peFile;
-            }
-        }
-
-        public bool IsExe => peFile != null && !peFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll);
+        public bool IsExe => PEFile != null && !PEFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll);
 
         /// <summary>
         /// Gets or sets whether this module is currently loaded in the target process.<para/>
@@ -54,17 +43,33 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public bool IsLoaded { get; internal set; } = true;
 
+        private ISymbolModule? symbolModule;
+
+        /// <summary>
+        /// Provides access to any symbol information that is available for this module.
+        /// </summary>
+        public ISymbolModule? SymbolModule
+        {
+            get
+            {
+                if (symbolModule == null)
+                    symbolModule = Process.Symbols.GetSymbolModule(BaseAddress);
+
+                return symbolModule;
+            }
+        }
+
         protected CordbModule(string name, long baseAddress, int size, CordbProcess process, PEFile? peFile)
         {
-            Name = name;
+            Name = Path.IsPathRooted(name) ? Path.GetFileNameWithoutExtension(name) : name;
+            FullName = name;
             BaseAddress = baseAddress;
             Size = size;
             EndAddress = baseAddress + size;
             Process = process;
 
             //We can have no PEFile when we have a dynamic module
-            this.peFile = peFile;
-            hasFullPEFile = peFile == null;
+            PEFile = peFile;
         }
 
         public override string ToString()

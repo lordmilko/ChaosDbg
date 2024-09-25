@@ -2,15 +2,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using ChaosDbg.Metadata;
-using ChaosDbg.TypedData;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.TypedData;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
 using Win32Process = System.Diagnostics.Process;
 using static ClrDebug.HRESULT;
@@ -353,6 +351,7 @@ namespace ChaosDbg.Cordb
                     options.IsAttach ? null : options.CommandLine
                 );
                 engine.Session.IsInterop = options.UseInterop;
+                engine.Session.IsCoreCLR = this is CordbCoreLauncher;
 
                 Log.Debug<CordbLauncher>("Successfully stored session info");
             }

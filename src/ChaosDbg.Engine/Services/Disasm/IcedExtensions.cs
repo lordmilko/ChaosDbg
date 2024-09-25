@@ -7,6 +7,19 @@ namespace ChaosDbg.Disasm
 {
     internal static class IcedExtensions
     {
+        public static Register GetFullRegister32Ex(this Register register)
+        {
+            //Iced says that GetFullRegister32 returns the 32-bit register for all "general purpose registers".
+            //This seems to be everything BUT EIP (even things like ESP/EBP are treated correctly). I don't understand why this is,
+            //but it doesn't make any sense to me. If I have a 32-bit register, it's completely invalid to then be handed a 64-bit one instead
+            //https://github.com/icedland/iced/blob/ef5fda6f337759284edd8cd02333ccef9c3894f3/src/csharp/Intel/Iced/Intel/RegisterExtensions.1.cs#L14
+
+            if (register == Register.EIP)
+                return register;
+
+            return register.GetFullRegister32();
+        }
+
         #region CorDebugRegister
 
         public static Register ToIcedRegister(this CorDebugRegister register, IMAGE_FILE_MACHINE arch)
@@ -1274,8 +1287,8 @@ namespace ChaosDbg.Disasm
                 //CV_HREG_e.CV_AMD64_TILECFG => Register.TILECFG,
                 _ => throw new ArgumentOutOfRangeException(nameof(register), register, null)
             };
-
-            #endregion
         }
+
+        #endregion
     }
 }

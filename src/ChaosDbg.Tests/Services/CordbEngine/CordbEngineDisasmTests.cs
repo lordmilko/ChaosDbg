@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using ChaosDbg.Cordb;
 using ChaosDbg.IL;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -24,13 +23,13 @@ namespace ChaosDbg.Tests
                     var thread = ctx.CordbEngine.Process.Threads.Single();
 
                     thread.Verify().IL(
-                        "System.Threading.Thread.Sleep",
+                        "mscorlib.dll!System.Threading.Thread.Sleep(int millisecondsTimeout)",
                         "IL_0000   ldarg.0",
-                        "IL_0001   call System.Threading.Thread.SleepInternal",
-                        "IL_0006   call System.AppDomainPauseManager.get_IsPaused",
+                        "IL_0001   call mscorlib.dll!System.Threading.Thread.SleepInternal(int millisecondsTimeout)",
+                        "IL_0006   call mscorlib.dll!System.AppDomainPauseManager.get_IsPaused()",
                         "IL_000B   brfalse.s IL_0018",
-                        "IL_000D   call System.AppDomainPauseManager.get_ResumeEvent",
-                        "IL_0012   callvirt System.Threading.WaitHandle.WaitOneWithoutFAS",
+                        "IL_000D   call mscorlib.dll!System.AppDomainPauseManager.get_ResumeEvent()",
+                        "IL_0012   callvirt mscorlib.dll!System.Threading.WaitHandle.WaitOneWithoutFAS()",
                         "IL_0017   pop",
                         "IL_0018   ret"
                     );
@@ -135,8 +134,6 @@ namespace ChaosDbg.Tests
                     foreach (var corDebugModule in corDebugModules)
                     {
                         var mdi = corDebugModule.GetMetaDataInterface<MetaDataImport>();
-
-                        var metadataProvider = new MetaDataProvider(mdi);
 
                         var typeDefs = mdi.EnumTypeDefs();
 

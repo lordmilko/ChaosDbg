@@ -607,6 +607,7 @@ namespace ChaosDbg.PowerShell.Host
                     {
                         Name = "ConsoleHost.HandleBreak"
                     };
+                    breakHandlerThread.IsBackground = true;
                     breakHandlerThread.Start();
                 }
             }

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ChaosDbg.Evaluator.Masm;
 using ChaosLib.Symbols;
 using ClrDebug;
@@ -7,7 +8,7 @@ using Iced.Intel;
 
 namespace ChaosDbg.Cordb
 {
-    public class CordbMasmEvaluatorContext : IEvaluatorContext
+    public class CordbMasmEvaluatorContext : IMasmEvaluatorContext
     {
         private CordbProcess process;
 
@@ -56,7 +57,7 @@ namespace ChaosDbg.Cordb
 
             //Try with what the user asked for first
 
-            var matches = process.Symbols.NativeSymEnumSymbols($"{moduleName}!{symbolName}");
+            var matches = process.Symbols.EnumerateSymbols($"{moduleName}!{symbolName}").ToArray();
 
             if (matches.Length == 0)
             {
@@ -72,7 +73,7 @@ namespace ChaosDbg.Cordb
                         {
                             moduleName = moduleName.Substring(0, moduleName.Length - 4);
 
-                            matches = process.Symbols.NativeSymEnumSymbols($"{moduleName}!{symbolName}");
+                            matches = process.Symbols.EnumerateSymbols($"{moduleName}!{symbolName}").ToArray();
                         }
 
                         break;
@@ -96,7 +97,7 @@ namespace ChaosDbg.Cordb
 
         public bool TryGetSimpleSymbolValue(string symbolName, out long address)
         {
-            if (process.Symbols.TryNativeSymFromName(symbolName, out var symbol))
+            if (process.Symbols.TryGetSymbolFromName(symbolName, out var symbol))
             {
                 address = symbol.Address;
                 return true;

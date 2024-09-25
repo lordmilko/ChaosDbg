@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ChaosLib;
 
 namespace ChaosDbg.Cordb
 {
@@ -12,13 +13,15 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public class NativeAccessor : ICordbThreadAccessor
         {
+            public string Name => Kernel32.GetThreadDescription(Handle);
+
             public CordbThread Thread { get; set; }
 
             public int Id { get; }
 
             public IntPtr Handle { get; }
 
-            public IEnumerable<CordbFrame> EnumerateFrames() => CordbFrameEnumerator.Native.Enumerate(Thread);
+            public IEnumerable<CordbFrame> EnumerateFrames(NativeStackWalkerKind nativeStackWalkerKind) => CordbFrameEnumerator.Native.Enumerate(Thread, nativeStackWalkerKind);
 
             public NativeAccessor(int id, IntPtr handle)
             {

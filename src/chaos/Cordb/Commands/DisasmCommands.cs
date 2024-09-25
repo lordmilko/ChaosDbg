@@ -6,7 +6,7 @@ using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.IL;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 
 #nullable enable
 
@@ -65,7 +65,7 @@ namespace chaos.Cordb.Commands
 
                 disassembly = engine.Process.ProcessDisassembler.EnumerateInstructions(addr).Take(8).ToArray();
 
-                if (engine.Process.Symbols.TrySymFromAddr(addr, SymFromAddrOption.All, out var sym))
+                if (engine.Process.Symbols.TryGetSymbolFromAddress(addr, out var sym))
                     Console.WriteColorLine(sym.ToString(), ConsoleColor.Magenta);
                 else
                     Console.WriteColorLine(expr, ConsoleColor.Magenta);

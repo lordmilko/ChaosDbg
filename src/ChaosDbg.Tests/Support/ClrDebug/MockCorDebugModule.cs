@@ -72,7 +72,7 @@ namespace ChaosDbg.Tests
 
         public HRESULT GetMetaDataInterface(Guid riid, out object ppObj)
         {
-            if (riid == typeof(IMetaDataImport).GUID)
+            if (riid == typeof(IMetaDataImport).GUID || riid == typeof(IMetaDataAssemblyImport).GUID)
                 ppObj = new MockMetaDataImport();
             else
                 throw new NotImplementedException();

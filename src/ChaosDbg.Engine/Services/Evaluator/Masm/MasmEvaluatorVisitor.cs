@@ -7,9 +7,9 @@ namespace ChaosDbg.Evaluator.Masm
 {
     class MasmEvaluatorVisitor
     {
-        private IEvaluatorContext context;
+        private IMasmEvaluatorContext context;
 
-        public MasmEvaluatorVisitor(IEvaluatorContext context)
+        public MasmEvaluatorVisitor(IMasmEvaluatorContext context)
         {
             if (context == null)
                 throw new ArgumentNullException(nameof(context));

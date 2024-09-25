@@ -1,0 +1,2 @@
+P:ChaosLib.PortableExecutable.ImageOptionalHeader.ImageBase;Images that are manually mapped by kernel32CreateFileMapping may be loaded at a different address than what is stored in the PE Headers
+P:System.AppContext.BaseDirectory;BaseDirectory will be wrong when running inside PowerShell

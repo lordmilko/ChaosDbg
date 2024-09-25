@@ -205,9 +205,13 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public void Detach()
         {
-            if (Process != null)
+            //If Process is not null, that means the Session wasn't either
+            var localSession = Session;
+            var localProcess = localSession?.ActiveProcess;
+
+            if (localProcess != null)
             {
-                if (Process.Win32Process.HasExited)
+                if (localProcess.Win32Process.HasExited)
                 {
                     /* There is a huge race when detaching. If the process was just killed and we try and call detach, CordbProcess::DetachShim() will try and send
                      * an IPC event DB_IPCE_DETACH_FROM_PROCESS. CordbRCEventThread::SendIPCEvent waits on 3 event handles for a response: a right-side-acknowledgement-handle,
@@ -241,16 +245,18 @@ namespace ChaosDbg.Cordb
                         //being neutered, ICorDebug::Terminate will throw. For now, we don't handle this rare scenario
                         Process.CorDebugProcess.Detach();
 
+                        Debug.Assert(localSession != null, "Session was null");
+
                         //Now clear out the process so we don't attempt to kill it when this engine is destroyed
-                        Session.ActiveProcess.Dispose();
-                        Session.ActiveProcess = null;
+                        localSession.ActiveProcess.Dispose();
+                        localSession.ActiveProcess = null;
 
                         //We want to now assert that there are no special timing rules we need to adhere to, and that it is safe for us to shutdown ICorDebug ASAP. There's
                         //nothing left for this engine to do once we no longer have a process, anyway.
-                        if (Session.CorDebug != null)
+                        if (localSession.CorDebug != null)
                         {
-                            Session.CorDebug.Terminate();
-                            Session.CorDebug = null;
+                            localSession.CorDebug.Terminate();
+                            localSession.CorDebug = null;
                         }
                     }
                 }
@@ -266,28 +272,31 @@ namespace ChaosDbg.Cordb
             {
                 try
                 {
-                    if (Process != null)
+                    var localSession = Session;
+                    var localProcess = Process;
+
+                    if (localProcess != null)
                     {
                         Log.Verbose("Terminating and disposing CorDebugProcess");
 
                         //CordbProcess.Terminate will wait for our exit process event to be signalled before returning
 #pragma warning disable CS0618 // Type or member is obsolete
-                        Process.Terminate();
+                        localProcess.Terminate();
 #pragma warning restore CS0618 // Type or member is obsolete
 
                         //Now clear out the process so we don't attempt to kill it when this engine is destroyed
-                        Session.ActiveProcess.Dispose();
-                        Session.ActiveProcess = null;
+                        localSession.ActiveProcess.Dispose();
+                        localSession.ActiveProcess = null;
                     }
 
                     //CordbProcess.Terminate() should wait for the ExitProcess event to be emitted, and so we now want to assert that it is safe for us to shutdown ICorDebug ASAP.
                     //There's nothing left for this engine to do once we no longer have a process, anyway.
-                    if (Session.CorDebug != null)
+                    if (localSession?.CorDebug != null)
                     {
                         Log.Verbose("Terminating CorDebug...");
 
-                        Session.CorDebug.Terminate();
-                        Session.CorDebug = null;
+                        localSession.CorDebug.Terminate();
+                        localSession.CorDebug = null;
 
                         Log.Verbose("Terminated CorDebug");
                     }

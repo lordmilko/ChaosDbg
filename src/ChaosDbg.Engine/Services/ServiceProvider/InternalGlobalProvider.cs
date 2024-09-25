@@ -8,11 +8,10 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.IL;
 using ChaosDbg.Metadata;
+using ChaosDbg.Symbols;
 using ChaosLib;
-using ChaosLib.Metadata;
 using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg
 {
@@ -65,30 +64,26 @@ namespace ChaosDbg
                 typeof(DbgEngEngineServices),
 
                 //Symbols
-                typeof(MicrosoftPdbSourceFileProvider),
-                {  typeof(IDbgHelpProvider), typeof(DbgHelpProvider) },
 
                 //NativeLibrary
-                typeof(NativeLibraryProvider),
+                { typeof(INativeLibraryProvider), typeof(NativeLibraryProvider) },
                 { typeof(INativeLibraryBaseDirectoryProvider), typeof(SingleFileNativeLibraryBaseDirectoryProvider) },
                 { typeof(INativeLibraryLoadCallback[]), new[]
                 {
                     typeof(DbgEngNativeLibraryLoadCallback),
                     typeof(DbgHelpNativeLibraryLoadCallback),
+                    typeof(MSDiaNativeLibraryLoadCallback),
                     typeof(SymSrvNativeLibraryLoadCallback)
                 }},
 
                 typeof(CordbMasmEvaluatorContext),
-                typeof(ILDisassemblerProvider),
 
                 //Misc
 
                 typeof(DbgEngRemoteClientProvider),
 
                 { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
-                { typeof(IPEFileProvider), typeof(PEFileProvider) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
-                { typeof(ISigReader), typeof(SigReader) }
+                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) }
             };
 
             configureServices?.Invoke(services);

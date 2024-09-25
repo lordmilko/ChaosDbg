@@ -22,7 +22,9 @@ namespace ChaosDbg.Cordb
         public CordbNativeModule? NativeModule { get; set; }
 
         public CordbManagedProcessPseudoModule(string name, CorDebugProcess corDebugProcess, CordbProcess process, PEFile peFile) :
+#pragma warning disable RS0030 //This object is only created in response to a create process event (and a managed one at that), so we know that the PEFile is not a random mapped image
             base(name, peFile.OptionalHeader.ImageBase, peFile.OptionalHeader.SizeOfImage, process, peFile)
+#pragma warning restore RS0030
         {
             CorDebugProcess = corDebugProcess;
         }

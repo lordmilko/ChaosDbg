@@ -13,14 +13,10 @@ namespace ChaosDbg.Analysis
     class PEMetadataProvider
     {
         private INativeDisassemblerProvider nativeDisassemblerProvider;
-        private IPEFileProvider peFileProvider;
 
-        public PEMetadataProvider(
-            INativeDisassemblerProvider nativeDisassemblerProvider,
-            IPEFileProvider peFileProvider)
+        public PEMetadataProvider(INativeDisassemblerProvider nativeDisassemblerProvider)
         {
             this.nativeDisassemblerProvider = nativeDisassemblerProvider;
-            this.peFileProvider = peFileProvider;
         }
 
         /// <summary>
@@ -38,7 +34,7 @@ namespace ChaosDbg.Analysis
             var virtualPEFile = module.PEFile;
             var physicalPEFile = GetPhysicalPEFile(modulePath);
 
-            var processStream = new CordbMemoryStream(module.Process.DataTarget);
+            var processStream = new MemoryReaderStream((IMemoryReader) module.Process.DataTarget);
 
             INativeDisassembler createDisassembler(Stream stream) =>
                 nativeDisassemblerProvider.CreateDisassembler(stream ?? processStream, module.Process.Is32Bit, new CordbDisasmSymbolResolver(module.Process));
@@ -46,7 +42,7 @@ namespace ChaosDbg.Analysis
             var metadataModule = new PEMetadataVirtualModule(
                 modulePath,
                 module.BaseAddress,
-                module.SymbolModule,
+                (IUnmanagedSymbolModule) module.SymbolModule,
                 physicalPEFile,
                 virtualPEFile,
                 createDisassembler);
@@ -62,11 +58,12 @@ namespace ChaosDbg.Analysis
             string modulePath,
             IUnmanagedSymbolModule symbolModule,
             ISymbolResolver disasmSymbolResolver,
-            PEMetadataSearchOptions options)
+            PEMetadataSearchOptions options,
+            Action<PEFile> peFileTestHook = null)
         {
             var peSymbolResolver = new PESymbolResolver(symbolModule);
 
-            var physicalPEFile = GetPhysicalPEFile(modulePath, PEFileDirectoryFlags.All, peSymbolResolver);
+            var physicalPEFile = GetPhysicalPEFile(modulePath, PEFileDirectoryFlags.All, peSymbolResolver, peFileTestHook);
 
             var fileStream = File.Open(modulePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -93,13 +90,14 @@ namespace ChaosDbg.Analysis
             IUnmanagedSymbolModule symbolModule,
             RemoteMemoryStream processStream,
             ISymbolResolver disasmSymbolResolver,
-            PEMetadataSearchOptions options)
+            PEMetadataSearchOptions options,
+            Action<PEFile> peFileTestHook = null)
         {
             var modulePath = Kernel32.GetModuleFileNameExW(hProcess, hModule);
 
             var peSymbolResolver = new PESymbolResolver(symbolModule);
 
-            GetPEFiles(processStream, (long) (void*) hModule, modulePath, peSymbolResolver, out var physicalPEFile, out var virtualPEFile);
+            GetPEFiles(processStream, (long) (void*) hModule, modulePath, peSymbolResolver, peFileTestHook, out var physicalPEFile, out var virtualPEFile);
 
             INativeDisassembler CreateDisassembler(Stream stream) =>
                 nativeDisassemblerProvider.CreateDisassembler(stream ?? processStream, virtualPEFile.OptionalHeader.Magic == PEMagic.PE32, disasmSymbolResolver);
@@ -125,22 +123,25 @@ namespace ChaosDbg.Analysis
             long moduleAddress,
             string modulePath,
             IPESymbolResolver peSymbolResolver,
+            Action<PEFile> peFileTestHook,
             out PEFile physicalPEFile,
             out PEFile virtualPEFile)
         {
-            physicalPEFile = GetPhysicalPEFile(modulePath);
+            physicalPEFile = GetPhysicalPEFile(modulePath, peFileTestHook: peFileTestHook);
 
             //We don't know how big the in memory module is yet (we get that from the VirtualPEFile) and I'm not sure whether
             //we want to trust the size listed in the PhysicalPEFile. Hence, we don't copy the whole module to an in-process
             //MemoryStream to be used by both our PE File and our disassembler
             stream.Position = moduleAddress;
-            virtualPEFile = peFileProvider.ReadStream(stream, true, PEFileDirectoryFlags.All, peSymbolResolver);
+            virtualPEFile = PEFile.FromStream(stream, true, PEFileDirectoryFlags.All, peSymbolResolver);
+
+            peFileTestHook?.Invoke(virtualPEFile);
         }
 
-        private PEFile GetPhysicalPEFile(string modulePath, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver peSymbolResolver = null)
+        private PEFile GetPhysicalPEFile(string modulePath, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver peSymbolResolver = null, Action<PEFile> peFileTestHook = null)
         {
             //Don't need any flags here. All we're really interested in is the base address.
-            var physicalPEFile = peFileProvider.ReadFile(modulePath, flags, peSymbolResolver);
+            var physicalPEFile = PEFile.FromPath(modulePath, flags, peSymbolResolver);
 
             if (physicalPEFile.OptionalHeader.Magic == PEMagic.PE32)
             {
@@ -152,6 +153,8 @@ namespace ChaosDbg.Analysis
                 if (IntPtr.Size != 8)
                     throw new InvalidOperationException("Cannot process a 64-bit module inside a 32-bit process: our module path resolution logic doesn't handle sysnative.");
             }
+
+            peFileTestHook?.Invoke(physicalPEFile);
 
             return physicalPEFile;
         }

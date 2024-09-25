@@ -40,13 +40,6 @@ namespace ChaosDbg.Disasm
     /// </summary>
     public class NativeDisassemblerProvider : INativeDisassemblerProvider
     {
-        private readonly IPEFileProvider portableExecutableProvider;
-
-        public NativeDisassemblerProvider(IPEFileProvider portableExecutableProvider)
-        {
-            this.portableExecutableProvider = portableExecutableProvider;
-        }
-
         /// <inheritdoc />
         public INativeDisassembler CreateDisassembler(Stream stream, bool is32Bit, ISymbolResolver symbolResolver = null)
         {
@@ -63,7 +56,7 @@ namespace ChaosDbg.Disasm
                 throw new ArgumentNullException(nameof(path));
 
             var fileStream = File.OpenRead(path);
-            var peFile = portableExecutableProvider.ReadStream(fileStream, false);
+            var peFile = PEFile.FromStream(fileStream, false);
 
             var is32Bit = peFile.OptionalHeader.Magic == PEMagic.PE32;
             var entryPoint = peFile.OptionalHeader.AddressOfEntryPoint;

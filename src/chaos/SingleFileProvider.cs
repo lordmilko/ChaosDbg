@@ -11,7 +11,7 @@ namespace ChaosDbg
     /// </summary>
     static class SingleFileProvider
     {
-        private static string UnpackDir = Path.Combine(AppContext.BaseDirectory, "lib");
+        private static string UnpackDir = Path.Combine(Path.GetDirectoryName(typeof(SingleFileProvider).Assembly.Location), "lib");
 
         //This field is only accessed via reflection
         public static bool IsSingleFile { get; set; }

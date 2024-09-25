@@ -31,11 +31,16 @@ namespace ChaosDbg.Cordb
                 var typeStr = type == null ? null : SpecialType + " ";
                 var activeStr = Process.Threads.ActiveThread == this ? " *" : null;
 
+                var name = Name;
+
+                if (name != null)
+                    name = $" : \"{name}\"";
+
                 if (!IsManaged)
-                    builder.Append($"[Native] {typeStr}{Id}{activeStr}");
+                    builder.Append($"[Native{name}] {typeStr}{Id}{activeStr}");
                 else
                 {
-                    builder.Append("[Managed] ");
+                    builder.Append($"[Managed{name}] ");
                     builder.Append(typeStr);
 
                     var accessor = (ManagedAccessor) Accessor;
@@ -51,6 +56,8 @@ namespace ChaosDbg.Cordb
                 return builder.ToString();
             }
         }
+
+        public string Name => Accessor.Name;
 
         /// <summary>
         /// Gets the <see cref="CordbProcess"/> to which this thread belongs.
@@ -229,7 +236,7 @@ namespace ChaosDbg.Cordb
                      * there won't be an extra offset that we need to skip over. */
 
                     var dac = Process.DAC;
-                    MemoryReader memoryReader = dac.DataTarget;
+                    IMemoryReader memoryReader = dac.DataTarget;
 
                     //In .NET Core, this returns g_TlsIndex, which is set by SetIlsIndex. It seems this is a pointer to ThreadLocalInfo gCurrentThreadInfo
                     var rawIndex = dac.SOS.TLSIndex;
@@ -361,12 +368,15 @@ namespace ChaosDbg.Cordb
 
         #endregion
 
+        /// <inheritdoc cref="ManagedAccessor.ManagedThread" />
+        public CordbValue ManagedThread => (Accessor as ManagedAccessor)?.ManagedThread;
+
         /// <summary>
         /// Gets whether this thread has ever executed managed code.
         /// </summary>
         public bool IsManaged => Accessor is ManagedAccessor;
 
-        public IEnumerable<CordbFrame> EnumerateFrames() => Accessor.EnumerateFrames();
+        public IEnumerable<CordbFrame> EnumerateFrames(NativeStackWalkerKind nativeStackWalkerKind = NativeStackWalkerKind.DbgHelp) => Accessor.EnumerateFrames(nativeStackWalkerKind);
 
         public CordbFrame[] StackTrace => EnumerateFrames().ToArray();
 
@@ -421,8 +431,8 @@ namespace ChaosDbg.Cordb
         public CordbThread(int userId, ICordbThreadAccessor threadAccessor, CordbProcess process)
         {
             UserId = userId;
+            Process = process; //Must be done before setting the thread accessor, as setting the thread accessor may attempt to resolve the thread name
             Accessor = threadAccessor;
-            Process = process;
 
 #pragma warning disable CS0618 // Type or member is obsolete
             Teb = RemoteTeb.FromThread(Handle, Process.DAC.DataTarget);
@@ -463,7 +473,12 @@ namespace ChaosDbg.Cordb
             set
             {
                 if (value != null)
+                {
                     value.Thread = this;
+
+                    if (value is ManagedAccessor m)
+                        m.RefreshName();
+                }
 
                 accessor = value;
             }
@@ -474,6 +489,9 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public interface ICordbThreadAccessor
         {
+            /// <inheritdoc cref="CordbThread.Name" />
+            string Name { get; }
+
             CordbThread Thread { get; set; }
 
             /// <inheritdoc cref="CordbThread.Id" />
@@ -482,7 +500,7 @@ namespace ChaosDbg.Cordb
             /// <inheritdoc cref="CordbThread.Handle" />
             IntPtr Handle { get; }
 
-            IEnumerable<CordbFrame> EnumerateFrames();
+            IEnumerable<CordbFrame> EnumerateFrames(NativeStackWalkerKind nativeStackWalkerKind);
         }
 
         #endregion

@@ -16,32 +16,10 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbNativeModule : CordbModule
     {
-        public static bool IsCLRName(string fileName) => StringComparer.OrdinalIgnoreCase.Equals(fileName, "coreclr.dll") || StringComparer.OrdinalIgnoreCase.Equals(fileName, "clr.dll");
-
         /// <summary>
-        /// Gets whether this is the module representing the CLR.
+        /// Gets whether this is the module representing the CLR (i.e. clr.dll, coreclr.dll, etc).
         /// </summary>
         public bool IsCLR { get; }
-
-        private IUnmanagedSymbolModule? symbolModule;
-
-        /// <summary>
-        /// Provides access to any symbol information that is available for this module.
-        /// </summary>
-        public IUnmanagedSymbolModule? SymbolModule
-        {
-            get
-            {
-                /* Even if we don't have any symbols, we still must inform DbgHelp about this module. SymFunctionTableAccess64
-                 * calls dbghelp!GetModuleForPC internally, which means if DbgHelp doesn't know about this module, on x64 we won't
-                 * be able to unwind through it! It's very important we use SYMOPT.DEFERRED_LOADS (set in CordbProcess.ctor()), otherwise
-                 * this can cause a half a second delay while we search for symbols */
-                if (symbolModule == null && peFile != null)
-                    symbolModule = Process.Symbols.GetOrAddNativeModule(Name, BaseAddress, peFile.OptionalHeader.SizeOfImage);
-
-                return symbolModule;
-            }
-        }
 
         /// <summary>
         /// Gets the managed counterpart of this native module. This value may be null if this module has no managed counterpart,
@@ -58,14 +36,8 @@ namespace ChaosDbg.Cordb
         {
             var fileName = Path.GetFileName(name);
 
-            IsCLR = IsCLRName(fileName);
+            IsCLR = SymbolProvider.IsCLRName(fileName);
         }
-
-        /// <summary>
-        /// Gets the PE File of this module without forcing symbol resolution.
-        /// </summary>
-        /// <returns>The PE File of this module.</returns>
-        internal PEFile? GetRawPEFile() => peFile;
 
         #region GetNativeModuleName
 
@@ -91,7 +63,7 @@ namespace ChaosDbg.Cordb
         //This method demonstrates the supposed "proper" way of getting a module name that DbgEng uses.
         //As stated above however, if we can get the name from the hFile, why not just do that?
         private static string AlternateModuleNameStrategies(
-            MemoryReader memoryReader,
+            LiveProcessMemoryReader memoryReader,
             PEFile peFile,
             in LOAD_DLL_DEBUG_INFO loadDll)
         {
@@ -119,7 +91,7 @@ namespace ChaosDbg.Cordb
             return name;
         }
 
-        private static unsafe string? GetNativeModuleNameFromPtr(MemoryReader memoryReader, IntPtr lpImageName, bool isUnicode)
+        private static unsafe string? GetNativeModuleNameFromPtr(IMemoryReader memoryReader, IntPtr lpImageName, bool isUnicode)
         {
             //The lpImageName apparently points to TEB.NT_TIB.ArbitraryUserPointer and is a giant hack that
             //Windows uses to relay the module name to debuggers.

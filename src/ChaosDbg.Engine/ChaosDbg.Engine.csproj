@@ -42,6 +42,11 @@
       <!-- This tag actually seems to be whether to copy the reference to the output directory -->
       <Private>false</Private>
     </Reference>
+
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="$(BannedApiAnalyzersVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
 	</ItemGroup>
 
   <!-- We only want to copy native assemblies to the output directory when we're not building single file. During single file

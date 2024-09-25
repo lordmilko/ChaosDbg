@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ChaosDbg.Tests
 {
     [TestClass]
-    public class CodeNavigatorTests
+    public class CodeNavigatorTests : BaseTest
     {
         #region HeaderSegment
 
@@ -202,28 +202,16 @@ namespace ChaosDbg.Tests
         {
             var path = "C:\\windows\\SysWOW64\\ntdll.dll";
 
-            var serviceProvider = BuildServiceProvider();
-
-            var peProvider = serviceProvider.GetService<IPEFileProvider>();
-            var disasmProvider = serviceProvider.GetService<INativeDisassemblerProvider>();
+            var disasmProvider = GetService<INativeDisassemblerProvider>();
             var nativeDisassembler = disasmProvider.CreateDisassembler(path);
 
-            var pe = peProvider.ReadFile(path);
+            var pe = PEFile.FromPath(path);
 
-            var nav = new CodeNavigator(pe, nativeDisassembler);
+#pragma warning disable RS0030 //It's a physical address
+            var nav = new CodeNavigator(pe.OptionalHeader.ImageBase, pe, nativeDisassembler);
+#pragma warning restore RS0030
 
             return nav;
-        }
-
-        private IServiceProvider BuildServiceProvider()
-        {
-            var services = new ServiceCollection
-            {
-                { typeof(IPEFileProvider), typeof(PEFileProvider) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) }
-            };
-
-            return services.Build();
         }
     }
 }

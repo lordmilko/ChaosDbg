@@ -35,6 +35,9 @@ namespace ChaosDbg.Disasm
             long address,
             DisasmFunctionResolutionContext context)
         {
+            if (address == 0)
+                throw new ArgumentException("Address should not be 0", nameof(address));
+
             this.nativeDisassembler = nativeDisassembler;
             this.functionAddress = address;
             this.context = context;

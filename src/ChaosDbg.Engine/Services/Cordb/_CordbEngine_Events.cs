@@ -1,10 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Threading;
 using ChaosLib;
 using ClrDebug;
-using static ChaosDbg.EventExtensions;
 
 namespace ChaosDbg.Cordb
 {
@@ -167,7 +165,7 @@ namespace ChaosDbg.Cordb
                 Session.EventHistory.Add(CordbManagedEventHistoryItem.New(e));
 
                 //Let's kick off a load for CLR symbols now so that they're ready for when we need them
-                Process.Symbols.LoadCLRSymbols(Session.EngineId, Session.EngineCancellationToken);
+                Process.Symbols.LoadCLRSymbolsForNonInterop();
             }
 
             RaiseModuleLoad(new EngineModuleLoadEventArgs(module));
@@ -459,8 +457,9 @@ namespace ChaosDbg.Cordb
             {
                 /* It was a thread name change. As per the documentation on Debugger::NameChangeEvent(),
                  * in order to an AppDomain's name change, just do AppDomain.Name. But in order to get
-                 * a Thread's name change, you're recommended to do a func-eval of Thread::get_Name!
-                 * This is what dnSpy does as well. When you call Thread.Name = "value", it dispatches
+                 * a Thread's name change, you're recommended to do an eval of Thread::get_Name. Note that
+                 * since this information is stored in a field, you can do a simple query against an ICorDebugValue
+                 * to get this information. When you call Thread.Name = "value", it dispatches
                  * to ThreadNative::InformThreadNameChange(). This method does 3 things in the following order:
                  *
                  * 1. Calls SetThreadDescriptor()
@@ -471,7 +470,8 @@ namespace ChaosDbg.Cordb
                  * Windows 10 1607, they aren't part of .NET Framework's version of ThreadNative::InformThreadNameChange()!
                  * As such, your only true option is to use func-eval. */
 
-                //todo: requires func-eval
+                var cordbThread = Process.Threads[e.Thread.Id];
+                ((CordbThread.ManagedAccessor) cordbThread.Accessor).RefreshName();
             }
         }
 
@@ -563,11 +563,11 @@ namespace ChaosDbg.Cordb
             switch (e.ExceptionRecord.ExceptionCode)
             {
                 case NTSTATUS.STATUS_BREAKPOINT:
-                    ProcessStatusBreakpoint(e);
+                    UnmanagedStatusBreakpoint(e);
                     break;
 
                 case NTSTATUS.STATUS_SINGLE_STEP:
-                    ProcessSingleStep(e);
+                    UnmanagedSingleStep(e);
                     break;
 
                 case NTSTATUS.STATUS_CPP_EH_EXCEPTION:
@@ -648,13 +648,13 @@ namespace ChaosDbg.Cordb
             {
                 //It's an unhandled exception then!
 
-                Process.Symbols.TrySymFromAddr((long) (void*) exception.ExceptionRecord.ExceptionAddress, Symbol.SymFromAddrOption.Safe, out var unhandledTarget);
+                Process.Symbols.TryGetSymbolFromAddress((long) (void*) exception.ExceptionRecord.ExceptionAddress, out var unhandledTarget);
 
                 throw new NotImplementedException("Processing unhandled exceptions is not implemented");
             }
         }
 
-        private void ProcessSingleStep(in EXCEPTION_DEBUG_INFO exception)
+        private void UnmanagedSingleStep(in EXCEPTION_DEBUG_INFO exception)
         {
             var tid = Session.CallbackContext.UnmanagedEventThreadId;
 
@@ -663,23 +663,6 @@ namespace ChaosDbg.Cordb
 
             AddUnmanagedPause(new CordbNativeStepEventPauseReason(Session.CallbackContext.UnmanagedOutOfBand, exception));
             RaiseBreakpointHit(new EngineBreakpointHitEventArgs(null)); //temp
-        }
-
-        private void ProcessAppException(in EXCEPTION_DEBUG_INFO exception)
-        {
-            var tid = Session.CallbackContext.UnmanagedEventThreadId;
-
-            Process.CorDebugProcess.ClearCurrentException(tid);
-
-            var outOfBand = Session.CallbackContext.UnmanagedOutOfBand;
-
-            //Add the pause before raising the event
-            AddUnmanagedPause(
-                exception.dwFirstChance
-                    ? new CordbNativeFirstChanceExceptionPauseReason(exception.ExceptionRecord, outOfBand)
-                    : new CordbNativeSecondChanceExceptionPauseReason(exception.ExceptionRecord, outOfBand)
-            );
-            RaiseExceptionHit(new EngineExceptionHitEventArgs(exception));
         }
 
         #endregion

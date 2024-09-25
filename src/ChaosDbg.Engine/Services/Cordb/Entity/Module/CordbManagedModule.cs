@@ -34,7 +34,7 @@ namespace ChaosDbg.Cordb
                         return 0;
 
                     if (modules.Length > 1)
-                        throw new NotImplementedException($"Handling assemblies with {modules.Length} modules is not implemented.");
+                        throw new NotImplementedException($"Handling assemblies with {modules.Length} modules is not implemented."); //Maybe find the best module using ISOSDacInterface.GetModuleData?
 
                     clrAddress = modules[0];
                 }
@@ -61,19 +61,19 @@ namespace ChaosDbg.Cordb
 
         public CordbAssembly? Assembly { get; internal set; }
 
-        private MetaDataProvider? metaDataProvider;
+        private MetadataModule? metadataModule;
 
         /// <summary>
-        /// Gets a <see cref="MetaDataProvider"/> that provides access to the metadata contained in this module.
+        /// Gets a <see cref="ChaosLib.Metadata.MetadataModule"/> that provides access to the metadata contained in this module.
         /// </summary>
-        public MetaDataProvider MetaDataProvider
+        public MetadataModule MetadataModule
         {
             get
             {
-                if (metaDataProvider == null)
-                    metaDataProvider = new MetaDataProvider(CorDebugModule.GetMetaDataInterface<MetaDataImport>());
+                if (metadataModule == null)
+                    metadataModule = Process.Modules.MetadataStore.GetOrAddModule(this);
 
-                return metaDataProvider;
+                return metadataModule;
             }
         }
 

@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.Metadata;
-using ChaosLib;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
@@ -28,10 +29,10 @@ namespace ChaosDbg.Tests
 
                     thread.Verify().StackTrace(
                         "Transition Frame",
-                        "System.Threading.Thread.Sleep",
-                        "TestApp.Program.SignalReady",
-                        "TestApp.CordbEngine_Thread_StackTrace.Managed",
-                        "TestApp.Program.Main",
+                        "mscorlib.dll!System.Threading.Thread.Sleep(int millisecondsTimeout)",
+                        "Managed.x64.exe!TestApp.Program.SignalReady()",
+                        "Managed.x64.exe!TestApp.CordbEngine_Thread_StackTrace.Managed()",
+                        "Managed.x64.exe!TestApp.Program.Main(string[] args)",
                         "Transition Frame"
                     );
                 }
@@ -49,10 +50,10 @@ namespace ChaosDbg.Tests
 
                     thread.Verify().StackTrace(
                         "Transition Frame",
-                        "System.Threading.Thread.Sleep",
-                        "TestApp.Program.SignalReady",
-                        "TestApp.CordbEngine_Thread_StackTrace.Managed",
-                        "TestApp.Program.Main",
+                        "mscorlib.dll!System.Threading.Thread.Sleep(int millisecondsTimeout)",
+                        "Managed.x64.exe!TestApp.Program.SignalReady()",
+                        "Managed.x64.exe!TestApp.CordbEngine_Thread_StackTrace.Managed()",
+                        "Managed.x64.exe!TestApp.Program.Main(string[] args)",
                         "Transition Frame"
                     );
                 }
@@ -70,14 +71,14 @@ namespace ChaosDbg.Tests
 
                     thread.Verify().StackTrace(
                         "Transition Frame",
-                        "System.Threading.Thread.Sleep",
-                        "TestApp.Program.SignalReady",
-                        "TestApp.CordbEngine_Thread_StackTrace+<>c.<Internal>b__1_0",
-                        "[Runtime]",
+                        "mscorlib.dll!System.Threading.Thread.Sleep(int millisecondsTimeout)",
+                        "Managed.x64.exe!TestApp.Program.SignalReady()",
+                        "Managed.x64.exe!TestApp.CordbEngine_Thread_StackTrace+<>c.<Internal>b__1_0(IntPtr a, IntPtr b)",
+                        "DomainBoundILStubClass.IL_STUB_ReversePInvoke(Int64, Int64)",
                         "Transition Frame",
-                        "[Runtime]",
-                        "TestApp.CordbEngine_Thread_StackTrace.Internal",
-                        "TestApp.Program.Main",
+                        "DomainBoundILStubClass.IL_STUB_PInvoke(TestApp.EnumWindowsProc, IntPtr)",
+                        "Managed.x64.exe!TestApp.CordbEngine_Thread_StackTrace.Internal()",
+                        "Managed.x64.exe!TestApp.Program.Main(string[] args)",
                         "Transition Frame"
                     );
                 }
@@ -316,7 +317,7 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Program.Main"));
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name.Contains("TestApp.Program.Main")));
                 }
             );
         }
@@ -330,7 +331,7 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Program.Main"));
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name.Contains("TestApp.Program.Main")));
                 },
                 useInterop: true
             );
@@ -345,9 +346,10 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    //The real main thread will now be a transition frame
-
-                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name == "TestApp.Example.Signal"));
+                    //The real main thread will now be a transition frame. It's not very useful, but that's not our problem;
+                    //the main thread is the main thread
+                    Assert.AreEqual("Transition Frame", mainThread.StackTrace.Single().Name);
+                    Assert.IsTrue(!mainThread.StackTrace.Any(f => f.Name.Contains("TestApp.Example.Signal")));
                 },
                 native: true
             );
@@ -362,7 +364,7 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name is "Native.x86!wmain+C4" or "Native.x64!wmain+D6"));
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name.StartsWith("Native.x86!wmain+") || f.Name.StartsWith("Native.x64!wmain+")));
                 },
                 useInterop: true,
                 native: true
@@ -414,7 +416,7 @@ namespace ChaosDbg.Tests
             );
         }
 
-        private void CompareDbgEngFrames(CordbThread cordbThread, DbgEngEngine dbgEngEngine)
+        private unsafe void CompareDbgEngFrames(CordbThread cordbThread, DbgEngEngine dbgEngEngine)
         {
             dbgEngEngine.Invoke(c => c.SystemObjects.CurrentThreadId = c.SystemObjects.GetThreadIdBySystemId(cordbThread.Id));
 
@@ -453,18 +455,26 @@ namespace ChaosDbg.Tests
                     var cdbName = cdbFrame.ToString();
                     var dbgEngName = deFrame.ToString();
 
-                    var index = dbgEngName.IndexOf('!');
+                    var dbgEngNameStart = dbgEngName.IndexOf('!');
 
-                    if (index != -1)
+                    if (dbgEngNameStart != -1)
                     {
-                        var chars = dbgEngName.ToCharArray();
+                        //DbgHelp seems to trim leading underscores from certain symbol names.
+                        //We display the original symbol name reported by DIA
 
-                        for (var j = 0; j < index; j++)
+                        var cdbNameStart = cdbName.IndexOf('!');
+
+                        var chars = dbgEngName.ToCharArray().ToList();
+
+                        if (cdbNameStart != -1 && cdbName[cdbNameStart + 1] == '_' && dbgEngName[dbgEngNameStart + 1] != '_')
+                            chars.Insert(dbgEngNameStart + 1, '_');
+
+                        for (var j = 0; j < dbgEngNameStart; j++)
                         {
                             if (chars[j] == '_')
                             {
                                 //If the name actually is meant to contain an underscore, e.g. vcruntime140_clr0400.dll,
-                                //this will introduce an issue
+                                //messing with the name will introduce an issue
                                 if (j < cdbName.Length && cdbName[j] == '_')
                                     continue;
 
@@ -472,10 +482,10 @@ namespace ChaosDbg.Tests
                             }
                         }
 
-                        dbgEngName = new string(chars);
+                        dbgEngName = new string(chars.ToArray());
                     }
 
-                    //Because we now read the filename, we'll get KernelBase.dll
+                    //Because we our native module name reader reads the filename instead of the in-memory name (which can contain faulty information. See CordbNativeModule.GetNativeModuleName for details), we'll get KernelBase.dll
                     //while DbgEng will get KERNELBASE.dll
                     Assert.AreEqual(cdbName, dbgEngName, ignoreCase: true);
                 }

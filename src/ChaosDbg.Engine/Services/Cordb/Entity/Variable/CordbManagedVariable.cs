@@ -11,6 +11,8 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public abstract class CordbManagedVariable : CordbVariable
     {
+        public CordbILFrame Frame { get; }
+
         public CorDebugVariableHome CorDebugVariableHome { get; }
 
         public VariableLocationType LocationType { get; }
@@ -42,9 +44,26 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public int Offset { get; }
 
-        protected CordbManagedVariable(CorDebugVariableHome corDebugVariableHome, CordbModule module)
+        private CordbValue value;
+
+        public CordbValue Value
+        {
+            get
+            {
+                if (value == null)
+                    value = GetValue();
+
+                return value;
+            }
+        }
+
+        protected CordbManagedVariable(
+            CorDebugVariableHome corDebugVariableHome,
+            CordbILFrame frame,
+            CordbModule module)
         {
             CorDebugVariableHome = corDebugVariableHome;
+            Frame = frame;
 
             LocationType = corDebugVariableHome.LocationType;
 
@@ -68,6 +87,8 @@ namespace ChaosDbg.Cordb
                     throw new NotImplementedException($"Don't know how to handle {nameof(VariableLocationType)} '{LocationType}'.");
             }
         }
+
+        protected abstract CordbValue GetValue();
 
         public override string ToString()
         {

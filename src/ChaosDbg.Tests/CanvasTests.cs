@@ -18,7 +18,7 @@ namespace ChaosDbg.Tests
 {
     //Unit tests for validating that we can properly detect things which happen on a canvas
 
-    [TestClass]
+    [AppDomainTestClass]
     public class CanvasTests : BaseTest
     {
         [TestMethod]

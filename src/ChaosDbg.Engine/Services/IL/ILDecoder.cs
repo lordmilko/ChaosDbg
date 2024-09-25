@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
+using ChaosLib;
 using ChaosLib.Metadata;
+
+#nullable enable
 
 namespace ChaosDbg.IL
 {
@@ -95,18 +98,15 @@ namespace ChaosDbg.IL
         }
 
         private BinaryReader reader;
-        private MetaDataProvider provider;
+        private MetadataModule? metadataModule;
 
-        public ILDecoder(Stream stream, MetaDataProvider provider)
+        public ILDecoder(Stream stream, MetadataModule? metadataModule)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
-            if (provider == null)
-                throw new ArgumentNullException(nameof(provider));
-
             this.reader = new BinaryReader(stream);
-            this.provider = provider;
+            this.metadataModule = metadataModule;
         }
 
         public ILInstruction Decode()
@@ -161,7 +161,11 @@ namespace ChaosDbg.IL
                 case OperandType.InlineType:
                 {
                     var token = reader.ReadInt32();
-                    return provider.ResolveToken(token);
+
+                    if (metadataModule == null)
+                        return token;
+
+                    return metadataModule.ResolveToken(token);
                 }    
 
                 case OperandType.InlineI:
@@ -206,7 +210,11 @@ namespace ChaosDbg.IL
                 case OperandType.InlineSig:
                 {
                     var token = reader.ReadInt32();
-                    return provider.ResolveToken(token);
+
+                    if (metadataModule == null)
+                        return token;
+
+                    return metadataModule.ResolveToken(token);
                 }
 
                 default:

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ChaosDbg.Symbol;
+using ChaosLib;
 using ChaosLib.Symbols;
 using ClrDebug;
 using ClrDebug.DbgEng;
@@ -65,8 +65,9 @@ namespace ChaosDbg.Cordb
             /// If interop debugging, includes any native frames in the call stack.
             /// </summary>
             /// <param name="accessor">The accessor that is used to interact with the managed thread.</param>
+            /// <param name="nativeStackWalkerKind">Specifies the native stack walking engine that should be used for unwinding frames.</param>
             /// <returns>A list of all frames in the stack trace.</returns>
-            public static CordbFrame[] Enumerate(CordbThread.ManagedAccessor accessor)
+            public static CordbFrame[] Enumerate(CordbThread.ManagedAccessor accessor, NativeStackWalkerKind nativeStackWalkerKind)
             {
                 /* Interacting with threads is an inherently dangerous affair. Threads can decide to end at any time,
                  * even when the managed process is broken into. We can try and query whether or not the thread is currently alive,
@@ -105,13 +106,13 @@ namespace ChaosDbg.Cordb
                         //If we did something naughty like set a breakpoint inside the CLR, we can't show a managed stack trace at this point,
                         //but we _can_ attempt to do a native stack trace instead!
                         if (process.Session.IsInterop)
-                            return Native.Enumerate(accessor.Thread).ToArray();
+                            return Native.Enumerate(accessor.Thread, nativeStackWalkerKind).ToArray();
 
                         return Array.Empty<CordbFrame>();
 
                     case CORDBG_E_CANT_CALL_ON_THIS_THREAD:
                         if (!process.IsV3 && process.Session.IsInterop)
-                            return ResolveNativeFrames(process, accessor, process.DataTarget, process.Symbols);
+                            return ResolveNativeFrames(process, accessor);
 
                         return Array.Empty<CordbFrame>();
 
@@ -171,16 +172,15 @@ namespace ChaosDbg.Cordb
                 }
 
                 if (!process.IsV3 && process.Session.IsInterop)
-                    return ResolveAndMergeNativeFrames(process, accessor, process.DataTarget, process.Symbols, results);
+                    return ResolveAndMergeNativeFrames(process, nativeStackWalkerKind, accessor, results);
 
                 return results.ToArray();
             }
 
             private static CordbFrame[] ResolveAndMergeNativeFrames(
                 CordbProcess process,
+                NativeStackWalkerKind nativeStackWalkerKind,
                 CordbThread.ManagedAccessor accessor,
-                ICLRDataTarget dataTarget,
-                DebuggerSymbolProvider symbolProvider,
                 List<CordbFrame> frames)
             {
                 /* Ostensibly, we'd like to iterate over all of our frames, and any time we see a transition frame,
@@ -194,15 +194,12 @@ namespace ChaosDbg.Cordb
                 if (frames.Count == 0)
                     return Array.Empty<CordbFrame>();
 
-                using var walker = new NativeStackWalker(
-                    dataTarget,
-                    symbolProvider,
-                    process.Session.PauseContext.DynamicFunctionTableCache,
-                    (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
-                );
-
-                //First, let's get all native frames starting from the top of the stack
-                var nativeFrames = walker.Walk(accessor.Handle, frames[0].Context).ToArray();
+                NativeFrame[] nativeFrames = nativeStackWalkerKind switch
+                {
+                    NativeStackWalkerKind.DbgHelp => Native.EnumerateDbgHelp(process, accessor.Handle, frames[0].Context),
+                    NativeStackWalkerKind.DIA     => Native.EnumerateDIA(process, frames[0].Context),
+                    _ => throw new UnknownEnumValueException(nativeStackWalkerKind)
+                };
 
                 //Concat our native and ICorDebug derived frames together. The stack pointer of each frame should increase
                 //as you go from more recent function calls to older function calls. I'm not sure if this solution of merging
@@ -249,13 +246,12 @@ namespace ChaosDbg.Cordb
 
             private static CordbFrame[] ResolveNativeFrames(
                 CordbProcess process,
-                CordbThread.ManagedAccessor accessor,
-                ICLRDataTarget dataTarget,
-                DebuggerSymbolProvider symbolProvider)
+                CordbThread.ManagedAccessor accessor)
             {
                 using var walker = new NativeStackWalker(
-                    dataTarget,
-                    symbolProvider,
+                    process.Handle,
+                    (IMemoryReader) process.DataTarget,
+                    process.Symbols,
                     process.Session.PauseContext.DynamicFunctionTableCache,
                     (addr, inlineFrameContext) => GetModuleSymbol(addr, inlineFrameContext, process)
                 );

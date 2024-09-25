@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using ChaosDbg.Disasm;
-using ChaosLib;
+using System.Diagnostics;
 using ChaosLib.Symbols;
-using ChaosLib.TypedData;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
+using ClrDebug.DIA;
 
 namespace ChaosDbg.Cordb
 {
@@ -119,43 +118,6 @@ namespace ChaosDbg.Cordb
 
                 return results.ToArray();
             }
-        }
-
-        private CordbVariable GetRegisterRelativeVariable(DbgHelpSymbol symbol)
-        {
-            //Based on DbgEng DumpTypeAndReturnInfo, TranslateAddress, MachineInfo::CvRegToMachine
-
-            /* Trying to look at how DbgEng does this, at first it seemed like there was a a separate concept of pulling the register value
-             * from the "frame" when its CV_ALLREG_VFRAME and pulling the register value from the "active thread context" otherwise...but
-             * in the end my final implementation for both was still the same. I think it might be confusing because DbgEng has a separate
-             * concept of the current "scope" which you can mess with using the .frame command. In any case, ToIcedRegister() will convert
-             * CV_ALLREG_VFRAME to the correct register based on the target platform */
-
-            var register = symbol.Register.ToIcedRegister(Thread.Process.MachineType);
-            var registerValue = Context.GetRegisterValue(register);
-
-            //The symbol's address will be an offset from the target register
-            var address = registerValue + symbol.Address;
-
-            return CreateVariableValue(address, symbol, false);
-        }
-
-        private CordbVariable GetRegisterVariable(DbgHelpSymbol symbol)
-        {
-            var register = symbol.Register.ToIcedRegister(Thread.Process.MachineType);
-            var registerValue = Context.GetRegisterValue(register);
-
-            return CreateVariableValue(registerValue, symbol, true);
-        }
-
-        private CordbNativeVariable CreateVariableValue(long addressOrValue, DbgHelpSymbol symbol, bool possibleLiteral)
-        {
-            var value = symbol.GetValue(addressOrValue, possibleLiteral);
-
-            if (symbol.Flags.HasFlag(SymFlag.Parameter))
-                return new CordbNativeParameterVariable(symbol, value);
-
-            return new CordbNativeLocalVariable(symbol, value);
         }
 
         #endregion

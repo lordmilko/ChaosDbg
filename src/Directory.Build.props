@@ -22,6 +22,8 @@
 
     <SingleFile Condition="$(IsRelease)">true</SingleFile>
     <SingleFile Condition="'$(SingleFile)' == ''">false</SingleFile>
+
+    <WarningsAsErrors>RS0030</WarningsAsErrors>
   </PropertyGroup>
 
   <!-- Package Versions -->
@@ -35,11 +37,16 @@
     <DbgShimVersion>8.0.452401</DbgShimVersion>
     <FlaUIVersion>4.0.0</FlaUIVersion>
     <TraceEventVersion>1.0.23</TraceEventVersion>
+    <BannedApiAnalyzersVersion>3.3.4</BannedApiAnalyzersVersion>
 
     <TestSDKVersion>16.9.4</TestSDKVersion>
     <MSTestVersion>2.2.3</MSTestVersion>
     <CoverletVersion>3.0.2</CoverletVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Visible="false" Include="$(Build)BannedSymbols.txt" />
+  </ItemGroup>
 
   <Target Name="RemoveDbgShim" AfterTargets="Build">
     <!-- When targeting .NET Framework, MSBuild will assume we are win7-x86, and will copy the x86 dbgshim.dll

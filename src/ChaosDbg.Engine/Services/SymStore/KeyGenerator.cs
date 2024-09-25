@@ -52,7 +52,7 @@ namespace ChaosDbg.SymStore
         /// <param name="id">id string</param>
         /// <param name="clrSpecialFile">if true, the file is one the clr special files</param>
         /// <returns>key</returns>
-        protected static SymbolStoreKey BuildKey(string path, string id, bool clrSpecialFile = false)
+        public static SymbolStoreKey BuildKey(string path, string id, bool clrSpecialFile = false)
         {
             string file = GetFileName(path).ToLowerInvariant();
             return BuildKey(path, null, id, file, clrSpecialFile);

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Analysis
 {
@@ -26,8 +26,8 @@ namespace ChaosDbg.Analysis
                 length = is32Bit ? 4 : 8;
             else if (metadata.FoundBy.HasFlag(FoundBy.Symbol))
             {
-                if (metadata.Symbol is IHasDiaSymbol m)
-                    length = m.DiaSymbol.Length;
+                if (metadata.Symbol is MicrosoftPdbSymbol m)
+                    length = m.SafeDiaSymbol.Length;
                 else
                     throw new NotImplementedException();
             }

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
@@ -54,7 +54,7 @@ namespace ChaosDbg.Cordb
 
             CordbNativeCodeBreakpoint breakpoint;
 
-            process.Symbols.TrySymFromAddr(address, SymFromAddrOption.All, out var symbol);
+            process.Symbols.TryGetSymbolFromAddress(address, out var symbol);
 
             //Is this breakpoint inside the CLR?
             if (process.Modules.TryGetModuleForAddress(address, out var module) && module is CordbNativeModule { IsCLR: true })

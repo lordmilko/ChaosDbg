@@ -7,7 +7,10 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Evaluator.Masm;
 using ChaosDbg.Evaluator.Masm.Syntax;
 using ChaosDbg.TTD;
-using ChaosLib.Services.TTD;
+using ChaosLib;
+using ChaosLib.Memory;
+using ChaosLib.Symbols;
+using ChaosLib.TTD;
 using ClrDebug.TTD;
 using Iced.Intel;
 
@@ -45,12 +48,12 @@ namespace ChaosDbg.PowerShell.Cmdlets
             }
 
             //Create an isolated deferred symbol manager based on the symbols loaded at the current position
-            using var symbolManager = new TtdSymbolManager(cursor);
+            using var symbolManager = new TtdSymbolManager(GetService<INativeLibraryProvider>(), GetService<ISymSrv>(), cursor);
             symbolManager.Update();
 
             var registerContext = cursor.GetCrossPlatformContext();
 
-            var stream = new TtdCursorMemoryStream(cursor);
+            var stream = new MemoryReaderStream(new TtdCursorMemoryReader(cursor));
             var disassembler = GetService<INativeDisassemblerProvider>().CreateDisassembler(stream, ActiveEngine.ActiveProcess.Is32Bit, new DbgEngDisasmSymbolResolver(ActiveEngine.ActiveClient));
 
             var evaluationContext = new TtdMasmEvaluatorContext(cursor, registerContext);

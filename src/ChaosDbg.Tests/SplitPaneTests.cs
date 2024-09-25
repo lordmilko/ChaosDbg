@@ -8,7 +8,7 @@ using static ChaosDbg.Tests.LayoutFactory;
 
 namespace ChaosDbg.Tests
 {
-    [TestClass]
+    [AppDomainTestClass]
     public class SplitPaneTests : BaseTest
     {
         [TestMethod]

@@ -20,9 +20,9 @@ namespace ChaosDbg
 
         public long Address { get; }
 
-        private MemoryReader memoryReader;
+        private IMemoryReader memoryReader;
 
-        public RemotePeb(CLRDATA_ADDRESS pebAddress, MemoryReader memoryReader)
+        public RemotePeb(CLRDATA_ADDRESS pebAddress, LiveProcessMemoryReader memoryReader)
         {
             if (memoryReader.Is32Bit && IntPtr.Size == 8)
             {
@@ -52,7 +52,7 @@ namespace ChaosDbg
         {
         }
 
-        public RemotePeb(IntPtr hProcess) : this(GetPebAddress(hProcess), new MemoryReader(hProcess))
+        public RemotePeb(IntPtr hProcess) : this(GetPebAddress(hProcess), new LiveProcessMemoryReader(hProcess))
         {
         }
 
@@ -98,9 +98,9 @@ namespace ChaosDbg
 
             public long Address { get; }
 
-            private MemoryReader memoryReader;
+            private IMemoryReader memoryReader;
 
-            public PebLdrData(long address, MemoryReader memoryReader)
+            public PebLdrData(long address, IMemoryReader memoryReader)
             {
                 Address = address;
                 this.memoryReader = memoryReader;
@@ -185,9 +185,9 @@ namespace ChaosDbg
 
             public long Address { get; }
 
-            private MemoryReader memoryReader;
+            private IMemoryReader memoryReader;
 
-            public PebUserProcessParameters(long address, MemoryReader memoryReader)
+            public PebUserProcessParameters(long address, IMemoryReader memoryReader)
             {
                 Address = address;
                 this.memoryReader = memoryReader;

@@ -5,11 +5,10 @@ using System.Linq;
 using ChaosDbg.DAC;
 using ChaosDbg.Disasm;
 using ChaosDbg.Evaluator.Masm;
-using ChaosDbg.Symbol;
 using ChaosLib;
 using ChaosLib.Handle;
 using ChaosLib.Symbols;
-using ChaosLib.TypedData;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
@@ -111,7 +110,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Provides access to the native mscordbi!CordbProcess via typed data.
         /// </summary>
-        internal IDbgRemoteObject TypedProcess { get; }
+        internal ObjectTypedValue TypedProcess { get; }
 #endif
 
         public Process Win32Process { get; }
@@ -152,7 +151,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Provides access to the symbols contained within this process.
         /// </summary>
-        public DebuggerSymbolProvider Symbols { get; }
+        public SymbolProvider Symbols { get; }
 
         /// <summary>
         /// Gets a disassembler capable of disassembling any instruction in this process.
@@ -211,12 +210,13 @@ namespace ChaosDbg.Cordb
             //DbgHelp.Native.SymSetOptions(ClrDebug.DbgEng.SYMOPT.DEFERRED_LOADS); //temp
 
             //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
-            Symbols = new DebuggerSymbolProvider(
-                corDebugProcess.Handle,
-                Session.EngineId,
-                new CordbDebuggerSymbolProviderExtension(this),
-                Session.Services.DbgHelpProvider,
-                Session.Services.MicrosoftPdbSourceFileProvider
+            Symbols = new SymbolProvider(
+                session.Services.NativeLibraryProvider,
+                session.Services.SymSrv,
+                DAC.DataTarget,
+                DAC,
+                enableDebuggerServices: true,
+                engineId: Session.EngineId
             );
 
             using var dbgHelpHolder = new DisposeHolder(Symbols);

@@ -1,4 +1,5 @@
 ﻿using System;
+using ChaosDbg.Disasm;
 using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
@@ -7,6 +8,8 @@ namespace ChaosDbg
 {
     public static class RegisterContextExtensions
     {
+        #region CrossPlatformContext
+
         /// <summary>
         /// Gets the value of a register, converted to a <see langword="long"/> value.<para/>
         /// This method cannot be used to retrieve XMM registers (which are 128-bits wide). To retrieve these values, use <see cref="GetRegisterValue{T}(CrossPlatformContext, Register)"/>.
@@ -67,6 +70,50 @@ namespace ChaosDbg
             throw new NotImplementedException($"Don't know what CPU architecture the register context is (flags: {context.Flags})");
         }
 
+        #endregion
+        #region CROSS_PLATFORM_CONTEXT
+
+        public static long GetRegisterValue(this in CROSS_PLATFORM_CONTEXT context, Register register, IMAGE_FILE_MACHINE machine)
+        {
+            return machine switch
+            {
+                IMAGE_FILE_MACHINE.I386 => context.X86Context.GetRegisterValue(register),
+                IMAGE_FILE_MACHINE.AMD64 => context.Amd64Context.GetRegisterValue(register),
+                _ => throw GetUnknownMachineException(machine)
+            };
+        }
+
+        public static T GetRegisterValue<T>(this in CROSS_PLATFORM_CONTEXT context, Register register, IMAGE_FILE_MACHINE machine)
+        {
+            return machine switch
+            {
+                IMAGE_FILE_MACHINE.I386 => context.X86Context.GetRegisterValue<T>(register),
+                IMAGE_FILE_MACHINE.AMD64 => context.Amd64Context.GetRegisterValue<T>(register),
+                _ => throw GetUnknownMachineException(machine)
+            };
+        }
+
+        public static void SetRegisterValue(this ref CROSS_PLATFORM_CONTEXT context, Register register, IMAGE_FILE_MACHINE machine, long value)
+        {
+            switch (machine)
+            {
+                case IMAGE_FILE_MACHINE.I386:
+                    context.X86Context.SetRegisterValue(register, (int) value);
+                    break;
+
+                case IMAGE_FILE_MACHINE.AMD64:
+                    context.Amd64Context.SetRegisterValue(register, value);
+                    break;
+
+                default:
+                    throw GetUnknownMachineException(machine);
+            }
+        }
+
+        private static Exception GetUnknownMachineException(IMAGE_FILE_MACHINE machine) =>
+            throw new NotImplementedException($"Don't know how to handle a context for machine '{machine}'");
+
+        #endregion
         #region x86
         #region Get
 
@@ -94,7 +141,7 @@ namespace ChaosDbg
             //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
             var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
                 ? register
-                : register.GetFullRegister32();
+                : register.GetFullRegister32Ex();
 
             var result = GetFullRegisterValue(context, fullRegister);
 
@@ -214,7 +261,7 @@ namespace ChaosDbg
             //The full version of the xmm registers is zmm which we don't support. Therefore, take xmm as is
             var fullRegister = register is >= Register.XMM0 and <= Register.XMM15
                 ? register
-                : register.GetFullRegister32();
+                : register.GetFullRegister32Ex();
 
             if (fullRegister != register)
                 throw new NotImplementedException("Setting partial register values is not implemented. Not sure if we need to merge it with the full value or something");

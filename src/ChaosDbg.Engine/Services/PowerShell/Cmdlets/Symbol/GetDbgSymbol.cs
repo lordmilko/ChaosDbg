@@ -13,7 +13,7 @@ namespace ChaosDbg.PowerShell.Cmdlets.Symbol
         {
             var symbols = ((CordbEngine) ActiveEngine).Process.Symbols;
 
-            var results = symbols.NativeSymEnumSymbols(Name);
+            var results = symbols.EnumerateSymbols(Name);
 
             foreach (var result in results)
                 WriteObject(result);

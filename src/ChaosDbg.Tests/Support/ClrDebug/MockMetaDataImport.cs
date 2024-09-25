@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using ClrDebug;
 using static ClrDebug.HRESULT;
 
@@ -89,16 +90,12 @@ namespace ChaosDbg.Tests
             throw new NotImplementedException();
         }
 
-        public HRESULT EnumMembers(ref IntPtr phEnum, mdTypeDef cl, mdToken[] rMembers, int cMax, out int pcTokens)
+        public HRESULT EnumMembers(ref IntPtr phEnum, mdTypeDef cl, mdToken[] rMembers, int cMax, out int pcTokens) => throw new NotImplementedException();
         {
             throw new NotImplementedException();
         }
 
-        public HRESULT EnumMembersWithName(ref IntPtr phEnum, mdTypeDef cl, string szName, mdToken[] rMembers, int cMax,
-            out int pcTokens)
-        {
-            throw new NotImplementedException();
-        }
+        public HRESULT EnumMembersWithName(ref IntPtr phEnum, mdTypeDef cl, string szName, mdToken[] rMembers, int cMax, out int pcTokens) => throw new NotImplementedException();
 
         public HRESULT EnumMethods(ref IntPtr phEnum, mdTypeDef cl, mdMethodDef[] rMethods, int cMax, out int pcTokens)
         {
@@ -405,7 +402,7 @@ namespace ChaosDbg.Tests
 
         public HRESULT GetParamProps(mdParamDef tk, out mdMethodDef pmd, out int pulSequence, char[] szName, int cchName,
             out int pchName, out CorParamAttr pdwAttr, out CorElementType pdwCPlusTypeFlag, out IntPtr ppValue,
-            out IntPtr pcchValue)
+            out int pcchValue)
         {
             throw new NotImplementedException();
         }

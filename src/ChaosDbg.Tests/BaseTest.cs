@@ -6,20 +6,18 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
-using ChaosDbg.IL;
 using ChaosDbg.Logger;
 using ChaosDbg.Metadata;
+using ChaosDbg.Symbols;
 using ChaosLib;
-using ChaosLib.Metadata;
-using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
@@ -33,8 +31,6 @@ namespace ChaosDbg.Tests
 
         [ThreadStatic]
         private IServiceProvider serviceProvider;
-
-        private static Type dbgHelpProviderType = typeof(OutOfProcDbgHelpProvider);
 
         private IServiceProvider ServiceProvider
         {
@@ -68,7 +64,8 @@ namespace ChaosDbg.Tests
                 { typeof(INativeLibraryLoadCallback[]), new[]
                 {
                     typeof(DbgEngNativeLibraryLoadCallback),
-                    typeof(DbgHelpNativeLibraryLoadCallback)
+                    typeof(DbgHelpNativeLibraryLoadCallback),
+                    typeof(MSDiaNativeLibraryLoadCallback)
                 }},
 
                 //Console
@@ -76,16 +73,12 @@ namespace ChaosDbg.Tests
                 //Misc
 
                 typeof(PEMetadataProvider),
-                typeof(ILDisassemblerProvider),
-                typeof(MicrosoftPdbSourceFileProvider),
 
                 typeof(DbgEngRemoteClientProvider),
 
                 { typeof(IUserInterface), typeof(NullUserInterface) },
                 { typeof(IFrameworkTypeDetector), typeof(FrameworkTypeDetector) },
-                { typeof(IPEFileProvider), typeof(MockPEFileProvider) },
-                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) },
-                { typeof(ISigReader), typeof(SigReader) }
+                { typeof(INativeDisassemblerProvider), typeof(NativeDisassemblerProvider) }
             };
 
             configureServices?.Invoke(serviceCollection);
@@ -104,10 +97,7 @@ namespace ChaosDbg.Tests
             GlobalProvider.AllowGlobalProvider = false;
             SerilogLogger.Install();
 
-            NativeReflector.Initialize(
-                new NativeLibraryProvider(),
-                (IDbgHelpProvider) Activator.CreateInstance(dbgHelpProviderType)
-            );
+            NativeReflector.Initialize(ServiceSingletons.NativeReflector);
         }
 
         [AssemblyCleanup]
@@ -115,6 +105,8 @@ namespace ChaosDbg.Tests
         {
             //LdrUnregisterDllNotification cannot be used in managed code; if an exception is thrown the CLR can deadlock trying to call
             //back into managed code
+
+            ServiceSingletons.Dispose();
 
             //Close and flush any loggers
             Log.Shutdown();
@@ -266,8 +258,11 @@ namespace ChaosDbg.Tests
 
             engineProvider.EngineFailure += (s, e) =>
             {
-                ctx.LastFatalException = e.Exception;
-                cts.Cancel();
+                if (e.Exception != null)
+                {
+                    ctx.LastFatalException = e.Exception;
+                    cts.Cancel();
+                }
 
                 ctx.LastFatalStatus = e.Status;
             };
@@ -285,8 +280,6 @@ namespace ChaosDbg.Tests
             using var eventHandle = new EventWaitHandle(false, EventResetMode.ManualReset, EventName);
 
             var win32Process = cordbEngine.Process.Win32Process;
-
-            using var optionsHolder = new DbgHelpOptionsHolder(((INativeStackWalkerFunctionTableProvider) cordbEngine.Process.Symbols).UnsafeGetDbgHelp());
 
             using var mainThread = Kernel32.OpenThread(ThreadAccess.THREAD_ALL_ACCESS, false, Kernel32.GetCurrentThreadId());
             var mainThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -316,7 +309,16 @@ namespace ChaosDbg.Tests
 
                     engineProvider.EngineFailure += (s, e) =>
                     {
-                        Debug.Assert(false, $"A fatal exception occurred within the {nameof(DbgEngEngine)}: {e.Exception}");
+                        if (e.Exception != null)
+                        {
+                            ctx.LastFatalException = e.Exception;
+                            cts.Cancel();
+                        }
+
+                        ctx.LastFatalStatus = e.Status;
+
+                        if (e.Exception is not (AssertFailedException or OperationCanceledException) && e.Exception != null)
+                            Debug.Assert(false, $"A fatal exception occurred within the {nameof(DbgEngEngine)}: {e.Exception}");
                     };
 
                     var output = new List<string>();
@@ -561,7 +563,8 @@ namespace ChaosDbg.Tests
 
                         engineProvider.EngineFailure += (s, e) =>
                         {
-                            Debug.Assert(false, $"A fatal exception occurred within the {nameof(DbgEngEngine)}: {e.Exception}");
+                            if (e.Exception != null && e.Exception is not OperationCanceledException or TaskCanceledException)
+                                Debug.Assert(false, $"A fatal exception occurred within the {nameof(DbgEngEngine)}: {e.Exception}");
                         };
 
                         //Commented out because we're currently attempting to allow running multiple DbgEng tests in parallel to try and improve performance

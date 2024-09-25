@@ -15,9 +15,13 @@ namespace ChaosDbg.Cordb
             //so let's go ahead and notify the user that engine is initialized
             RaiseEngineInitialized();
 
+            var localSession = Session;
+
+            Debug.Assert(localSession != null, "Session was null");
+
             try
             {
-                CreateDebugTarget(options, Session.EngineCancellationToken);
+                CreateDebugTarget(options, localSession.EngineCancellationToken);
             }
             catch (Exception ex)
             {
@@ -26,24 +30,24 @@ namespace ChaosDbg.Cordb
 
                 Log.Error<CordbEngine>(ex, "Failed to create debug target: {message}", ex.Message);
 
-                Session.TargetCreated.SetException(ex);
+                localSession.TargetCreated.SetException(ex);
 
                 //The UI thread is waiting for TargetCreated to be set. Cancel our CTS and shutdown the thread
 
                 StopAndTerminate();
 
-                Session.Dispose();
+                localSession.Dispose();
 
                 throw;
             }
 
             try
             {
-                Session.TargetCreated.SetResult();
+                localSession.TargetCreated.SetResult();
 
-                while (!Session.IsEngineCancellationRequested) //temp
+                while (!localSession.IsEngineCancellationRequested) //temp
                 {
-                    Session.EngineThread.Dispatcher.DrainQueue();
+                    localSession.EngineThread.Dispatcher.DrainQueue();
 
                     Thread.Sleep(100); //temp
                 }
@@ -64,9 +68,12 @@ namespace ChaosDbg.Cordb
         {
             //If we haven't already detached from the target process, terminate it now
             var localProcess = Process;
+            var localSession = Session;
 
             if (localProcess != null)
             {
+                Debug.Assert(localSession != null, "Session was null");
+
                 //This will hang if the target process is zombified
                 //We currently make the assumption that the debugger thread inside of the target won't be interrupted
                 var hr = localProcess.CorDebugProcess.TryStop(0);
@@ -77,7 +84,7 @@ namespace ChaosDbg.Cordb
                         break;
 
                     case HRESULT.CORDBG_E_PROCESS_TERMINATED:
-                        Session.IsTerminated = true;
+                        localSession.IsTerminated = true;
                         break;
 
                     default:
@@ -94,11 +101,15 @@ namespace ChaosDbg.Cordb
 
         private void CreateDebugTarget(LaunchTargetOptions options, CancellationToken token)
         {
+            var localSession = Session;
+
+            Debug.Assert(localSession != null, "Session was null");
+
             if (options.IsAttach)
             {
                 Log.Information<CordbEngine>("Attaching to target process {targetPID} (interop: {interop})", options.ProcessId, options.UseInterop);
 
-                Session.IsAttaching = true;
+                localSession.IsAttaching = true;
 
                 CordbLauncher.Attach(options, this, token);
             }
@@ -113,7 +124,7 @@ namespace ChaosDbg.Cordb
 
                 options.FrameworkKind ??= services.FrameworkTypeDetector.Detect(options.CommandLine);
 
-                Session.DidCreateProcess = true;
+                localSession.DidCreateProcess = true;
 
                 CordbLauncher.Create(options, this, token);
             }

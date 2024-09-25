@@ -166,7 +166,7 @@ namespace ChaosDbg.DbgEng
             return Invoke(engine =>
             {
                 //g_DefaultStackTraceDepth is 256 (0x100) in modern versions of DbgEng
-                var frames = engine.Control.GetStackTrace(0, 0, 0, 256);
+                var frames = engine.Control.GetStackTraceEx(0, 0, 0, 256); //Use GetStackTraceEx provides inline frame support
 
                 var results = new List<DbgEngFrame>();
 
@@ -174,12 +174,25 @@ namespace ChaosDbg.DbgEng
                 {
                     string name = null;
 
-                    if (engine.Symbols.TryGetNameByOffset(frame.InstructionOffset, out var symbol) == HRESULT.S_OK)
+                    if (frame.InlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
                     {
-                        name = symbol.NameBuffer;
+                        if (engine.Symbols.TryGetNameByInlineContext(frame.InstructionOffset, frame.InlineFrameContext.ContextValue, out var symbol) == HRESULT.S_OK)
+                        {
+                            name = symbol.NameBuffer;
 
-                        if (symbol.Displacement > 0)
-                            name = $"{name}+{symbol.Displacement:X}";
+                            if (symbol.Displacement > 0)
+                                name = $"{name}+{symbol.Displacement:X}";
+                        }
+                    }
+                    else
+                    {
+                        if (engine.Symbols.TryGetNameByOffset(frame.InstructionOffset, out var symbol) == HRESULT.S_OK)
+                        {
+                            name = symbol.NameBuffer;
+
+                            if (symbol.Displacement > 0)
+                                name = $"{name}+{symbol.Displacement:X}";
+                        }
                     }
 
                     results.Add(new DbgEngFrame(name, frame));

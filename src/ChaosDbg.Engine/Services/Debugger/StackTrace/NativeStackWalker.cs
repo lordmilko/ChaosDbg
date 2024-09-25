@@ -128,9 +128,9 @@ namespace ChaosDbg
                             frame.AddrFrame.Offset,
                             frame.AddrStack.Offset,
                             frame.AddrReturn.Offset,
-                            ctx.Amd64Context.Rip,
-                            ctx.Amd64Context.Rsp,
-                            ctx.Amd64Context.Rbp
+                            ctx.GetIP(machineType),
+                            ctx.GetSP(machineType),
+                            ctx.GetBP(machineType)
                         );
 
                         var dbgHelp = functionTables.UnsafeGetDbgHelp();
@@ -140,9 +140,8 @@ namespace ChaosDbg
                             hThread,
                             (IntPtr) pFrame,
                             (IntPtr) pCtx,
-                            null,
                             FunctionTableAccess,
-                            GetModuleBase,
+                            getModuleBaseRoutine,
                             null,
                             SYM_STKWALK.DEFAULT
                         );
@@ -153,9 +152,9 @@ namespace ChaosDbg
                             frame.AddrFrame.Offset,
                             frame.AddrStack.Offset,
                             frame.AddrReturn.Offset,
-                            ctx.Amd64Context.Rip,
-                            ctx.Amd64Context.Rsp,
-                            ctx.Amd64Context.Rbp
+                            ctx.GetIP(machineType),
+                            ctx.GetSP(machineType),
+                            ctx.GetBP(machineType)
                         );
 
                         return walkResult;
@@ -190,7 +189,7 @@ namespace ChaosDbg
             }
         }
 
-        private unsafe IntPtr FunctionTableAccess(IntPtr hProcess, long addrBase)
+        private unsafe IntPtr FunctionTableAccess(IntPtr dbgHelpId, long addrBase)
         {
             /* DbgEng employs the following logic in SwFunctionTableAccess():
              * - if the target is i386, it tries to resolve the function table via SymFunctionTableAccess()

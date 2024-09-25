@@ -4,7 +4,7 @@ using Iced.Intel;
 
 namespace ChaosDbg.Tests
 {
-    class TestEvaluatorContext : IEvaluatorContext
+    class TestEvaluatorContext : IMasmEvaluatorContext
     {
         public long GetRegisterValue(Register register)
         {

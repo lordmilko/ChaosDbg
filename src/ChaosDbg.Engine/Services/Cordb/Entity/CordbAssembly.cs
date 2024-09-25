@@ -1,9 +1,14 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Reflection;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb
 {
+    /// <summary>
+    /// Represents a managed assembly that is backed by a <see cref="CorDebugAssembly"/>.
+    /// </summary>
     public class CordbAssembly
     {
         #region ClrAddress
@@ -56,6 +61,36 @@ namespace ChaosDbg.Cordb
         public CorDebugAssembly CorDebugAssembly { get; }
 
         public CordbProcess Process { get; }
+
+        private AssemblyName assemblyName;
+
+        public AssemblyName AssemblyName
+        {
+            get
+            {
+                if (assemblyName == null)
+                {
+                    var mdai = Module.CorDebugModule.GetMetaDataInterface<MetaDataAssemblyImport>();
+
+                    assemblyName = ModuleMetadataStore.GetAssemblyName(mdai, Module.Name);
+                }
+
+                return assemblyName;
+            }
+        }
+
+        private MetadataAssembly metadataAssembly;
+
+        public MetadataAssembly MetadataAssembly
+        {
+            get
+            {
+                if (metadataAssembly == null)
+                    metadataAssembly = (MetadataAssembly) Module.MetadataModule.Assembly;
+
+                return metadataAssembly;
+            }
+        }
 
         public CordbAssembly(CorDebugAssembly corDebugAssembly, CordbProcess process)
         {

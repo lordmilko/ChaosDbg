@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 using ChaosLib;
 
 namespace ChaosDbg.Debugger

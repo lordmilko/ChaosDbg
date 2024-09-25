@@ -1,9 +1,7 @@
 ﻿using ChaosDbg.Disasm;
-using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols.MicrosoftPdb;
+using ChaosLib.Symbols;
 
 namespace ChaosDbg.Cordb
 {
@@ -14,36 +12,25 @@ namespace ChaosDbg.Cordb
     {
         public IFrameworkTypeDetector FrameworkTypeDetector { get; }
 
-        public NativeLibraryProvider NativeLibraryProvider { get; }
+        public INativeLibraryProvider NativeLibraryProvider { get; }
 
         public INativeDisassemblerProvider NativeDisasmProvider { get; }
 
-        public ILDisassemblerProvider ILDisasmProvider { get; }
-
-        public IPEFileProvider PEFileProvider { get; }
-
-        public IDbgHelpProvider DbgHelpProvider { get; }
-
-        public MicrosoftPdbSourceFileProvider MicrosoftPdbSourceFileProvider { get; }
+        public ISymSrv SymSrv { get; }
 
         public IUserInterface UserInterface { get; }
 
         public CordbEngineServices(
             IFrameworkTypeDetector frameworkTypeDetector,
-            NativeLibraryProvider nativeLibraryProvider,
+            INativeLibraryProvider nativeLibraryProvider,
             INativeDisassemblerProvider nativeDisasmProvider,
-            ILDisassemblerProvider ilDisasmProvider,
-            IPEFileProvider peFileProvider,
-            IDbgHelpProvider dbgHelpProvider,
-            MicrosoftPdbSourceFileProvider microsoftPdbSourceFileProvider, IUserInterface userInterface)
+            ISymSrv symSrv,
+            IUserInterface userInterface)
         {
             FrameworkTypeDetector = frameworkTypeDetector;
             NativeLibraryProvider = nativeLibraryProvider;
             NativeDisasmProvider = nativeDisasmProvider;
-            ILDisasmProvider = ilDisasmProvider;
-            PEFileProvider = peFileProvider;
-            DbgHelpProvider = dbgHelpProvider;
-            MicrosoftPdbSourceFileProvider = microsoftPdbSourceFileProvider;
+            SymSrv = symSrv;
             UserInterface = userInterface;
         }
     }

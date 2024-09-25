@@ -1,11 +1,11 @@
 ﻿using ChaosLib.Symbols;
-using ChaosLib.TypedData;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {
     public class CordbNativeParameterVariable : CordbNativeVariable
     {
-        public CordbNativeParameterVariable(IUnmanagedSymbol symbol, IDbgRemoteValue value) : base(symbol, value)
+        public CordbNativeParameterVariable(IUnmanagedSymbol symbol, ITypedValueSource valueSource) : base(symbol, valueSource)
         {
         }
     }

@@ -11,13 +11,14 @@ namespace ChaosDbg
         public IMemoryTextSegment[] Segments { get; }
 
         private PEFile pe;
-        private long BaseAddress => pe.OptionalHeader.ImageBase;
+        private long BaseAddress { get; }
         private int currentSegmentIndex = 0;
         private IMemoryTextSegment currentSegment => Segments[currentSegmentIndex];
 
-        public CodeNavigator(PEFile pe, INativeDisassembler nativeDisassembler)
+        public CodeNavigator(long baseAddress, PEFile pe, INativeDisassembler nativeDisassembler)
         {
             this.pe = pe;
+            BaseAddress = baseAddress;
 
             var headerStart = 0;
             var headerEnd = pe.OptionalHeader.BaseOfCode - 1;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using ChaosDbg.DbgEng.Server;
@@ -13,6 +14,11 @@ namespace ChaosDbg.DbgEng
     /// </summary>
     public class DbgEngSessionInfo : IDbgSessionInfo, IDisposable
     {
+#if DEBUG
+        //Sanity check that only a single session is active at once
+        private static int activeSessions;
+#endif
+
         public DbgEngProcess ActiveProcess
         {
             get => Processes.ActiveProcess;
@@ -255,6 +261,11 @@ namespace ChaosDbg.DbgEng
 
             this.services = services;
 
+#if DEBUG
+            var localNumActiveSessions = Interlocked.Increment(ref activeSessions);
+            Debug.Assert(localNumActiveSessions == 1);
+#endif
+
             Log.Debug<DebugClient>("Created UI DebugClient {hashCode}", uiClient.GetHashCode());
 
             EngineThread = new DispatcherThread(
@@ -361,7 +372,21 @@ namespace ChaosDbg.DbgEng
                 }
             }
 
+            var localNumActiveSessions = Interlocked.CompareExchange(ref activeSessions, 0, 0); //equivalent to Interlocked.Read()
+            Debug.Assert(localNumActiveSessions == 1);
+
+            /* If the engine is in the middle of dispatching an event inside WaitForEvent, it's already "awake", however DbgEng may have increased the refcount
+             * on the DebugClient (via dbgeng!ClientListCapture::Fill). Now that we know that the engine is awake, we now need to wait for WaitForEvent to return,
+             * restoring the refcount back to normal. A more insidious issue that can occur is, if multiple engines are running at the same time, and the other engine
+             * tries to dispatch an APC to us, and our engine thread was already dead, the APC will never be delivered, causing the other engine to hang in
+             * dbgeng!SendEvent waiting on g_EventStatusReady, and causing _us_ to explode when we try and dispose our DebugClient below, because the refcount will have
+             * been increased by dbgeng!SendEvent calling dbgeng!CaptureClientList */
             EngineThread.Dispose();
+
+#if DEBUG
+            localNumActiveSessions = Interlocked.CompareExchange(ref activeSessions, 0, 0); //equivalent to Interlocked.Read()
+            Debug.Assert(localNumActiveSessions == 1);
+#endif
 
             /* We need to remove our DebugClient instances from g_Clients. If we don't, if we create another
              * DebugClient in the future, many functions including NotifyChangeEngineState() will attempt to
@@ -381,8 +406,18 @@ namespace ChaosDbg.DbgEng
                 uiClientCache.Clear();
             }
 
+#if DEBUG
+            localNumActiveSessions = Interlocked.CompareExchange(ref activeSessions, 0, 0); //equivalent to Interlocked.Read()
+            Debug.Assert(localNumActiveSessions == 1);
+#endif
+
             engineClient?.Dispose();
             bufferClient?.Dispose();
+
+#if DEBUG
+            localNumActiveSessions = Interlocked.CompareExchange(ref activeSessions, 0, 0); //equivalent to Interlocked.Read()
+            Debug.Assert(localNumActiveSessions == 1);
+#endif
 
             engineClient = null;
             bufferClient = null;
@@ -390,6 +425,11 @@ namespace ChaosDbg.DbgEng
 
             Processes = null;
             externalProcessStore = null;
+
+#if DEBUG
+            localNumActiveSessions = Interlocked.Decrement(ref activeSessions);
+            Debug.Assert(localNumActiveSessions == 0);
+#endif
         }
     }
 }

@@ -8,7 +8,7 @@ namespace ChaosDbg.TTD
     /// <summary>
     /// Provides facilities for evaluating <see cref="MasmEvaluator"/> expression values in the context of a TTD <see cref="Cursor"/>.
     /// </summary>
-    class TtdMasmEvaluatorContext : IEvaluatorContext
+    class TtdMasmEvaluatorContext : IMasmEvaluatorContext
     {
         private Cursor cursor;
         private CrossPlatformContext context;

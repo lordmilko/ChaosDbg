@@ -40,6 +40,12 @@ namespace ChaosDbg.PowerShell.Cmdlets
             }
         }
 
+        protected sealed override void BeginProcessing()
+        {
+            if (!Log.HasContext(Thread.CurrentThread))
+                Log.CopyContextFrom((ILogEventEnricher) null);
+        }
+
         protected override void StopProcessing()
         {
             TokenSource.Cancel();

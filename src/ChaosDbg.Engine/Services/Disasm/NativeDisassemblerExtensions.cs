@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
+using ChaosLib;
 using ChaosLib.Memory;
 using Iced.Intel;
 
@@ -71,7 +72,7 @@ namespace ChaosDbg.Disasm
             CordbProcess process,
             ISymbolResolver symbolResolver = null)
         {
-            var stream = new CordbMemoryStream(process.DataTarget);
+            var stream = new MemoryReaderStream((IMemoryReader) process.DataTarget);
 
             return nativeDisassemblerProvider.CreateDisassembler(stream, process.Is32Bit, symbolResolver);
         }

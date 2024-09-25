@@ -73,6 +73,7 @@ namespace ChaosDbg.Tests
             });
             Log.CopyContextTo(thread);
             thread.Name = "AppRunnerThread";
+            thread.IsBackground = true;
             thread.SetApartmentState(ApartmentState.STA);
 
             thread.Start();
@@ -91,18 +92,26 @@ namespace ChaosDbg.Tests
         {
             Exception outerEx = null;
 
-            app.Dispatcher.Invoke(() =>
+            try
             {
-                try
+                app.Dispatcher.Invoke(() =>
                 {
-                    Log.Debug<AppRunner>("Executing action on dispatcher thread");
-                    action(app);
-                }
-                catch (Exception ex)
-                {
-                    outerEx = ex;
-                }
-            }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
+                    try
+                    {
+                        Log.Debug<AppRunner>("Executing action on dispatcher thread");
+                        action(app);
+                    }
+                    catch (Exception ex)
+                    {
+                        outerEx = ex;
+                    }
+                }, DispatcherPriority.Send, default, TimeSpan.FromSeconds(10));
+            }
+            catch (TimeoutException)
+            {
+                Debug.Assert(false, "Timed out while attempting to invoke dispatcher");
+                throw;
+            }
 
             if (outerEx != null)
                 ExceptionDispatchInfo.Capture(outerEx).Throw();

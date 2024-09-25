@@ -7,7 +7,7 @@ using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 using ChaosLib.Symbols.MicrosoftPdb;
 
 namespace chaos
@@ -118,7 +118,7 @@ namespace chaos
         {
             var ip = engine.Process.Threads.ActiveThread.RegisterContext.IP;
 
-            engine.Process.Symbols.TrySymFromAddr(ip, SymFromAddrOption.Safe, out var symbol);
+            engine.Process.Symbols.TryGetSymbolFromAddress(ip, out var symbol);
 
             Console.WriteLine($"{symbol?.ToString() ?? ip.ToString("X")}:");
 

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
@@ -11,15 +12,26 @@ namespace ChaosDbg.DbgEng
         {
             get
             {
-                if (Name != null)
-                    return Name;
+                var builder = new StringBuilder();
 
-                //There is no BP field on DEBUG_STACK_FRAME
-                return string.Join(", ", new[]
+                if (frame.InlineFrameContext.FrameType.HasFlag(STACK_FRAME_TYPE.STACK_FRAME_TYPE_INLINE))
+                    builder.Append("[Inline] ");
+
+                var name = Name;
+
+                if (name != null)
+                    builder.Append(name);
+                else
                 {
-                    $"IP = 0x{IP:X}",
-                    $"SP = 0x{SP:X}"
-                });
+                    //There is no BP field on DEBUG_STACK_FRAME
+                    builder.Append(string.Join(", ", new[]
+                    {
+                        $"IP = 0x{IP:X}",
+                        $"SP = 0x{SP:X}"
+                    }));
+                }
+
+                return builder.ToString();
             }
         }
 
@@ -29,9 +41,9 @@ namespace ChaosDbg.DbgEng
 
         public long SP { get; }
 
-        private DEBUG_STACK_FRAME frame;
+        private DEBUG_STACK_FRAME_EX frame;
 
-        public DbgEngFrame(string name, DEBUG_STACK_FRAME frame)
+        public DbgEngFrame(string name, in DEBUG_STACK_FRAME_EX frame)
         {
             Name = name;
             IP = frame.InstructionOffset;

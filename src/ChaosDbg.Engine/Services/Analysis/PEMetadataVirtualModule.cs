@@ -40,10 +40,14 @@ namespace ChaosDbg.Analysis
 #if DEBUG
         override
 #endif
+#pragma warning disable RS0030 //We're after a physical address
         long GetPhysicalAddress(long virtualAddress) => (virtualAddress - Address) + PhysicalPEFile.OptionalHeader.ImageBase;
+#pragma warning restore RS0030
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public long GetVirtualAddress(long physicalAddress) => (physicalAddress - (long) PhysicalPEFile.OptionalHeader.ImageBase) + Address;
+#pragma warning disable RS0030 //We're working with a physical address
+        public long GetVirtualAddress(long physicalAddress) => (physicalAddress - PhysicalPEFile.OptionalHeader.ImageBase) + Address;
+#pragma warning restore RS0030
 
         public override bool ContainsAddress(long address) =>
             ContainsVirtualAddress(address);

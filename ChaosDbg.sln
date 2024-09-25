@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg", "src\ChaosDbg\ChaosDbg.csproj", "{BB1BEE98-15F8-40D8-B8F3-13D02DF61856}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Engine", "src\ChaosDbg.Engine\ChaosDbg.Engine.csproj", "{14EB146E-9F40-44F5-9C85-5F9A4E7E13ED}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F04FE7A7-10FA-4812-BD0C-CB1288477ED4} = {F04FE7A7-10FA-4812-BD0C-CB1288477ED4}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChaosDbg.Tests", "src\ChaosDbg.Tests\ChaosDbg.Tests.csproj", "{4B2014D7-04BF-4103-881B-64F0B2347397}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -27,6 +30,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{285EA220-1484-4F14-B9B3-EECD1A26D7BC}"
 	ProjectSection(SolutionItems) = preProject
+		build\BannedSymbols.txt = build\BannedSymbols.txt
 		build\ChaosLib.props = build\ChaosLib.props
 		build\ClrDebug.props = build\ClrDebug.props
 		build\SingleFile.targets = build\SingleFile.targets

@@ -1,28 +1,23 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
 using ClrDebug.DbgEng;
 
 namespace ChaosDbg.DbgEng
 {
     public class DbgEngEngineServices
     {
-        public NativeLibraryProvider NativeLibraryProvider { get; }
-
-        public IPEFileProvider PEFileProvider { get; }
+        public INativeLibraryProvider NativeLibraryProvider { get; }
 
         internal DbgEngNativeLibraryLoadCallback DbgEngNativeLibraryLoadCallback { get; }
 
         public IUserInterface UserInterface { get; }
 
         internal DbgEngEngineServices(
-            NativeLibraryProvider nativeLibraryProvider,
-            IPEFileProvider peFileProvider,
+            INativeLibraryProvider nativeLibraryProvider,
             DbgEngNativeLibraryLoadCallback dbgEngNativeLibraryLoadCallback, IUserInterface userInterface)
         {
             NativeLibraryProvider = nativeLibraryProvider;
-            PEFileProvider = peFileProvider;
             DbgEngNativeLibraryLoadCallback = dbgEngNativeLibraryLoadCallback;
             UserInterface = userInterface;
         }

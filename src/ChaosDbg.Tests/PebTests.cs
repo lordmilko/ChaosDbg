@@ -1,5 +1,7 @@
 ﻿using System;
 using ChaosLib;
+using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ChaosLib.TypedData;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
@@ -29,39 +31,27 @@ namespace ChaosDbg.Tests
                 is32Bit,
                 process =>
                 {
-                    //Ensure we're not using the system32 version
-                    GetService<NativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
-                    var dbgHelpProvider = GetService<IDbgHelpProvider>();
-
-                    using var dbgHelp = dbgHelpProvider.Acquire(process.Handle, invadeProcess: true);
-
-                    var reader = new MemoryReader(process.Handle);
+                    var reader = new LiveProcessMemoryReader(process.Handle);
                     var remotePeb = new RemotePeb(process);
 
-                    var typedDataProvider = new DbgHelpTypedDataProvider(dbgHelp, null);
+                    var symbolProvider = new SymbolProvider(GetService<INativeLibraryProvider>(), GetService<ISymSrv>(), reader);
+                    symbolProvider.DiscoverModules(process.Handle);
+
+                    var typedValueAccessor = new LiveProcessTypedDataAccessor(process.Handle, symbolProvider);
 
                     //Ensure we use Peb32 for the purposes of this test, which RemotePeb will resolve
-                    var typedPeb = typedDataProvider.CreateObject(remotePeb.Address, "ntdll!_PEB");
+                    var typedPeb = symbolProvider.CreateObjectTypedValue(remotePeb.Address, "ntdll!_PEB", typedValueAccessor);
 
-                    var typedLdr = (IDbgRemoteValue) typedPeb["Ldr"].Value;
+                    var typedLdr = (PointerTypedValue) typedPeb["Ldr"];
                     var remoteLdr = remotePeb.Ldr;
 
-                    IDbgRemoteObject[] GetModuleNames(string listName, string linkName)
-                    {
-                        var head = (DbgRemoteListEntryHead) typedLdr[listName];
-
-                        var list = head.ToList("ntdll!_LDR_DATA_TABLE_ENTRY", linkName);
-
-                        return list.ToArray();
-                    }
-
-                    var typedInLoadOrder = GetModuleNames("InLoadOrderModuleList", "InLoadOrderLinks");
+                    var typedInLoadOrder = typedLdr["InLoadOrderModuleList"].AsType("ntdll!_LDR_DATA_TABLE_ENTRY")["InLoadOrderLinks"].ToArray();
                     var remoteInLoadOrder = remoteLdr.InLoadOrderModuleList;
 
-                    var typedInMemoryOrder = GetModuleNames("InMemoryOrderModuleList", "InMemoryOrderLinks");
+                    var typedInMemoryOrder = typedLdr["InMemoryOrderModuleList"].AsType("ntdll!_LDR_DATA_TABLE_ENTRY")["InMemoryOrderLinks"].ToArray();
                     var remoteInMemoryOrder = remoteLdr.InMemoryOrderModuleList;
 
-                    var typedInInitializationOrder = GetModuleNames("InInitializationOrderModuleList", "InInitializationOrderLinks");
+                    var typedInInitializationOrder = typedLdr["InInitializationOrderModuleList"].AsType("ntdll!_LDR_DATA_TABLE_ENTRY")["InInitializationOrderLinks"].ToArray();
                     var remoteInInitializationOrder = remoteLdr.InInitializationOrderModuleList;
 
                     var sets = new[]
@@ -83,8 +73,8 @@ namespace ChaosDbg.Tests
                             var typedItem = typedItems[i];
                             var remoteItem = remoteItems[i];
 
-                            Assert.AreEqual(typedItem["FullDllName"].ToString().Trim('\"'), remoteItem.FullDllName);
-                            Assert.AreEqual(typedItem["BaseDllName"].ToString().Trim('\"'), remoteItem.BaseDllName);
+                            Assert.AreEqual(typedItem["FullDllName"]["Buffer"].GetPrimativeValue(), remoteItem.FullDllName);
+                            Assert.AreEqual(typedItem["BaseDllName"]["Buffer"].GetPrimativeValue(), remoteItem.BaseDllName);
                         }
                     }
                 }

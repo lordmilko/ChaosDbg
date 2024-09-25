@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using ChaosDbg.Disasm;
+using ChaosLib.Metadata;
 using ClrDebug;
 
 #nullable enable
@@ -31,15 +33,26 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (Name != null)
-                    return Name;
+                var builder = new StringBuilder();
 
-                return string.Join(", ", new[]
+                if (this is CordbNativeFrame f && f.IsInline)
+                    builder.Append("[Inline] ");
+
+                var name = Name;
+
+                if (name != null)
+                    builder.Append(name);
+                else
                 {
-                    $"IP = 0x{Context.IP:X}",
-                    $"SP = 0x{Context.SP:X}",
-                    $"BP = 0x{Context.BP:X}"
-                });
+                    builder.Append(string.Join(", ", new[]
+                    {
+                        $"IP = 0x{Context.IP:X}",
+                        $"SP = 0x{Context.SP:X}",
+                        $"BP = 0x{Context.BP:X}"
+                    }));
+                }
+
+                return builder.ToString();
             }
         }
 
@@ -63,7 +76,11 @@ namespace ChaosDbg.Cordb
             get
             {
                 if (name == null && CorDebugFrame != null && Module != null && !(this is CordbRuntimeNativeFrame))
-                    name = ((CordbManagedModule) Module).MetaDataProvider.ResolveMethodDef(CorDebugFrame.FunctionToken).ToString();
+                {
+                    var metadataMethod = (IMetadataMethodBase) ((CordbManagedModule) Module).MetadataModule.ResolveMethod(CorDebugFrame.FunctionToken);
+
+                    name = metadataMethod.ToString();
+                }
 
                 return name;
             }
@@ -85,6 +102,8 @@ namespace ChaosDbg.Cordb
         /// Gets the module associated with this frame, or null if a module could not be found or the module is in dynamically generated code.
         /// </summary>
         public CordbModule? Module { get; }
+
+        public virtual long FrameIP => Context.IP;
 
         //When doing a native stack walk, we can have different values for BP on the frame vs the context. For managed frames,
         //CorDebugFrame doesn't provide this information, so we'll just go with what's in the context

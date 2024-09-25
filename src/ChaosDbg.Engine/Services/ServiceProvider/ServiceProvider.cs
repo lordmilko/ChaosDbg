@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -71,9 +72,26 @@ namespace ChaosDbg.Engine
             services[serviceType] = new ServiceDescriptor(serviceType, implementation.GetType(), implementation: implementation);
         }
 
-        public object GetService(Type serviceType) => GetServiceInternal(serviceType, new Stack<ServiceDescriptor>());
+        [ThreadStatic]
+        private static Stack<ServiceDescriptor> resolutionScope;
 
-        private object GetServiceInternal(Type serviceType, Stack<ServiceDescriptor> resolutionScope, bool optional = false)
+        public object GetService(Type serviceType)
+        {
+            Debug.Assert(resolutionScope == null);
+
+            resolutionScope = new Stack<ServiceDescriptor>();
+
+            try
+            {
+                return GetServiceInternal(serviceType);
+            }
+            finally
+            {
+                resolutionScope = null;
+            }
+        }
+
+        private object GetServiceInternal(Type serviceType, bool optional = false)
         {
             if (!services.TryGetValue(serviceType, out var descriptor))
             {
@@ -113,7 +131,7 @@ namespace ChaosDbg.Engine
                 else
                 {
                     if (descriptor.Value == null)
-                        descriptor.Value = ResolveService(descriptor.ImplementationType, resolutionScope);
+                        descriptor.Value = ResolveService(descriptor.ImplementationType);
                 }
 
                 resolutionOrder.Add(descriptor.Value);
@@ -154,14 +172,14 @@ namespace ChaosDbg.Engine
 
         internal object ResolveArrayService(Type type)
         {
-            var service = ResolveService(type, new Stack<ServiceDescriptor>());
+            var service = ResolveService(type);
 
             resolutionOrder.Add(service);
 
             return service;
         }
 
-        private object ResolveService(Type type, Stack<ServiceDescriptor> resolutionScope)
+        private object ResolveService(Type type)
         {
             try
             {
@@ -182,7 +200,7 @@ namespace ChaosDbg.Engine
 
                 var ctor = ctors.Single();
 
-                var parameters = ctor.GetParameters().Select(p => GetServiceInternal(p.ParameterType, resolutionScope, p.HasDefaultValue)).ToArray();
+                var parameters = ctor.GetParameters().Select(p => GetServiceInternal(p.ParameterType, p.HasDefaultValue)).ToArray();
 
                 return ctor.Invoke(parameters);
             }

@@ -50,16 +50,21 @@ namespace ChaosDbg.SymStore
             }
         }
 
-        public string GetStoreFile(SymbolStoreKey key)
+        public string GetStoreFile(SymbolStoreKey key, CancellationToken cancellationToken)
         {
-            StoreChain.GetFile(key, CancellationToken.None).GetAwaiter().GetResult();
-
-            var result = GetCachedFile(key.Index);
-
-            if (result == null)
+            if (!TryGetStoreFile(key, cancellationToken, out var result))
                 throw new InvalidOperationException($"Couldn't find a symbol for key '{key}'");
 
             return result;
+        }
+
+        public bool TryGetStoreFile(SymbolStoreKey key, CancellationToken cancellationToken, out string result)
+        {
+            StoreChain.GetFile(key, cancellationToken).GetAwaiter().GetResult();
+
+            result = GetCachedFile(key.Index);
+
+            return result != null;
         }
 
         public Task<string> GetPdbAsync(string modulePath, bool pdbOnly, CancellationToken token) =>

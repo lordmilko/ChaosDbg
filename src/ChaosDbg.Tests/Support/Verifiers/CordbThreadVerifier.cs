@@ -32,9 +32,10 @@ namespace ChaosDbg.Tests
 
             for (var i = 0; i < expected.Length; i++)
             {
-                var actualItem = actual[i] is CordbRuntimeNativeFrame ? "[Runtime]" : actual[i].ToString();
+                var expectedItem = expected[i];
+                var actualItem = actual[i].ToString();
 
-                Assert.AreEqual(expected[i], actualItem);
+                Assert.AreEqual(expectedItem, actualItem);
             }
         }
 

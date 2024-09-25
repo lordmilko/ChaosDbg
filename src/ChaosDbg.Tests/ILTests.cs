@@ -48,7 +48,7 @@ namespace ChaosDbg.Tests
 
                             if (pe.TryReadCorILMethod(props.pulCodeRVA, ref peReader, out var result))
                             {
-                                var dis = ilProvider.CreateDisassembler(result.ILBytes, metadataProvider);
+                                var dis = ilProvider.CreateDisassembler(result.ILBytes, module);
 
                                 var instrs = dis.EnumerateInstructions().ToArray();
                             }

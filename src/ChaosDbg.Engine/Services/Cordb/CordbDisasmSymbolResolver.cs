@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 using ChaosLib.Symbols;
 using ClrDebug;
 using Iced.Intel;
@@ -88,7 +88,7 @@ namespace ChaosDbg.Cordb
                  * address as well, it results in such a big spew of symbols (that may have a '+' sign in them themselves) that it's quite hard to see that this symbol being
                  * listed ISN'T actually the target of the call, but just the base of a very large displacement. */
 
-                if (process.Symbols.TrySymFromAddr((long) address, SymFromAddrOption.Fallback | SymFromAddrOption.CLR, out var displacedSymbol))
+                if (process.Symbols.TryGetSymbolFromAddress((long) address, SymFromAddrOption.ModuleAddressed | SymFromAddrOption.CLR, out var displacedSymbol))
                 {
                     symbol = MakeSymbol(displacedSymbol);
                     return true;
@@ -154,7 +154,7 @@ namespace ChaosDbg.Cordb
                 if (isValidAddress)
                     options |= SymFromAddrOption.DangerousManaged;
 
-                if (process.Symbols.TrySymFromAddr((long) targetAddress, options, out var displacedSymbol))
+                if (process.Symbols.TryGetSymbolFromAddress((long) targetAddress, options, out var displacedSymbol))
                 {
                     symbol = MakeSymbol(displacedSymbol);
                     return true;
@@ -169,7 +169,7 @@ namespace ChaosDbg.Cordb
 
                 //Try and resolve native symbols last. When an address does lie inside a module, we'll obviously get a fallback symbol, but we want to prefer
                 //retrieving thunk information first if it is available
-                if (process.Symbols.TrySymFromAddr((long) targetAddress, SymFromAddrOption.Fallback, out displacedSymbol))
+                if (process.Symbols.TryGetSymbolFromAddress((long) targetAddress, SymFromAddrOption.ModuleAddressed, out displacedSymbol))
                 {
                     symbol = MakeSymbol(displacedSymbol);
                     return true;
@@ -268,7 +268,7 @@ namespace ChaosDbg.Cordb
 
             ulong displacement = 0;
 
-            if (process.Symbols.TrySymFromAddr((long) address, SymFromAddrOption.Managed | SymFromAddrOption.Native, out var symbol))
+            if (process.Symbols.TryGetSymbolFromAddress((long) address, SymFromAddrOption.Managed | SymFromAddrOption.Native, out var symbol))
             {
                 targetAddress = address;
                 result = MakeSymbol(targetAddress, displacement, $"Thunk -> {symbol.Symbol}");

@@ -160,8 +160,7 @@ namespace ChaosDbg.SymStore
         public static SymbolStoreKey GetPDBKey(string path, Guid signature, int age)
         {
             Debug.Assert(path != null);
-            Debug.Assert(signature != null);
-            return BuildKey(path, string.Format("{0}{1:x}", signature.ToString("N"), age));
+            return BuildKey(path, $"{signature:N}{age:x}");
         }
 
         /// <summary>
@@ -181,7 +180,7 @@ namespace ChaosDbg.SymStore
             bool clrSpecialFile = s_coreClrSpecialFiles.Contains(fileName) ||
                                   (s_longNameBinaryPrefixes.Any((prefix) => fileName.StartsWith(prefix)) && Path.GetExtension(fileName) == ".dll");
 
-            string id = string.Format("{0:X8}{1:x}", timestamp, sizeOfImage);
+            string id = $"{timestamp:X8}{sizeOfImage:x}";
             return BuildKey(path, id, clrSpecialFile);
         }
     }

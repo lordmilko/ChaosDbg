@@ -59,7 +59,7 @@ namespace ChaosDbg.Tests
             throw new NotImplementedException();
         }
 
-        public ISymbol GetSymbolFromName(string name)
+        public ISymbol GetSymbolFromName(string name, SymbolKind kind)
         {
             throw new NotImplementedException();
         }

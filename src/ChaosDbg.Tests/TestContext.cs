@@ -8,9 +8,9 @@ using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Disasm;
-using ChaosDbg.Symbol;
 using ChaosLib;
 using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug.DbgEng;
 using ClrDebug.DIA;
 using Iced.Intel;
@@ -108,7 +108,14 @@ namespace ChaosDbg.Tests
 
             for (var i = 0; i < maxInstrsToSearch; i++)
             {
-                StepOver();
+                try
+                {
+                    StepOver();
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new TimeoutException($"Timed out waiting for breakpoint to be hit. The following functions were encountered during stepping:{Environment.NewLine}{string.Join(Environment.NewLine, found)}", ex);
+                }
 
                 var disasm = Process.ProcessDisassembler.Disassemble(ActiveThread.RegisterContext.IP);
 
@@ -116,13 +123,29 @@ namespace ChaosDbg.Tests
 
                 if (disasm.Instruction.Mnemonic == Mnemonic.Call)
                 {
-                    if (disasm.TryGetOperand(out var operand) && Process.Symbols.TrySymFromAddr(operand, SymFromAddrOption.Native, out var result))
+                    if (disasm.TryGetOperand(out var operand) && Process.Symbols.TryGetSymbolFromAddress(operand, SymFromAddrOption.Native, out var result))
                     {
                         //DIA does not do a very good job of showing name/undecorated name properly
-                        var name = ((IHasDiaSymbol) result.Symbol).DiaSymbol.GetUndecoratedNameEx(UNDNAME.UNDNAME_NAME_ONLY);
+                        var name = ((MicrosoftPdbSymbol) result.Symbol).SafeDiaSymbol.GetUndecoratedNameEx(UNDNAME.UNDNAME_NAME_ONLY);
 
                         if (name == expr)
                             return;
+
+                        if (name.StartsWith("@ILT+"))
+                        {
+                            //In debug builds, assemblies can be compiled using incremental linking, wherein the existing EXE/DLL file is updated, rather than creating a whole new one.
+                            //Function calls within the assembly are then all listed indirectly, via a symbol called @ILT+offset(<target>), which specified the address of a thunk
+                            //that will then jump to the real function. Demanglers do not know how to deal with this situation, as it's not part of the normal demangling rules. As such,
+                            //we must strip this off ourselves and try and demangle the inner value
+                            var start = name.IndexOf('(') + 1;
+
+                            name = name.Substring(start, name.Length - start - 1);
+
+                            name = SymbolProvider.GetUndecoratedName(name, UNDNAME.UNDNAME_NAME_ONLY);
+
+                            if (name == expr)
+                                return;
+                        }
 
                         found.Add(name);
                     }

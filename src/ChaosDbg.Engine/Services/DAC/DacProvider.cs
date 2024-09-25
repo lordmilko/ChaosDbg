@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using ChaosDbg.Cordb;
 using ChaosLib;
+using ChaosLib.Symbols;
 using ClrDebug;
 using static ClrDebug.Extensions;
 
@@ -13,7 +14,7 @@ namespace ChaosDbg.DAC
     /// <summary>
     /// Encapsulates facilities used for communicating with the DAC.
     /// </summary>
-    public class DacProvider
+    public class DacProvider : ISOSProvider
     {
         private object objLock = new object();
 
@@ -122,6 +123,20 @@ namespace ChaosDbg.DAC
         }
 
         #endregion
+        
+        bool ISOSProvider.TryGetSOS(out SOSDacInterface sos, out ProcessModule clrWin32Module)
+        {
+            if (!cdbProcess.Session.IsCLRLoaded)
+            {
+                sos = null;
+                clrWin32Module = null;
+                return false;
+            }
+
+            sos = SOS;
+            clrWin32Module = CLR;
+            return true;
+        }
 
         public void Dispose()
         {

@@ -4,9 +4,9 @@ namespace ChaosDbg.Evaluator.Masm
 {
     public class MasmEvaluator
     {
-        private IEvaluatorContext context;
+        private IMasmEvaluatorContext context;
 
-        public MasmEvaluator(IEvaluatorContext context)
+        public MasmEvaluator(IMasmEvaluatorContext context)
         {
             this.context = context;
         }

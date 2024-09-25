@@ -40,7 +40,18 @@ namespace ChaosDbg.Cordb
 
         public CorDebugFunction CorDebugFunction { get; }
 
-        public MdiMethodDef MetaData { get; }
+        private IMetadataMethodBase metadataMethod;
+
+        private IMetadataMethodBase MetadataMethod
+        {
+            get
+            {
+                if (metadataMethod == null)
+                    metadataMethod = (IMetadataMethodBase) Module.MetadataModule.ResolveMethod(CorDebugFunction.Token);
+
+                return metadataMethod;
+            }
+        }
 
         public CordbManagedModule Module { get; }
 
@@ -92,10 +103,7 @@ namespace ChaosDbg.Cordb
             {
                 if (il == null)
                 {
-                    var process = Module.Process;
-                    var ilDisasmProvider = process.Session.Services.ILDisasmProvider;
-
-                    var ilDisassembler = ilDisasmProvider.CreateDisassembler(CorDebugFunction, Module);
+                    var ilDisassembler = ILDisassembler.Create(CorDebugFunction, Module);
 
                     il = ilDisassembler.EnumerateInstructions().ToArray();
                 }
@@ -364,9 +372,8 @@ namespace ChaosDbg.Cordb
         {
             CorDebugFunction = corDebugFunction;
             Module = module;
-            MetaData = module.MetaDataProvider.ResolveMethodDef(CorDebugFunction.Token);
         }
 
-        public override string ToString() => MetaData.ToString();
+        public override string ToString() => MetadataMethod.ToString();
     }
 }

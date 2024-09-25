@@ -10,6 +10,7 @@ using ChaosLib;
 using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -28,7 +29,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "RtlRaiseStatus", "LdrpReportError"),
+                new ModuleMocker("RtlRaiseStatus", "LdrpReportError"),
                 m =>
                 {
                     var function = GetRegion(m, "RtlRaiseStatus");
@@ -76,7 +77,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "DbgUiRemoteBreakin"),
+                new ModuleMocker("DbgUiRemoteBreakin"),
                 m =>
                 {
                     var function = GetRegion(m, "DbgUiRemoteBreakin");
@@ -151,7 +152,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "KiUserApcDispatcher"),
+                new ModuleMocker("KiUserApcDispatcher"),
                 m =>
                 {
                     //Verify we have the jmp after the call to RtlRaiseStatus
@@ -174,7 +175,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "KiUserExceptionDispatcher"),
+                new ModuleMocker("KiUserExceptionDispatcher"),
                 m =>
                 {
                     //Verify we have the jmp after the call to RtlRaiseStatus
@@ -199,7 +200,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "strcpy", "strcat", "___entry_from_strcat_in_strcpy"),
+                new ModuleMocker("strcpy", "strcat", "___entry_from_strcat_in_strcpy"),
                 m =>
                 {
                     var regions = GetFunctionsWithSymbols(m);
@@ -272,7 +273,7 @@ namespace ChaosDbg.Tests
                     Assert.AreEqual("RtlpWakeSRWLock", groups[0].Key.Symbol.Name);
                     Assert.AreEqual("RtlReleaseSRWLockExclusive", groups[1].Key.Symbol.Name);
                     Assert.AreEqual("TppPoolpFree", groups[2].Key.Symbol.Name);
-                    Assert.AreEqual("_C_specific_handler", groups[3].Key.Symbol.Name);
+                    Assert.AreEqual("__C_specific_handler", groups[3].Key.Symbol.Name);
                     Assert.IsTrue(groups[2].Any(v => v.Metadata?.Symbol?.Name == "TppPoolpFree$fin$0"));
                 }
             );
@@ -309,7 +310,7 @@ namespace ChaosDbg.Tests
                     Assert.AreEqual(3, groups.Length);
                     Assert.AreEqual("RtlpWakeSRWLock", groups[0].Key.Symbol.Name);
                     Assert.AreEqual("TppPoolpFree", groups[1].Key.Symbol.Name);
-                    Assert.AreEqual("_C_specific_handler", groups[2].Key.Symbol.Name);
+                    Assert.AreEqual("__C_specific_handler", groups[2].Key.Symbol.Name);
                 }
             );
         }
@@ -359,7 +360,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "RtlpAllocateHeap", "RtlpHpLfhSlotAllocate"),
+                new ModuleMocker("RtlpAllocateHeap", "RtlpHpLfhSlotAllocate"),
                 m =>
                 {
                     //RtlpHpLfhSlotAllocate has a chunk that ends with an int 29, immediately followed by a chunk that belongs to RtlpAllocateHeap.
@@ -504,7 +505,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "RtlpInterlockedPopEntrySList", "ExpInterlockedPopEntrySListResume", "ExpInterlockedPopEntrySListFault", "ExpInterlockedPopEntrySListEnd"),
+                new ModuleMocker("RtlpInterlockedPopEntrySList", "ExpInterlockedPopEntrySListResume", "ExpInterlockedPopEntrySListFault", "ExpInterlockedPopEntrySListEnd"),
                 m =>
                 {
                     var regions = GetFunctionsWithSymbols(m).GroupBy(v => v.Function.PrimaryMetadata).ToArray();
@@ -628,7 +629,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols | PEMetadataSearchOptions.Exports,
-                (s, _) => new MockSymbolModule(s, "RtlNtdllName"),
+                new ModuleMocker("RtlNtdllName"),
                 m =>
                 {
                     var rtlNtdllName = GetData(m, "RtlNtdllName");
@@ -643,7 +644,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols | PEMetadataSearchOptions.Exports,
-                (s, _) => new MockSymbolModule(s), //Only need exports
+                new ModuleMocker(), //Only need exports
                 m =>
                 {
                     /* This test catches the following tricky scenario:
@@ -686,7 +687,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "RtlpCSparseBitmapUnlock", "RtlReleaseSRWLockShared", "RtlReleaseSRWLockExclusive", "RtlpWakeSRWLock"),
+                new ModuleMocker("RtlpCSparseBitmapUnlock", "RtlReleaseSRWLockShared", "RtlReleaseSRWLockExclusive", "RtlpWakeSRWLock"),
                 m =>
                 {
                     var regions = GetFunctionsWithSymbols(m).DistinctBy(v => v.Metadata).ToArray();
@@ -744,7 +745,7 @@ namespace ChaosDbg.Tests
                     var handler = GetRegion(m, "LdrUnloadAlternateResourceModuleEx$fin$0");
                     Assert.AreEqual(regions[2].Function, handler.Function);
 
-                    Assert.AreEqual("_C_specific_handler", regions[3].Metadata.Symbol.Name);
+                    Assert.AreEqual("__C_specific_handler", regions[3].Metadata.Symbol.Name);
                 }
             );
         }
@@ -761,7 +762,7 @@ namespace ChaosDbg.Tests
                     Assert.AreEqual(3, regions.Length);
 
                     Assert.AreEqual("LdrpProtectedCopyMemory", regions[0].Metadata.Symbol.Name);
-                    Assert.AreEqual("_C_specific_handler", regions[1].Metadata.Symbol.Name);
+                    Assert.AreEqual("__C_specific_handler", regions[1].Metadata.Symbol.Name);
                     Assert.AreEqual("LdrpProtectedCopyMemory$filt$0", regions[2].Metadata.Symbol.Name);
                 }
             );
@@ -810,7 +811,7 @@ namespace ChaosDbg.Tests
                     Assert.AreEqual(0x1800785AF, regions[1].PhysicalStartAddress);
                     Assert.AreEqual(7, regions[1].Instructions.Length);
 
-                    Assert.AreEqual("_GSHandlerCheck_SEH", regions[2].Metadata.Symbol.Name);
+                    Assert.AreEqual("__GSHandlerCheck_SEH", regions[2].Metadata.Symbol.Name);
                     Assert.AreEqual(0x18009EE2C, regions[2].PhysicalStartAddress);
                     Assert.AreEqual(40, regions[2].Instructions.Length);
 
@@ -843,7 +844,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols | PEMetadataSearchOptions.Config,
-                (s, _) => new MockSymbolModule(s, "RtlpUnwindEpilogue"),
+                new ModuleMocker("RtlpUnwindEpilogue"),
                 m =>
                 {
                     var function = GetRegion(m, "RtlpUnwindEpilogue").Function;
@@ -861,7 +862,7 @@ namespace ChaosDbg.Tests
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols,
-                (s, _) => new MockSymbolModule(s, "LdrpReadMemory", "__guard_dispatch_icall_fptr", "__guard_xfg_check_icall_fptr", "__guard_xfg_dispatch_icall_fptr", "__guard_xfg_table_dispatch_icall_fptr", "__castguard_check_failure_os_handled_fptr"),
+                new ModuleMocker("LdrpReadMemory", "__guard_dispatch_icall_fptr", "__guard_xfg_check_icall_fptr", "__guard_xfg_dispatch_icall_fptr", "__guard_xfg_table_dispatch_icall_fptr", "__castguard_check_failure_os_handled_fptr"),
                 m =>
                 {
                     var regions = GetFunctionRegions(m, "LdrpReadMemory");
@@ -869,7 +870,7 @@ namespace ChaosDbg.Tests
 
                     var call = (XRefAwareNativeInstruction) regions[0].Instructions.Single(i => i.Instruction.Mnemonic == Mnemonic.Call);
                     var target = (DataMetadataRange) ((NativeCallXRefInfo) call.RefsFromThis.Single()).Target;
-                    Assert.AreEqual("_guard_xfg_dispatch_icall_fptr", target.Metadata.Symbol.Name);
+                    Assert.AreEqual("__guard_xfg_dispatch_icall_fptr", target.Metadata.Symbol.Name);
                 }
             );
         }
@@ -923,7 +924,7 @@ namespace ChaosDbg.Tests
         private unsafe void TestMatchAllFunctions(
             SymbolStoreKey moduleKey,
             PEMetadataSearchOptions options,
-            Func<IUnmanagedSymbolModule, INativeDisassembler, IUnmanagedSymbolModule> mockSymbolModule,
+            ModuleMocker moduleMocker,
             Action<PEMetadataPhysicalModule> validate,
             bool liveNtdll = false)
         {
@@ -935,7 +936,7 @@ namespace ChaosDbg.Tests
 
             var hProcess = process.Handle;
 
-            IDbgHelp dbgHelp;
+            var symbolProvider = new SymbolProvider(GetService<INativeLibraryProvider>());
 
             string path;
             Stream stream;
@@ -960,45 +961,41 @@ namespace ChaosDbg.Tests
                 path = WellKnownTestModule.GetStoreFile(moduleKey);
                 Log.Debug<PEModuleMetadataTests>("Attempting to load symbols for file {path}", path);
                 var pe = PEFile.FromPath(path);
-                dbgHelp.SymLoadModuleEx(imageName: path, baseOfDll: pe.OptionalHeader.ImageBase, dllSize: pe.OptionalHeader.SizeOfImage);
+
+#pragma warning disable RS0030 //Physical PEFile
+                Debug.Assert(!pe.IsLoadedImage);
+                var baseAddress = pe.OptionalHeader.ImageBase;
+#pragma warning restore RS0030
+
+                diaSymbolModule = symbolProvider.LoadModule<MicrosoftPdbSymbolModule>(path);
+
                 var fileStream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var peFile = new PEFile(fileStream, false);
-                stream = new AbsoluteToRelativeStream(fileStream, peFile.OptionalHeader.ImageBase);
-
-                holder.SuppressDispose();
+                stream = new AbsoluteToRelativeStream(fileStream, baseAddress);
             }
-
-            using var dbgHelpHolder = new DisposeHolder(dbgHelp);
 
             try
             {
-                DbgHelpSymbolModule dbgHelpModule = null;
-
-                dbgHelp.SymEnumerateModules64((moduleName, baseOfDll, _) =>
-                {
-                    var size = dbgHelp.SymGetModuleInfo64(baseOfDll).ImageSize;
-                    dbgHelpModule = new DbgHelpSymbolModule(dbgHelp, moduleName, baseOfDll, size);
-                    return false;
-                });
-
-                Assert.IsNotNull(dbgHelpModule);
+                Assert.IsNotNull(diaSymbolModule);
 
                 var metadataProvider = GetService<PEMetadataProvider>();
 
                 var is32Bit = IntPtr.Size == 4;
-                var symbolResolver = new DbgHelpDisasmSymbolResolver(dbgHelp);
+                var symbolResolver = new SymbolProviderDisasmSymbolResolver(symbolProvider);
 
                 IUnmanagedSymbolModule symbolModule;
 
-                if (mockSymbolModule == null)
-                    symbolModule = dbgHelpModule;
+                Action<PEFile> peFileTestHook = null;
+
+                if (moduleMocker == null)
+                    symbolModule = diaSymbolModule;
                 else
                 {
                     var nativeDisassemblerProvider = GetService<INativeDisassemblerProvider>();
 
                     var disassembler = nativeDisassemblerProvider.CreateDisassembler(stream, is32Bit, symbolResolver);
 
-                    symbolModule = mockSymbolModule(dbgHelpModule, disassembler);
+                    symbolModule = moduleMocker.CreateMockSymbolModule(diaSymbolModule, disassembler);
+                    peFileTestHook = moduleMocker.GetPEFileTestHook();
                 }
 
                 PEMetadataPhysicalModule metadataModule;
@@ -1007,11 +1004,12 @@ namespace ChaosDbg.Tests
                 {
                     metadataModule = metadataProvider.GetVirtualMetadata(
                         hProcess,
-                        (IntPtr) dbgHelpModule.Address,
+                        (IntPtr) diaSymbolModule.Address,
                         symbolModule,
                         (RemoteMemoryStream) stream,
                         symbolResolver,
-                        options
+                        options,
+                        peFileTestHook
                     );
                 }
                 else
@@ -1020,7 +1018,8 @@ namespace ChaosDbg.Tests
                         path,
                         symbolModule,
                         symbolResolver,
-                        options
+                        options,
+                        peFileTestHook
                     );
                 }
 
@@ -1034,28 +1033,21 @@ namespace ChaosDbg.Tests
 
         private void TestSymbolsAndExports(string[] allowedSymbols, Action<PEMetadataPhysicalModule> validate)
         {
-            var mockPEProvider = (MockPEFileProvider) GetService<IPEFileProvider>();
+            var moduleMocker = new ModuleMocker(allowedSymbols, (peFile, mockSymbolModule, disassembler) =>
+            {
+                if (peFile.ExceptionDirectory == null)
+                    return;
+
+                var symbols = mockSymbolModule.EnumerateSymbols().ToArray();
+
+                if (peFile.ExportDirectory != null)
+                    ReflectionExtensions.SetPropertyValue(peFile.ExportDirectory, nameof(ImageExportDirectoryInfo.Exports), peFile.ExportDirectory.Exports.Where(e => symbols.Any(sym => sym.Name == e.Name)).ToArray());
+            });
 
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols | PEMetadataSearchOptions.Exports,
-                (s, d) =>
-                {
-                    var mockSymbolModule = new MockSymbolModule(s, allowedSymbols);
-
-                    mockPEProvider.ConfigureMock = v =>
-                    {
-                        if (v.ExceptionDirectory == null)
-                            return;
-
-                        var symbols = mockSymbolModule.EnumerateSymbols().ToArray();
-
-                        if (v.ExportDirectory != null)
-                            ReflectionExtensions.SetPropertyValue(v.ExportDirectory, nameof(ImageExportDirectoryInfo.Exports), v.ExportDirectory.Exports.Where(e => symbols.Any(sym => sym.Name == e.Name)).ToArray());
-                    };
-
-                    return mockSymbolModule;
-                },
+                moduleMocker,
                 validate
             );
         }
@@ -1065,59 +1057,52 @@ namespace ChaosDbg.Tests
             Action<PEMetadataPhysicalModule> validate,
             bool liveNtdll = false)
         {
-            var mockPEProvider = (MockPEFileProvider) GetService<IPEFileProvider>();
+            var moduleMocker = new ModuleMocker(allowedSymbols, (peFile, mockSymbolModule, disassembler) =>
+            {
+                if (peFile.ExceptionDirectory == null)
+                    return;
+
+                //RtlEnclaveCallDispatchReturn is a Data symbol that exists in the exports but its DiaSymbol doesn't have an address
+                var symbols = mockSymbolModule.EnumerateSymbols().Where(s => s.Address != 0).ToArray();
+
+                //Our Either doesn't throw on accessing the wrong value
+                var functions = symbols.Select(sym => disassembler.DisassembleCodeRegions(sym.Address)).Where(r => r.IsSuccess).ToArray();
+
+                var allowed = peFile.ExceptionDirectory.Where(e => functions.Any(f =>
+                {
+                    if (f.Contains(e.BeginAddress + mockSymbolModule.Address))
+                        return true;
+
+                    mockPEProvider.ConfigureMock = v =>
+                    {
+                        foreach (var record in table)
+                        {
+                            if (f.Contains(record.BeginAddress + mockSymbolModule.Address))
+                                return true;
+
+                            if (f.Contains(record.EndAddress + mockSymbolModule.Address))
+                                return true;
+
+                            if (record.HandlerAddress > 1 && f.Contains(record.HandlerAddress + mockSymbolModule.Address))
+                                return true;
+
+                            if (record.JumpTarget != 0 && f.Contains(record.JumpTarget + mockSymbolModule.Address))
+                                return true;
+                        }
+                    }
+
+                    return false;
+                })).ToArray();
+
+                //For each symbol we want to consider, disassemble the function to get all its chunks, and then get all unwind items that exist within those chunks
+                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExceptionDirectory), allowed);
+                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExportDirectory), null);
+            });
 
             TestMatchAllFunctions(
                 WellKnownTestModule.Ntdll,
                 PEMetadataSearchOptions.Symbols | PEMetadataSearchOptions.UnwindData,
-                (s, d) =>
-                {
-                    var mockSymbolModule = new MockSymbolModule(s, allowedSymbols);
-
-                    mockPEProvider.ConfigureMock = v =>
-                    {
-                        if (v.ExceptionDirectory == null)
-                            return;
-
-                        var symbols = mockSymbolModule.EnumerateSymbols().ToArray();
-
-                        //Our Either doesn't throw on accessing the wrong value
-                        var functions = symbols.Select(sym => d.DisassembleCodeRegions(sym.Address)).Where(r => r.IsSuccess).ToArray();
-
-                        var allowed = v.ExceptionDirectory.Where(e => functions.Any(f =>
-                        {
-                            if (f.Contains(e.BeginAddress + mockSymbolModule.Address))
-                                return true;
-
-                            //todo: why is exceptiondata a bunch of cc's sometimes?
-                            if (e.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is ImageScopeTable table)
-                            {
-                                foreach (var record in table)
-                                {
-                                    if (f.Contains(record.BeginAddress + mockSymbolModule.Address))
-                                        return true;
-
-                                    if (f.Contains(record.EndAddress + mockSymbolModule.Address))
-                                        return true;
-
-                                    if (record.HandlerAddress > 1 && f.Contains(record.HandlerAddress + mockSymbolModule.Address))
-                                        return true;
-
-                                    if (record.JumpTarget != 0 && f.Contains(record.JumpTarget + mockSymbolModule.Address))
-                                        return true;
-                                }
-                            }
-
-                            return false;
-                        })).ToArray();
-
-                        //For each symbol we want to consider, disassemble the function to get all its chunks, and then get all unwind items that exist within those chunks
-                        ReflectionExtensions.SetPropertyValue(v, nameof(PEFile.ExceptionDirectory), allowed);
-                        ReflectionExtensions.SetPropertyValue(v, nameof(PEFile.ExportDirectory), null);
-                    };
-
-                    return mockSymbolModule;
-                },
+                moduleMocker,
                 validate,
                 liveNtdll
             );
@@ -1131,6 +1116,40 @@ namespace ChaosDbg.Tests
 
             foreach (var target in jumpTableTargets)
                 Assert.AreEqual(mainRegion.Function.PrimaryMetadata, target.Function.PrimaryMetadata);
+        }
+
+        class ModuleMocker
+        {
+            private string[] allowedSymbols;
+            private Action<PEFile, MockSymbolModule, INativeDisassembler> configurePEFile;
+            private INativeDisassembler nativeDisassembler;
+            private MockSymbolModule mockSymbolModule;
+
+            public ModuleMocker(string[] allowedSymbols, Action<PEFile, MockSymbolModule, INativeDisassembler> configurePeFile)
+            {
+                this.allowedSymbols = allowedSymbols;
+                configurePEFile = configurePeFile;
+            }
+
+            public ModuleMocker(params string[] allowedSymbols)
+            {
+                this.allowedSymbols = allowedSymbols;
+            }
+
+            public MockSymbolModule CreateMockSymbolModule(IUnmanagedSymbolModule symbolModule, INativeDisassembler nativeDisassembler)
+            {
+                this.nativeDisassembler = nativeDisassembler;
+                mockSymbolModule = new MockSymbolModule(symbolModule, allowedSymbols);
+                return mockSymbolModule;
+            }
+
+            public Action<PEFile> GetPEFileTestHook()
+            {
+                if (configurePEFile == null)
+                    return null;
+
+                return peFile => configurePEFile(peFile, mockSymbolModule, nativeDisassembler);
+            }
         }
     }
 }

@@ -38,6 +38,7 @@ namespace chaos
                     typeof(CordbClient),
                     typeof(CommandBuilder),
                     { typeof(ITerminal), typeof(ConsoleTerminal) },
+                    { typeof(IUserInterface), typeof(NullUserInterface) },
 
                     //Console
                     typeof(ConsoleDisasmWriter),

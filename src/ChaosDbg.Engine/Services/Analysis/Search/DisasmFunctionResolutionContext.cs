@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using Iced.Intel;
 
 namespace ChaosDbg.Analysis
@@ -269,14 +269,14 @@ namespace ChaosDbg.Analysis
                 if (noReturnFunctions.Contains(existing.Symbol.Name))
                     return false;
 
-                if (existing.Symbol is IHasDiaSymbol m)
+                if (existing.Symbol is MicrosoftPdbSymbol m)
                 {
-                    if (noReturnFunctions.Contains(m.DiaSymbol.UndecoratedName))
+                    if (noReturnFunctions.Contains(m.SafeDiaSymbol.UndecoratedName))
                         return false;
 
                     //If we have symbol information indicating the function never returns. No need to disassemble it to check
                     //this manually
-                    if (m.DiaSymbol.NoReturn)
+                    if (m.SafeDiaSymbol.NoReturn)
                         return false;
                 }
                 else

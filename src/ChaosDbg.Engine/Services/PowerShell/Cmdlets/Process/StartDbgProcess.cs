@@ -3,11 +3,9 @@ using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Host;
 using ChaosDbg.Cordb;
-using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
 using ChaosDbg.PowerShell.Host;
-using ChaosDbg.Symbol;
 using ChaosLib;
 using ChaosLib.Symbols.MicrosoftPdb;
 
@@ -118,7 +116,7 @@ namespace ChaosDbg.PowerShell.Cmdlets.Process
         {
             var ip = engine.Process.Threads.ActiveThread.RegisterContext.IP;
 
-            engine.Process.Symbols.TrySymFromAddr(ip, SymFromAddrOption.Safe, out var symbol);
+            engine.Process.Symbols.TryGetSymbolFromAddress(ip, out var symbol);
 
             Host.UI.WriteLine($"{symbol?.ToString() ?? ip.ToString("X")}:");
 

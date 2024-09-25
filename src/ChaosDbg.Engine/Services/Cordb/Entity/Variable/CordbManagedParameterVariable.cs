@@ -9,9 +9,11 @@ namespace ChaosDbg.Cordb
     {
         public int Index { get; }
 
-        public CordbManagedParameterVariable(CorDebugVariableHome corDebugVariableHome, CordbModule module) : base(corDebugVariableHome, module)
+        public CordbManagedParameterVariable(CorDebugVariableHome corDebugVariableHome, CordbILFrame frame, CordbModule module) : base(corDebugVariableHome, frame, module)
         {
             Index = corDebugVariableHome.ArgumentIndex;
         }
+
+        protected override CordbValue GetValue() => CordbValue.New(Frame.CorDebugFrame.GetArgument(Index), Frame.Thread);
     }
 }

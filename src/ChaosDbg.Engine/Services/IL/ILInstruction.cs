@@ -18,6 +18,8 @@ namespace ChaosDbg.IL
 
         public object Operand { get; internal set; }
 
+        public OpCodeKind Kind => (OpCodeKind) (OpCode.Value & 0xffff);
+
         public ILInstruction(int offset, int length, OpCode opcode, object operand)
         {
             Offset = offset;

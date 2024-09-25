@@ -1,3 +1,4 @@
+﻿using System;
 ﻿using System.Collections.Generic;
 using System.IO;
 using Iced.Intel;
@@ -101,6 +102,9 @@ namespace ChaosDbg.Disasm
         /// <inheritdoc />
         public IEnumerable<INativeInstruction> EnumerateInstructions(long address)
         {
+            if (address == 0)
+                throw new ArgumentException("Address should not be 0", nameof(address));
+
             //Seek to the desired address
             disasmStream.Position = address;
 

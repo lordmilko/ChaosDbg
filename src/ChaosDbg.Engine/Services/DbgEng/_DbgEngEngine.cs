@@ -181,10 +181,14 @@ namespace ChaosDbg.DbgEng
             if (disposed)
                 return;
 
-            engineProvider.Remove(this);
-
             Session?.Dispose();
             Session = null;
+
+            //This MUST be the last thing that occurs. Until the session is disposed, the engine is still running. If we allow another engine to start running before we've
+            //fully stopped running, they might try and do an APC to one of our DebugClient objects. But if our engine thread then shuts down before handling the APC, not only
+            //will the APC not be delivered, but when the current engine actually gets around to disposing its DebugClient objects, it will be surprised to find that the refcount
+            //is not 0, because dbgeng!SendEvent called dbgeng!CaptureClientList, which bumped the refcount
+            engineProvider.Remove(this);
         }
     }
 }

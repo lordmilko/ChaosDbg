@@ -12,7 +12,7 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Provides facilities for interacting with the memory of a target process.
     /// </summary>
-    public class CordbDataTarget : ICLRDataTarget, ICorDebugDataTarget
+    public class CordbDataTarget : ICLRDataTarget, ICorDebugDataTarget, IMemoryReader, IMemoryWriter
     {
         //IXCLRDataProcess::Flush does not use DAC_ENTER, which can lead to heap corruption if the process is flushed while it is running. To work around this,
         //ReadVirtual is tricked to call IXCLRDataProcess::Flush upon attempting to execute another method (which DOES call DAC_ENTER), thereby giving us a safe flush.
@@ -22,12 +22,12 @@ namespace ChaosDbg.Cordb
         private ulong MagicFlushAddress = 0x43; //A random (invalid) address constant to signal we're doing a flush, not reading an address
 
         private int pid;
-        private MemoryReader reader;
+        private LiveProcessMemoryReader reader;
 
         public CordbDataTarget(IntPtr hProcess)
         {
             pid = Kernel32.GetProcessId(hProcess);
-            reader = new MemoryReader(hProcess);
+            reader = new LiveProcessMemoryReader(hProcess);
         }
 
         public void SetFlushCallback(Action action)
@@ -55,8 +55,6 @@ namespace ChaosDbg.Cordb
                 Interlocked.Decrement(ref flushContext);
             }
         }
-
-        public static implicit operator MemoryReader(CordbDataTarget dataTarget) => dataTarget.reader;
 
         #region ICLRDataTarget
 
@@ -242,6 +240,16 @@ namespace ChaosDbg.Cordb
 
         HRESULT ICorDebugDataTarget.GetThreadContext(int dwThreadId, ContextFlags contextFlags, int contextSize, IntPtr pContext) =>
             LegacyTarget.GetThreadContext(dwThreadId, contextFlags, contextSize, pContext);
+
+        #endregion
+        #region IMemoryReader
+
+        bool IMemoryReader.Is32Bit => reader.Is32Bit;
+
+        int IMemoryReader.PointerSize => reader.PointerSize;
+
+        HRESULT IMemoryReader.ReadVirtual(long address, IntPtr buffer, int bytesRequested, out int bytesRead) =>
+            reader.ReadVirtual(address, buffer, bytesRequested, out bytesRead);
 
         #endregion
     }

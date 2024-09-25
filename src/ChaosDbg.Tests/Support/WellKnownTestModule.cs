@@ -1,4 +1,5 @@
-﻿using ChaosDbg.SymStore;
+﻿using System.Threading;
+using ChaosDbg.SymStore;
 
 namespace ChaosDbg.Tests
 {
@@ -19,7 +20,7 @@ namespace ChaosDbg.Tests
         {
             var symbolClient = new SymbolClient(new NullSymStoreLogger());
 
-            var path = symbolClient.GetStoreFile(key);
+            var path = symbolClient.GetStoreFile(key, CancellationToken.None);
 
             return path;
         }

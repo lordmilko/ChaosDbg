@@ -16,12 +16,24 @@
     <PackageReference Include="Microsoft.Debugging.Platform.DbgEng" Version="$(DbgEngVersion)" />
     <PackageReference Include="Microsoft.Debugging.Platform.SymSrv" Version="$(DbgEngVersion)" />
 
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent.SupportFiles" Version="$(TraceEventVersion)" ExcludeAssets="compile;runtime" />
+
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
 
     <Reference Include="System.IO.Compression" />
 
     <PackageReference Include="Serilog.Sinks.Seq" Version="7.0.0" />
     <Reference Include="System.Net.Http" />
+
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="$(BannedApiAnalyzersVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(TraceEventSupportFilesBase)native\x86\msdia140.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x86\%(FileName)%(Extension)" />
+    <None Include="$(TraceEventSupportFilesBase)native\amd64\msdia140.dll" CopyToOutputDirectory="PreserveNewest" Visible="False" Link="x64\%(FileName)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

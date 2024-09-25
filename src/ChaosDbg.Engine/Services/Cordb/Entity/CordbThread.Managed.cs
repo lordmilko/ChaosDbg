@@ -12,6 +12,8 @@ namespace ChaosDbg.Cordb
         /// </summary>
         public class ManagedAccessor : ICordbThreadAccessor, IDisposable
         {
+            public string Name { get; private set; }
+
             public CordbThread Thread { get; set; }
 
             /// <summary>
@@ -42,7 +44,7 @@ namespace ChaosDbg.Cordb
 
             private bool ownsHandle;
 
-            public IEnumerable<CordbFrame> EnumerateFrames() => CordbFrameEnumerator.V3.Enumerate(this);
+            public IEnumerable<CordbFrame> EnumerateFrames(NativeStackWalkerKind nativeStackWalkerKind) => CordbFrameEnumerator.V3.Enumerate(this, nativeStackWalkerKind);
 
             public ManagedAccessor(CorDebugThread corDebugThread)
             {
@@ -73,6 +75,17 @@ namespace ChaosDbg.Cordb
                         hr.ThrowOnNotOK();
                         break;
                 }
+            }
+
+            internal void RefreshName()
+            {
+                //todo: if we cant get a clr name try an OS one? or maybe reserve that for the native accessor only?
+                var value = CordbValue.New(CorDebugThread.Object, Thread);
+
+                if (!value.IsNull)
+                    Name = ((CordbStringValue) ((CordbObjectValue) value)["m_Name"]).ClrValue;
+                else
+                    Name = null;
             }
 
             public void Dispose()

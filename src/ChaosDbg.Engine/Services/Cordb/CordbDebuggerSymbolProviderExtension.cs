@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using ChaosDbg.Symbol;
+using ChaosDbg.Symbols;
 using ChaosLib.Symbols;
 using ClrDebug;
 
@@ -52,11 +52,8 @@ namespace ChaosDbg.Cordb
 
                 if (process.Modules.TryGetModuleForAddress(address, out var module))
                 {
-                    var name = Path.GetFileNameWithoutExtension(module.Name);
-                    var displacement = address - module.BaseAddress;
-
                     //The address contains the displacement in it already, so we dont need to adjust it
-                    symbol = new DisplacedMissingSymbol(displacement, name, address);
+                    symbol = new DisplacedMissingSymbol(address, module.SymbolModule);
                     return true;
                 }
             }

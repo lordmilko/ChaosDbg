@@ -8,11 +8,10 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Graph;
 using ChaosLib.Memory;
 using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
+using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug;
 using ClrDebug.DIA;
 using Iced.Intel;
-using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Analysis
 {
@@ -460,16 +459,16 @@ namespace ChaosDbg.Analysis
             {
                 InstructionDiscoverySource searchData;
 
-                if (symbol is IHasDiaSymbol m)
+                if (symbol is MicrosoftPdbSymbol m)
                 {
-                    if (IsApparentCodeSymbol(m.DiaSymbol))
+                    if (IsApparentCodeSymbol(m))
                     {
                         searchData = AddFunctionCandidate(symbol.Address, FoundBy.Symbol, DiscoveryTrustLevel.Trusted, false);
                         searchData.Symbol = symbol;
 
                         symbolAddresses.Add(searchData.Address);
                     }
-                    else if (IsDataSymbol(m.DiaSymbol))
+                    else if (IsDataSymbol(m))
                     {
                         //If we've already added this item as a function (e.g. because there was an Export for it)
                         //change it to a data item
@@ -496,62 +495,86 @@ namespace ChaosDbg.Analysis
             OrderedSymbolAddresses = symbolAddresses.OrderBy(v => v).ToArray();
         }
 
-        private bool IsApparentCodeSymbol(DiaSymbol diaSymbol)
+        private bool IsApparentCodeSymbol(MicrosoftPdbSymbol symbol)
         {
             /* You can have symbols that refer to "code" and symbols that refer to "functions".
              * Our goal is to disassemble all "code" that exists within the assembly. Note that
              * some symbols reported as being "functions" aren't actually functions, but in fact
              * globals. */
 
-            if (diaSymbol.TryGetFunction(out var result) == S_OK && result)
+            //Fast path: check the SymTagEnum kind (which we cache on our MicrosoftPdbSymbol)
+            if (ShouldIgnoreSymbol(symbol))
+                return false;
+
+            //Regardless of what the symbol might have to say, if it doesn't have an address, we can't use it
+            if (symbol.SafeDiaSymbol.RelativeVirtualAddress == null)
+                return false;
+
+            if (symbol.SafeDiaSymbol.Function == true)
                 return true;
 
-            if (diaSymbol.TryGetCode(out result) == S_OK && result)
+            if (symbol.SafeDiaSymbol.Code == true)
                 return true;
 
-            //ntdll!RtlpHpVaMgrRangeCreate fails GetFunction but has SymTagEnum.Function
-            var tag = diaSymbol.SymTag;
-
-            switch (tag)
+            switch (symbol.SymTag)
             {
                 case SymTagEnum.PublicSymbol:
                     return false;
 
+                case SymTagEnum.Data:                
+                    //At this point, if we haven't determined that it is code, assume it isn't
+                    return false;
+
+                //ntdll!RtlpHpVaMgrRangeCreate fails GetFunction but has SymTagEnum.Function
+                case SymTagEnum.Function:
+                    return true;
+
+                default:
+                    throw new NotImplementedException($"Don't know whether a symbol with tag {symbol.SymTag} is a function");
+            }
+        }
+
+        private bool IsDataSymbol(MicrosoftPdbSymbol symbol)
+        {
+            //Fast path: check the SymTagEnum kind (which we cache on our MicrosoftPdbSymbol)
+            if (ShouldIgnoreSymbol(symbol))
+                return false;
+
+            //Regardless of what the symbol might have to say, if it doesn't have an address, we can't use it
+            if (symbol.SafeDiaSymbol.RelativeVirtualAddress == null)
+                return false;
+
+            switch (symbol.SymTag)
+            {
+                case SymTagEnum.PublicSymbol:
+                case SymTagEnum.Data:
+                    return true;
+
+                default:
+                    throw new NotImplementedException($"Don't know whether a symbol with tag {symbol.SymTag} is data");
+            }
+        }
+
+        private bool ShouldIgnoreSymbol(MicrosoftPdbSymbol symbol)
+        {
+            switch (symbol.SymTag)
+            {
                 case SymTagEnum.Annotation:
+                case SymTagEnum.ArrayType:
+                case SymTagEnum.BaseType:
+                case SymTagEnum.Compiland:
+                case SymTagEnum.FunctionArgType:
+                case SymTagEnum.FunctionType:
+                case SymTagEnum.PointerType:
                 case SymTagEnum.UDT:
                 case SymTagEnum.Enum:
                 case SymTagEnum.Typedef:
                 case SymTagEnum.BaseClass:
                 case SymTagEnum.VTable:
-                    //At this point, if we haven't determined that it is code, assume it isn't
-                    return false;
-
-                case SymTagEnum.Function:
                     return true;
 
                 default:
-                    throw new NotImplementedException($"Don't know whether a symbol with tag {tag} is a function");
-            }
-        }
-
-        private bool IsDataSymbol(DiaSymbol diaSymbol)
-        {
-            var tag = diaSymbol.SymTag;
-
-            switch (tag)
-            {
-                case SymTagEnum.PublicSymbol:
-                    return true;
-
-                case SymTagEnum.Annotation:
-                case SymTagEnum.UDT:
-                case SymTagEnum.Enum:
-                case SymTagEnum.Typedef:
-                    //At this point, if we haven't determined that it is code, assume it isn't
                     return false;
-
-                default:
-                    throw new NotImplementedException($"Don't know whether a symbol with tag {tag} is a function");
             }
         }
 
@@ -1830,16 +1853,16 @@ namespace ChaosDbg.Analysis
 
                     if (item.Symbol != null)
                     {
-                        if (item.Symbol is IHasDiaSymbol m)
+                        if (item.Symbol is MicrosoftPdbSymbol m)
                         {
                             //Things that are called are definitely functions (see SplitChunkGraphByCallees). Things
                             //with symbols may or may not be functions (ntdll!RtlInterlockedPopEntrySList is a function
                             //but ExpInterlockedPopEntrySListResume is code)
-                            if (m.DiaSymbol.TryGetFunction(out var isFunction) == S_OK && isFunction)
+                            if (m.SafeDiaSymbol.Function == true)
                                 return true;
 
                             //EtwNotificationUnregister is neither a Function, nor Code, but IS tagged as a function
-                            if (m.DiaSymbol.SymTag == SymTagEnum.Function)
+                            if (m.SafeDiaSymbol.SymTag == SymTagEnum.Function)
                                 return true;
                         }
                         else

@@ -57,6 +57,7 @@ namespace ChaosDbg
 
         internal static IServiceProvider CreateServiceProvider(Action<ServiceCollection> configureServices)
         {
+#pragma warning disable CS0618 // Type or member is obsolete
             return InternalGlobalProvider.CreateServiceProvider(services =>
             {
                 //We set InternalGlobalProvider.ConfigureServices, so we need to ensure that we invoke that
@@ -65,6 +66,7 @@ namespace ChaosDbg
 
                 configureServices?.Invoke(services);
             });
+#pragma warning restore CS0618 // Type or member is obsolete
         }
 
 #pragma warning disable CS0618
