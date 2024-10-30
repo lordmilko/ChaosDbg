@@ -1,6 +1,5 @@
-﻿using System.Diagnostics;
-using ChaosLib.Symbols;
-using ClrDebug;
+﻿using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {

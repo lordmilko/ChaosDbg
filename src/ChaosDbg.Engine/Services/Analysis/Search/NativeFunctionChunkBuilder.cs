@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosLib.PortableExecutable;
 using Iced.Intel;
+using PESpy;
 
 namespace ChaosDbg.Analysis
 {
@@ -99,7 +99,7 @@ namespace ChaosDbg.Analysis
         internal void ResolveReferences(
             Dictionary<long ,ChunkedInstruction> chunkedInstrMap,
             Dictionary<long, JumpTableMetadataRange> jumpTables,
-            Dictionary<long, HashSet<ImageScopeRecord>> exceptionUnwindMap,
+            Dictionary<long, HashSet<ScopeTable.ScopeRecord>> exceptionUnwindMap,
             long moduleAddress)
         {
             ChunkedInstruction targetInstr;

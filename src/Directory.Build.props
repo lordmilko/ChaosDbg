@@ -32,6 +32,7 @@
     <EnvDTEVersion>8.0.3</EnvDTEVersion>
     <ClrDebugVersion>0.3.2</ClrDebugVersion>
     <ChaosLibVersion>0.1.0</ChaosLibVersion>
+    <SymHelpVersion>0.1.0</SymHelpVersion>
     <VsDockVersion>0.1.0</VsDockVersion>
     <DbgEngVersion>20230731.1609.0</DbgEngVersion>
     <DbgShimVersion>8.0.452401</DbgShimVersion>

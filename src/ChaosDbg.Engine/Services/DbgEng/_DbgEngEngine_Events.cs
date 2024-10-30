@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using ClrDebug;
 using ClrDebug.DbgEng;
-using static ChaosDbg.EventExtensions;
 using static ClrDebug.DbgEng.DbgEngExtensions;
 using static ClrDebug.HRESULT;
 

@@ -3,9 +3,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Handle;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
 using ClrDebug;
+using PESpy;
+using SymHelp;
 
 #nullable enable
 
@@ -145,37 +145,50 @@ namespace ChaosDbg.Cordb
         {
             //ntdll can hit this code path
 
-            foreach (var dir in peFile.DebugDirectory.Entries)
+            var debugDirectories = peFile.DebugTable;
+
+            if (debugDirectories != null)
             {
-                if (dir.Type == ImageDebugType.Misc)
-                    throw new NotImplementedException("Retrieving a module name from the Misc debug directory is not implemented.");
-            }
-
-            if (peFile.ExportDirectory != null)
-            {
-                if (peFile.ExportDirectory.Name != null)
-                    return peFile.ExportDirectory.Name;
-            }
-
-            var codeViews = peFile.DebugDirectory.CodeView;
-
-            if (codeViews != null && codeViews.Length > 0)
-            {
-                var fileName = Path.GetFileNameWithoutExtension(codeViews[0].Path);
-
-                //Ostensibly we should have a filename ntdll.pdb. If the filename is ntdll.dll.pdb however,
-                //fileName is going to still contain ".dll" in it
-                var originalExt = Path.GetExtension(fileName).ToLower();
-
-                if (originalExt != string.Empty && originalExt == ".exe" || originalExt == ".dll" || originalExt == ".sys")
+                foreach (var dir in debugDirectories)
                 {
-                    //Already have a filename, use as is then!
-                    return fileName;
+                    if (dir.Type == ImageDebugType.Misc)
+                        throw new NotImplementedException("Retrieving a module name from the Misc debug directory is not implemented.");
                 }
-                else if (peFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll))
-                    return fileName + ".dll";
-                else
-                    return fileName + ".exe";
+            }
+
+            if (peFile.ExportTable != null)
+            {
+                if (peFile.ExportTable.Name.IsValid)
+                    return peFile.ExportTable.Name.ToString();
+            }
+
+            if (debugDirectories != null)
+            {
+                foreach (var dir in debugDirectories)
+                {
+                    string path;
+
+                    if (dir.Data is ICodeView c)
+                        path = c.Path;
+                    else
+                        continue;
+
+                    var fileName = Path.GetFileNameWithoutExtension(path);
+
+                    //Ostensibly we should have a filename ntdll.pdb. If the filename is ntdll.dll.pdb however,
+                    //fileName is going to still contain ".dll" in it
+                    var originalExt = Path.GetExtension(fileName).ToLower();
+
+                    if (originalExt != string.Empty && originalExt == ".exe" || originalExt == ".dll" || originalExt == ".sys")
+                    {
+                        //Already have a filename, use as is then!
+                        return fileName;
+                    }
+                    else if (peFile.FileHeader.Characteristics.HasFlag(ImageFile.Dll))
+                        return fileName + ".dll";
+                    else
+                        return fileName + ".exe";
+                }
             }
 
             return null;

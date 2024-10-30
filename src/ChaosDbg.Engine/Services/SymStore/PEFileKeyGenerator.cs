@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using ChaosLib.PortableExecutable;
 using ClrDebug;
+using PESpy;
 
 namespace ChaosDbg.SymStore
 {
@@ -31,7 +31,7 @@ namespace ChaosDbg.SymStore
             _path = path;
         }
 
-        public PEFileKeyGenerator(ISymStoreLogger tracer, SymbolStoreFile file) : this(tracer, new PEFile(file.Stream, false, PEFileDirectoryFlags.DebugDirectory | PEFileDirectoryFlags.ResourceDirectory), file.FileName)
+        public PEFileKeyGenerator(ISymStoreLogger tracer, SymbolStoreFile file) : this(tracer, PEFile.FromStream(file.Stream, false), file.FileName)
         {
         }
 
@@ -51,12 +51,15 @@ namespace ChaosDbg.SymStore
                 }
                 if ((flags & KeyTypeFlags.SymbolKey) != 0)
                 {
-                    var pdbs = _peFile.DebugDirectory.CodeView;
+                    var debugDirectories = _peFile.DebugTable;
 
-                    foreach (var pdb in pdbs)
+                    if (debugDirectories != null)
                     {
-                        if (pdb is ImageRSDSI r)
-                            yield return GetPDBKey(pdb.Path, r.Guid, pdb.Age);
+                        foreach (var dir in debugDirectories)
+                        {
+                            if (dir.Data is RSDSI r)
+                                yield return GetPDBKey(r.Path, r.Guid, r.Age);
+                        }
                     }
                 }
 
@@ -78,7 +81,7 @@ namespace ChaosDbg.SymStore
         {
             var specialFiles = new List<string>((flags & KeyTypeFlags.ClrKeys) != 0 ? s_coreClrSpecialFiles : s_dacdbiSpecialFiles);
 
-            var fileVersion = _peFile.ResourceDirectory.Version?.Value;
+            var fileVersion = _peFile.ResourceDirectory?.EnumerateResources<VsVersionInfo>().SingleOrDefault()?.Value;
 
             if (fileVersion != null)
             {
@@ -120,9 +123,9 @@ namespace ChaosDbg.SymStore
                     {
                         string buildFlavor = "";
 
-                        if ((fileVersion.FileFlags & FileInfoFlags.Debug) != 0)
+                        if ((fileVersion.FileFlags & VS_FF.Debug) != 0)
                         {
-                            if ((fileVersion.FileFlags & FileInfoFlags.SpecialBuild) != 0)
+                            if ((fileVersion.FileFlags & VS_FF.SpecialBuild) != 0)
                             {
                                 buildFlavor = ".dbg";
                             }
@@ -170,7 +173,7 @@ namespace ChaosDbg.SymStore
         /// <param name="timestamp">time stamp of pe image</param>
         /// <param name="sizeOfImage">size of pe image</param>
         /// <returns>symbol store keys (or empty enumeration)</returns>
-        public static SymbolStoreKey GetKey(string path, int timestamp, int sizeOfImage)
+        public static SymbolStoreKey GetKey(string path, uint timestamp, int sizeOfImage)
         {
             Debug.Assert(path != null);
 

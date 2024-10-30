@@ -1,5 +1,4 @@
 ﻿using System.Management.Automation;
-using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
 
 namespace ChaosDbg.PowerShell.Cmdlets.Server

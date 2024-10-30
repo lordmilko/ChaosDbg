@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using ChaosDbg.Disasm;
-using ChaosLib.PortableExecutable;
 using Iced.Intel;
+using PESpy;
 
 namespace ChaosDbg.Analysis
 {
@@ -240,7 +240,7 @@ namespace ChaosDbg.Analysis
         {
             var rawSlotValues = new long[numCases];
 
-            var reader = new PEBinaryReader(processStream);
+            var reader = new FileReader(processStream, false);
 
             for (var i = 0; i < numCases; i++)
             {

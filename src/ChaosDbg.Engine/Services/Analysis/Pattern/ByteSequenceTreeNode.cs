@@ -11,7 +11,10 @@ namespace ChaosDbg.Analysis
     /// <summary>
     /// Provides facilities for simultaneously comparing a byte value against multiple possible <see cref="ByteSequence"/> values
     /// by constructing a tree that can be traversed to "dig down" to possible patterns that may match. e.g. given the patterns
-    /// 0xff00 and 0xff01, this will result in four tree nodes: Root -> 0xff, 0xff -> 0x00 and 0xff -> 0x01.
+    /// 0xff00 and 0xff01, this will result in three tree nodes:
+    ///     Root -> 0xff
+    ///             0xff -> 0x00
+    ///             0xff -> 0x01
     /// </summary>
     class ByteSequenceTreeNode
     {

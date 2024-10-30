@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ChaosDbg.Disasm;
 using ChaosDbg.Text;
-using ChaosLib.PortableExecutable;
+using PESpy;
 
 namespace ChaosDbg
 {

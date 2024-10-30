@@ -54,10 +54,11 @@ namespace ChaosDbg.Tests
                     //We should still be able to get the variables of the previous frame
                     var previousLocals = ctx.PreviousFrame.Variables.Cast<CordbNativeVariable>().ToArray();
 
-                    Assert.AreEqual(3, previousLocals.Length);
-                    Assert.IsTrue(previousLocals[0].Value.IsEquivalentTo(3));
-                    Assert.IsTrue(previousLocals[1].Value.IsEquivalentTo(ctx.Process.CommandLine[0]));
-                    Assert.IsTrue(previousLocals[2].Value.IsEquivalentTo(NativeTestType.Com));
+                    previousLocals.Verify(
+                        l => l.Verify("argc", 3),
+                        l => l.Verify("argv", ctx.Process.CommandLine[0]),
+                        l => l.Verify("type", NativeTestType.Com)
+                    );
                 }
             );
         }
@@ -73,13 +74,13 @@ namespace ChaosDbg.Tests
                     while (ctx.CurrentFrame.Context.BP == 0)
                         ctx.StepOver();
 
-                    var locals = ctx.CurrentFrame.Variables.Cast<CordbNativeVariable>().ToArray();
+                    var variables = ctx.CurrentFrame.Variables.Cast<CordbNativeVariable>().ToArray();
 
-                    Assert.AreEqual(3, locals.Length);
-
-                    //NativeTestType hasn't been initialized yet, and contains junk
-                    Assert.IsTrue(locals[0].Value.IsEquivalentTo(3));
-                    Assert.IsTrue(locals[1].Value.IsEquivalentTo(ctx.Process.CommandLine[0]));
+                    variables.Verify(
+                        l => l.Verify("argc", 3),
+                        l => l.Verify("argv", ctx.Process.CommandLine[0]),
+                        null //NativeTestType hasn't been initialized yet, and contains junk
+                    );
                 }
             );
         }
@@ -109,11 +110,11 @@ namespace ChaosDbg.Tests
                     //We should still be able to get the variables of the previous frame
                     var previousLocals = ctx.PreviousFrame.Variables.Cast<CordbNativeVariable>().ToArray();
 
-                    Assert.AreEqual(3, previousLocals.Length);
-
-                    Assert.IsTrue(previousLocals[0].Value.IsEquivalentTo(3));
-                    Assert.IsTrue(previousLocals[1].Value.IsEquivalentTo(ctx.Process.CommandLine[0]));
-                    Assert.IsTrue(previousLocals[2].Value.IsEquivalentTo(NativeTestType.Com));
+                    previousLocals.Verify(
+                        l => l.Verify("argc", 3),
+                        l => l.Verify("argv", ctx.Process.CommandLine[0]),
+                        l => l.Verify("type", NativeTestType.Com)
+                    );
                 }
             );
         }
@@ -129,13 +130,13 @@ namespace ChaosDbg.Tests
                     Log.Debug<CordbEngineValueTests>("Moving to BindLifetimeToParentProcess");
                     ctx.MoveToCall("BindLifetimeToParentProcess");
 
-                    var locals = ctx.CurrentFrame.Variables.Cast<CordbNativeVariable>().ToArray();
+                    var variables = ctx.CurrentFrame.Variables.Cast<CordbNativeVariable>().ToArray();
 
-                    Assert.AreEqual(3, locals.Length);
-
-                    Assert.IsTrue(locals[0].Value.IsEquivalentTo(3));
-                    Assert.IsTrue(locals[1].Value.IsEquivalentTo(ctx.Process.CommandLine[0]));
-                    Assert.IsTrue(locals[2].Value.IsEquivalentTo(NativeTestType.Com));
+                    variables.Verify(
+                        l => l.Verify("argc", 3),
+                        l => l.Verify("argv", ctx.Process.CommandLine[0]),
+                        l => l.Verify("type", NativeTestType.Com)
+                    );
                 }
             );
         }
@@ -157,6 +158,32 @@ namespace ChaosDbg.Tests
             }
 
             return IsBadInternal(variable.Value);
+        }
+
+        #endregion
+        #region Managed
+
+        [TestMethod]
+        public unsafe void CordbEngine_Value_Managed_Variables_WithSymbols_Get()
+        {
+            TestSignalledDebugCreate(
+                TestType.CordbEngine_Thread_StackTrace_ManagedFrames,
+                ctx =>
+                {
+                    var topFrame = ctx.ActiveThread.StackTrace.OfType<CordbILFrame>().Skip(3).First();
+
+                    var variables = topFrame.Variables.Cast<CordbManagedVariable>().ToArray();
+
+                    //todo: need to capture the type in our managed variable symbols too
+
+                    variables.Verify(
+                        l => l.Verify("args", new[] { "CordbEngine_Thread_StackTrace_ManagedFrames", $"ChaosDbg_Test_{Kernel32.GetCurrentProcessId()}_CordbEngine_Value_Managed_Variables_WithSymbols_Get" }),
+                        l => l.Verify("testType", TestType.CordbEngine_Thread_StackTrace_ManagedFrames),
+                        l => l.Verify("childProcess", null),
+                        l => l.Verify("i", 0)
+                    );
+                }
+            );
         }
 
         #endregion

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Reflection;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 #nullable enable
 
@@ -31,19 +31,19 @@ namespace ChaosDbg.Cordb
         {
             get
             {
-                if (Symbol == null)
+                if (SourceMember == null)
                     return $"[{GetType().Name}] {ToString()}";
 
                 return ToString();
             }
         }
 
-        internal static CordbValue New(CorDebugValue value, CordbThread thread, CordbValue? parent = null, MemberInfo? symbol = null)
+        internal static CordbValue New(CorDebugValue value, CordbThread thread, CordbValue? parent = null, MemberInfo? sourceMember = null)
         {
             if (value is CorDebugReferenceValue r)
             {
                 if (r.IsNull)
-                    return new CordbNullValue(value, thread, parent, symbol);
+                    return new CordbNullValue(value, thread, parent, sourceMember);
                 else
                     value = r.Dereference();
             }
@@ -52,13 +52,27 @@ namespace ChaosDbg.Cordb
                 value = b.Object;
 
             if (value.Raw is ICorDebugStringValue)
-                return new CordbStringValue(value.As<CorDebugStringValue>(), thread, parent, symbol);
+                return new CordbStringValue(value.As<CorDebugStringValue>(), thread, parent, sourceMember);
 
             if (value.Raw is ICorDebugArrayValue)
-                return new CordbArrayValue(value.As<CorDebugArrayValue>(), thread, parent, symbol);
+                return new CordbArrayValue(value.As<CorDebugArrayValue>(), thread, parent, sourceMember);
 
             if (value.Raw is ICorDebugObjectValue)
-                return new CordbObjectValue(value.As<CorDebugObjectValue>(), thread, parent, symbol);
+            {
+                //Enums represent themselves as a CorDebugObjectValue, with a single field "value__" that serves as the backing field
+                //of the enum. If we see that we're actually an enum, return a special enum type instead
+
+                var o = value.As<CorDebugObjectValue>();
+
+                var corDebugClass = o.ExactType.Class;
+                var module = thread.Process.Modules.GetModule(corDebugClass.Module);
+                var metadataType = (MetadataType) module.MetadataModule.ResolveType(corDebugClass.Token);
+
+                if (metadataType.IsEnum)
+                    return new CordbEnumValue(o, module, metadataType, thread, parent, sourceMember);
+
+                return new CordbObjectValue(o, module, metadataType, thread, parent, sourceMember);
+            }
 
             if (value.Raw is ICorDebugGenericValue)
                 return new CordbPrimativeValue(value.As<CorDebugGenericValue>(), thread, parent, symbol);
@@ -80,7 +94,7 @@ namespace ChaosDbg.Cordb
         /// Gets the <see cref="MetadataPropertyInfo"/> or <see cref="MetadataFieldInfo"/> that this value was retrieved from,
         /// or <see langword="null"/> if this is a root level object.
         /// </summary>
-        public MemberInfo? Symbol { get; }
+        public MemberInfo? SourceMember { get; }
 
         public bool IsNull
         {
@@ -109,12 +123,12 @@ namespace ChaosDbg.Cordb
 
         private readonly int sourceContinueCount;
 
-        protected CordbValue(CorDebugValue corDebugValue, CordbThread thread, CordbValue? parent, MemberInfo? symbol)
+        protected CordbValue(CorDebugValue corDebugValue, CordbThread thread, CordbValue? parent, MemberInfo? sourceMember)
         {
             this.corDebugValue = corDebugValue;
             Thread = thread;
             Parent = parent;
-            Symbol = symbol;
+            SourceMember = sourceMember;
             sourceContinueCount = thread.Process.Session.TotalContinueCount;
         }
     }

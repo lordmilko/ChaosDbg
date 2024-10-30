@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
 using ClrDebug.DIA;
+using SymHelp.Symbols;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {

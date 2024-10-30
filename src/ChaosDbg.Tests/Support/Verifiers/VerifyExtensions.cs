@@ -56,8 +56,46 @@ namespace ChaosDbg.Tests
         }
 
         #endregion
+        #region Variable
 
         public static CordbThreadVerifier Verify(this CordbThread thread) => new CordbThreadVerifier(thread);
+
+        public static void Verify(this CordbNativeVariable[] variables, params Action<CordbNativeVariable>[] verifiers)
+        {
+            Assert.AreEqual(verifiers.Length, variables.Length);
+
+            for (var i = 0; i < variables.Length; i++)
+            {
+                var verifier = verifiers[i];
+
+                if (verifier == null)
+                    continue; //The caller is saying the variable contains junk and not to verify it
+
+                verifier(variables[i]);
+            }
+        }
+
+        public static void Verify(this CordbNativeVariable variable, string name, object expectedValue)
+        {
+            Assert.AreEqual(name, variable.Name);
+            Assert.IsTrue(variable.Value.IsEquivalentTo(expectedValue));
+        }
+
+        public static void Verify(this CordbManagedVariable[] variables, params Action<CordbManagedVariable>[] verifiers)
+        {
+            Assert.AreEqual(verifiers.Length, variables.Length);
+
+            for (var i = 0; i < variables.Length; i++)
+                verifiers[i](variables[i]);
+        }
+
+        public static void Verify(this CordbManagedVariable variable, string name, object expectedValue)
+        {
+            Assert.AreEqual(name, variable.Name);
+            Assert.IsTrue(variable.Value.IsEquivalentTo(expectedValue));
+        }
+
+        #endregion
 
         public static void Verify(this ChunkGraph[] chunks, params Action<ChunkGraph>[] verifiers)
         {

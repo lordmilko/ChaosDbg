@@ -11,15 +11,14 @@ using ChaosDbg.Analysis;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
-using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
 using ChaosDbg.Logger;
 using ChaosDbg.Metadata;
 using ChaosDbg.Symbols;
 using ChaosLib;
-using ChaosLib.Symbols;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SymHelp.Symbols;
 using TestApp;
 
 namespace ChaosDbg.Tests

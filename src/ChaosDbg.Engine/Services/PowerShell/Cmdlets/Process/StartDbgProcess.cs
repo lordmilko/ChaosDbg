@@ -7,7 +7,7 @@ using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
 using ChaosDbg.PowerShell.Host;
 using ChaosLib;
-using ChaosLib.Symbols.MicrosoftPdb;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.PowerShell.Cmdlets.Process
 {

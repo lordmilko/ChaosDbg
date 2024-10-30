@@ -324,7 +324,7 @@ namespace ChaosDbg.Cordb
             if (managedCandidates.Length == 1)
                 return managedCandidates[0];
 
-            var managedExeCandidates = new List<Tuple<CordbThread, CordbILFrame, int>>();
+            var managedExeCandidates = new List<(CordbThread thread, CordbILFrame frame, int frameIndex)>();
             var nativeExeCandidates = new List<CordbThread>();
 
             foreach (var managedCandidate in managedCandidates)
@@ -342,7 +342,7 @@ namespace ChaosDbg.Cordb
                         var imageCor20Header = frame.Module.PEFile.Cor20Header;
 
                         if (imageCor20Header != null && imageCor20Header.Flags.HasFlag(COMIMAGE_FLAGS.ILONLY))
-                            managedExeCandidates.Add(Tuple.Create(managedCandidate, f, i));
+                            managedExeCandidates.Add((managedCandidate, f, i));
                         else
                             nativeExeCandidates.Add(managedCandidate);
 
@@ -354,19 +354,19 @@ namespace ChaosDbg.Cordb
             if (managedExeCandidates.Count > 0)
             {
                 if (managedExeCandidates.Count == 1)
-                    return managedExeCandidates[0].Item1;
+                    return managedExeCandidates[0].thread;
 
                 var entryPointMatches = new List<CordbThread>();
 
                 foreach (var item in managedExeCandidates)
                 {
-                    var token = (mdToken) item.Item2.Module.PEFile.Cor20Header.EntryPointTokenOrRelativeVirtualAddress;
+                    var token = (mdToken) item.Item2.Module.PEFile.Cor20Header.EntryPointTokenOrRVA;
 
                     switch (token.Type)
                     {
                         case CorTokenType.mdtMethodDef:
                             if (item.Item2.CorDebugFrame.FunctionToken == (mdMethodDef) token)
-                                entryPointMatches.Add(item.Item1);
+                                entryPointMatches.Add(item.thread);
 
                             break;
 

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.IO;
 using ChaosDbg.Disasm;
-using ChaosLib.Symbols;
 using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Analysis
 {

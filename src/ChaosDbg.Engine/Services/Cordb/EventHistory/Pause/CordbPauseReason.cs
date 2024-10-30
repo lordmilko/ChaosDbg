@@ -1,6 +1,4 @@
-﻿using ChaosLib;
-
-namespace ChaosDbg.Cordb
+﻿namespace ChaosDbg.Cordb
 {
     /// <summary>
     /// Provides information about why the normal debugger loop was stopped to prompt for user input.

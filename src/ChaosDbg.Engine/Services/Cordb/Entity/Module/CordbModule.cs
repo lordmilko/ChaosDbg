@@ -1,7 +1,7 @@
 ﻿using System.IO;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
 using ClrDebug;
+using PESpy;
+using SymHelp.Symbols;
 
 #nullable enable
 
@@ -46,9 +46,10 @@ namespace ChaosDbg.Cordb
         private ISymbolModule? symbolModule;
 
         /// <summary>
-        /// Provides access to any symbol information that is available for this module.
+        /// Provides access to the symbol information that is available for this module.<para/>
+        /// If no symbols are available, a synthetic symbol module will be returned that will provide access to any information that can be calculated at runtime.
         /// </summary>
-        public ISymbolModule? SymbolModule
+        public ISymbolModule SymbolModule
         {
             get
             {

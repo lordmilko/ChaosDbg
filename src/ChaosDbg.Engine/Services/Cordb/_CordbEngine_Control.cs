@@ -4,6 +4,7 @@ using ChaosDbg.Disasm;
 using ChaosLib;
 using ClrDebug;
 using Iced.Intel;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Cordb
 {
@@ -109,7 +110,9 @@ namespace ChaosDbg.Cordb
                 //This must be called _after_ updating the stop count, as the Status is automatically derived from it
                 NotifyEngineStatus();
             }
+#pragma warning disable IDE0059 // Unnecessary assignment of a value
             catch (Exception ex)
+#pragma warning restore IDE0059 // Unnecessary assignment of a value
             {
                 Debug.Assert(false, "We should never throw when attempting to call DoContinue(). When we're handling an unmanaged event like EXIT_PROCESS_DEBUG_EVENT, failing to continue means that the remaining thread handles won't be closed, which means the process won't ever terminate, and we'll hang forever");
             }

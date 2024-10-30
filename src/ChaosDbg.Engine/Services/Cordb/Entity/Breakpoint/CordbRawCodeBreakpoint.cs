@@ -1,4 +1,5 @@
 ﻿using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {
@@ -11,7 +12,7 @@ namespace ChaosDbg.Cordb
         private byte originalByte;
         protected bool hasOriginalByte;
 
-        public CordbRawCodeBreakpoint(string name, CORDB_ADDRESS address, CordbProcess process, bool isOneShot) : base(name, address, process, isOneShot)
+        public CordbRawCodeBreakpoint(IDisplacedSymbol symbol, CORDB_ADDRESS address, CordbProcess process, bool isOneShot) : base(symbol, address, process, isOneShot)
         {
         }
 

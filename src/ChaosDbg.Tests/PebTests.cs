@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Diagnostics;
 using ChaosLib;
 using ChaosLib.Symbols;
 using ChaosLib.Symbols.MicrosoftPdb.TypedData;
-using ChaosLib.TypedData;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SymHelp.Symbols;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 using TestApp;
 
 namespace ChaosDbg.Tests
@@ -34,7 +36,7 @@ namespace ChaosDbg.Tests
                     var reader = new LiveProcessMemoryReader(process.Handle);
                     var remotePeb = new RemotePeb(process);
 
-                    var symbolProvider = new SymbolProvider(GetService<INativeLibraryProvider>(), GetService<ISymSrv>(), reader);
+                    var symbolProvider = new LiveSymbolProvider(GetService<INativeLibraryProvider>(), GetService<ISymSrv>(), reader);
                     symbolProvider.DiscoverModules(process.Handle);
 
                     var typedValueAccessor = new LiveProcessTypedDataAccessor(process.Handle, symbolProvider);
@@ -73,8 +75,8 @@ namespace ChaosDbg.Tests
                             var typedItem = typedItems[i];
                             var remoteItem = remoteItems[i];
 
-                            Assert.AreEqual(typedItem["FullDllName"]["Buffer"].GetPrimativeValue(), remoteItem.FullDllName);
-                            Assert.AreEqual(typedItem["BaseDllName"]["Buffer"].GetPrimativeValue(), remoteItem.BaseDllName);
+                            Assert.AreEqual(typedItem["FullDllName"]["Buffer"].GetPrimitiveValue(), remoteItem.FullDllName);
+                            Assert.AreEqual(typedItem["BaseDllName"]["Buffer"].GetPrimitiveValue(), remoteItem.BaseDllName);
                         }
                     }
                 }

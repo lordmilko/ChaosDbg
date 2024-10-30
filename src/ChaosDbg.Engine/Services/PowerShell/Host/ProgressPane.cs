@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace ChaosDbg.PowerShell.Host
+﻿namespace ChaosDbg.PowerShell.Host
 {
     class ProgressPane
     {

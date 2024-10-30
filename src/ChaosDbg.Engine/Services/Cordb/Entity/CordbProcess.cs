@@ -9,8 +9,8 @@ using ChaosLib;
 using ChaosLib.Handle;
 using ChaosLib.Memory;
 using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {
@@ -152,7 +152,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Provides access to the symbols contained within this process.
         /// </summary>
-        public SymbolProvider Symbols { get; }
+        public DebugSymbolProvider Symbols { get; }
 
         /// <summary>
         /// Gets a disassembler capable of disassembling any instruction in this process.
@@ -211,13 +211,12 @@ namespace ChaosDbg.Cordb
             //DbgHelp.Native.SymSetOptions(ClrDebug.DbgEng.SYMOPT.DEFERRED_LOADS); //temp
 
             //The handle is not safe to retrieve if the CorDebugProcess has already been neutered, so we'll see if this causes an issue when calling SymCleanup() or not
-            Symbols = new SymbolProvider(
+            Symbols = new DebugSymbolProvider(
                 session.Services.NativeLibraryProvider,
                 session.Services.SymSrv,
+                engineId: Session.EngineId,
                 DAC.DataTarget,
-                DAC,
-                enableDebuggerServices: true,
-                engineId: Session.EngineId
+                DAC
             );
 
             using var dbgHelpHolder = new DisposeHolder(Symbols);

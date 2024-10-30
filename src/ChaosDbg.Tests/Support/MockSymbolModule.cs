@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ChaosLib.Symbols;
+using ClrDebug;
 using ClrDebug.DIA;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Tests
 {
@@ -24,6 +25,16 @@ namespace ChaosDbg.Tests
         }
 
         IEnumerable<ISymbol> ISymbolModule.EnumerateSymbols() => EnumerateSymbols();
+
+        public IEnumerable<IManagedSymbol> EnumerateManagedSymbols()
+        {
+            throw new NotImplementedException();
+        }
+
+        public IEnumerable<IManagedVariableSymbol> EnumerateManagedVariables(mdMethodDef methodDef, int ilOffset)
+        {
+            throw new NotImplementedException();
+        }
 
         public string[] GetSourceLinkJson()
         {

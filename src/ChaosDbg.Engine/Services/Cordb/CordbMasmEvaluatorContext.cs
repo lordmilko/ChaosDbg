@@ -2,9 +2,9 @@
 using System.IO;
 using System.Linq;
 using ChaosDbg.Evaluator.Masm;
-using ChaosLib.Symbols;
 using ClrDebug;
 using Iced.Intel;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {

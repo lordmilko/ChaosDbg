@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LocalSymHelp>$(MSBuildThisFileDirectory)\..\..\SymHelp\src\SymHelp\bin\Debug\net472\SymHelp.dll</LocalSymHelp>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <!-- If SymHelp has been cloned to the parent directory containing both SymHelp and ChaosDbg,
+         prefer the local version for development purposes -->
+    <PackageReference Include="SymHelp" Version="$(SymHelpVersion)" Condition="!Exists('$(LocalSymHelp)')" />
+
+    <Reference Include="SymHelp" Condition="Exists('$(LocalSymHelp)')">
+      <HintPath>$(LocalSymHelp)</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

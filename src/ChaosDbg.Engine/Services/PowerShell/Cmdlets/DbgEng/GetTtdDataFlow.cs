@@ -9,10 +9,10 @@ using ChaosDbg.Evaluator.Masm.Syntax;
 using ChaosDbg.TTD;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.Symbols;
 using ChaosLib.TTD;
 using ClrDebug.TTD;
 using Iced.Intel;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.PowerShell.Cmdlets
 {

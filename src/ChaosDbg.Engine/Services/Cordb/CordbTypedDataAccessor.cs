@@ -1,9 +1,9 @@
 ﻿using ChaosDbg.Disasm;
 using ChaosLib;
-using ChaosLib.Symbols.MicrosoftPdb;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
 using ClrDebug.DIA;
+using SymHelp.Symbols.MicrosoftPdb;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {

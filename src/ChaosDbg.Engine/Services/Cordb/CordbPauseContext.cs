@@ -1,5 +1,4 @@
-﻿using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
+﻿using ChaosLib.Symbols;
 
 namespace ChaosDbg.Cordb
 {

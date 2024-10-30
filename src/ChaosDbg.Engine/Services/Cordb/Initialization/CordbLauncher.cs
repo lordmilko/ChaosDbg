@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -8,8 +9,9 @@ using System.Threading;
 using ChaosDbg.Metadata;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
+using ChaosLib.Symbols;
 using ClrDebug;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 using Win32Process = System.Diagnostics.Process;
 using static ClrDebug.HRESULT;
 
@@ -331,6 +333,17 @@ namespace ChaosDbg.Cordb
         public delegate bool DbgHelp_DoCallback_Delegate(IntPtr processEntry, CBA actionCode, IntPtr callbackData);
         public delegate bool DbgHelp_DoCallback_DelegateHook(IntPtr processEntry, CBA actionCode, IntPtr callbackData, DbgHelp_DoCallback_Delegate original);
 
+        public delegate HRESULT DiaSymReader_DiaGetClassObject_Delegate(
+            [MarshalAs(UnmanagedType.LPStruct)] Guid rclsid,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            IntPtr ppv);
+
+        public delegate HRESULT DiaSymReader_DiaGetClassObject_DelegateHook(
+            [MarshalAs(UnmanagedType.LPStruct)] Guid rclsid,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            IntPtr ppv,
+            DiaSymReader_DiaGetClassObject_Delegate original);
+
         private static object hookLock = new object();
         private static bool hooksInstalled;
 #endif
@@ -601,7 +614,7 @@ namespace ChaosDbg.Cordb
                 var pShim = native["m_pShim"];
                 var ptr = pShim["m_ptr"];
                 var win32ET = ptr["m_pWin32EventThread"];
-                var win32EventThreadId = (uint) win32ET["m_threadId"].Value;
+                var win32EventThreadId = (uint) win32ET["m_threadId"].GetPrimitiveValue();
                 Log.Debug<CordbLauncher>("ShimProcess created Win32 Event Thread {win32EventThreadId}", win32EventThreadId);
             }
             catch (Exception ex)

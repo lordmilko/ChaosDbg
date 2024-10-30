@@ -46,6 +46,15 @@ namespace ChaosDbg.Cordb
             return breakpoint;
         }
 
+        /// <summary>
+        /// Adds a native breakpoint at the specified address.<para/>
+        /// Normally, this method will delegate the act of creating the breakpoint to mscordbi. In the event that the specified
+        /// <paramref name="address"/> is inside the CLR however, this method will bypass mscordbi and directly create the required
+        /// breakpoint itself. Note that CLR-internal breakpoints are unsupported, and debugging facilities may be impacted for the duration
+        /// that the debuggee is broken into inside the CLR.
+        /// </summary>
+        /// <param name="address">The address to add the breakpoint at.</param>
+        /// <returns>A <see cref="CordbRawCodeBreakpoint"/> or <see cref="CordbNativeCodeBreakpoint"/> that can be used to manage the created breakpoint.</returns>
         public CordbNativeCodeBreakpoint Add(CORDB_ADDRESS address)
         {
             if (!process.Session.IsInterop)
@@ -60,11 +69,11 @@ namespace ChaosDbg.Cordb
             {
                 //In order to set breakpoints inside the CLR we need to set the breakpoint ourselves. See the comments in CordbBreakpoint.cs
                 //for further details
-                breakpoint = new CordbRawCodeBreakpoint(symbol.ToString(), address, process, false);
+                breakpoint = new CordbRawCodeBreakpoint(symbol, address, process, false);
             }
             else
             {
-                breakpoint = new CordbNativeCodeBreakpoint(symbol.ToString(), address, process, false);
+                breakpoint = new CordbNativeCodeBreakpoint(symbol, address, process, false);
             }
 
             breakpoint.SetEnabled(true);
@@ -75,6 +84,16 @@ namespace ChaosDbg.Cordb
             return breakpoint;
         }
 
+        /// <summary>
+        /// Adds a data breakpoint at the specified address.<para/>
+        /// Note that a given process may only have a maximum of data breakpoints active
+        /// at a given time.
+        /// </summary>
+        /// <param name="address">The address to add the breakpoint at.</param>
+        /// <param name="accessKind">The type of data breakpoint to create (read/write/execute).</param>
+        /// <param name="size">The number of bytes from <paramref name="address"/> to monitor for access.
+        /// </param>
+        /// <returns>A <see cref="CordbDataBreakpoint"/> that can be used to manage the created breakpoint.</returns>
         public CordbDataBreakpoint Add(long address, DR7.Kind accessKind, DR7.Length size)
         {
             var breakpoint = new CordbDataBreakpoint(process, address, accessKind, size, false);

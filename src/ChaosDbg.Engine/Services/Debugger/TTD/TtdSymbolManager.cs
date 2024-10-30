@@ -6,6 +6,7 @@ using ChaosLib;
 using ChaosLib.Symbols;
 using ChaosLib.TTD;
 using ClrDebug.TTD;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.TTD
 {
@@ -14,7 +15,7 @@ namespace ChaosDbg.TTD
     /// </summary>
     class TtdSymbolManager : IDisposable
     {
-        private SymbolProvider symbolProvider;
+        private LiveSymbolProvider symbolProvider;
 
         private Cursor cursor;
 
@@ -22,7 +23,7 @@ namespace ChaosDbg.TTD
 
         public unsafe TtdSymbolManager(INativeLibraryProvider nativeLibraryProvider, ISymSrv symSrv, Cursor cursor)
         {
-            symbolProvider = new SymbolProvider(nativeLibraryProvider, symSrv, new TtdCursorMemoryReader(cursor));
+            symbolProvider = new LiveSymbolProvider(nativeLibraryProvider, symSrv, new TtdCursorMemoryReader(cursor));
 
             this.cursor = cursor;
         }
@@ -54,7 +55,7 @@ namespace ChaosDbg.TTD
                     var imageName = Path.GetFileName(fullPath);
                     var moduleName = Path.GetFileNameWithoutExtension(fullPath);
 
-                    symbolProvider.LoadModule(imageName, instance.Module->address, (int) instance.Module->size);
+                    symbolProvider.LoadModuleAsync(imageName, instance.Module->address, (int) instance.Module->size);
                     loadedModules.Add(instance);
                 }
             }

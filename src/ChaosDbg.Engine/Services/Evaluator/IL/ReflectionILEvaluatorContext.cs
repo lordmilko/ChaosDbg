@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Reflection;
-using ChaosLib.Metadata;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Evaluator.IL
 {

@@ -5,7 +5,8 @@ using System.Runtime.InteropServices;
 using ChaosLib;
 using ChaosLib.Detour;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
+using PESpy;
+using SymHelp;
 
 namespace ChaosDbg.DbgEng
 {
@@ -75,7 +76,7 @@ namespace ChaosDbg.DbgEng
                 var stream = new ProcessMemoryStream(hProcess);
 
                 stream.Position = (long) (void*) hModule;
-                var dbgEngPE = PEFile.FromStream(stream, true, PEFileDirectoryFlags.ImportDirectory);
+                var dbgEngPE = PEFile.FromStream(stream, true);
 
                 Log.Debug<DetourBuilder>("Hooking DbgEng {module}", hModule.ToString("X"));
 

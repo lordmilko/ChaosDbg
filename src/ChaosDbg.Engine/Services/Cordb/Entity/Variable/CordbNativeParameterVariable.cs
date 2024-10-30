@@ -1,5 +1,5 @@
-﻿using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
+﻿using SymHelp.Symbols;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {

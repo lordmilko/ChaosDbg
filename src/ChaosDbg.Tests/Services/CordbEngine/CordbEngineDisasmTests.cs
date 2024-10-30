@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using ChaosDbg.Cordb;
 using ChaosDbg.IL;
-using ChaosLib.PortableExecutable;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TestApp;
@@ -111,7 +110,7 @@ namespace ChaosDbg.Tests
 
                     thread.Verify().Disasm(
                         ctx.InProcDbgEng.Value,
-                        "System.Threading.Thread.Sleep",
+                        "mscorlib.dll!System.Threading.Thread.Sleep(Int32)",
                         x86Expected: x86Expected,
                         x64Expected: x64Expected
                     );

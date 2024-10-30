@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using ChaosDbg.IL;
-using ChaosLib.Metadata;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Evaluator.IL
 {

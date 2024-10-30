@@ -2,7 +2,6 @@
 using System.Runtime.InteropServices;
 using ChaosDbg.Disasm;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug;
 using ClrDebug.DIA;

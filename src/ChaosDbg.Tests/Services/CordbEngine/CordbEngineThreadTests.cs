@@ -346,10 +346,8 @@ namespace ChaosDbg.Tests
                 {
                     var mainThread = ctx.CordbEngine.Process.Threads.MainThread;
 
-                    //The real main thread will now be a transition frame. It's not very useful, but that's not our problem;
-                    //the main thread is the main thread
-                    Assert.AreEqual("Transition Frame", mainThread.StackTrace.Single().Name);
-                    Assert.IsTrue(!mainThread.StackTrace.Any(f => f.Name.Contains("TestApp.Example.Signal")));
+                    //We opt to go for the most "useful" thread, which is not the true native main thread
+                    Assert.IsTrue(mainThread.StackTrace.Any(f => f.Name.Contains("TestApp.Example.Signal")));
                 },
                 native: true
             );
@@ -432,7 +430,19 @@ namespace ChaosDbg.Tests
 
             Debug.WriteLine($"DbgEng: {dbgEngFrames.Length}, Cordb: {cordbFrames.Length}");
 
-            Assert.AreEqual(cordbFrames.Length, dbgEngFrames.Length);
+            if (cordbFrames.Length != dbgEngFrames.Length)
+                var builder = new StringBuilder();
+
+                builder.Append("Number of stack frames was incorrect").AppendLine().AppendLine();
+                builder.AppendLine("Cordb:");
+                builder.Append(string.Join(Environment.NewLine, (IEnumerable<CordbFrame>) cordbFrames));
+                builder.AppendLine();
+                builder.AppendLine();
+                builder.AppendLine("DbgEng:");
+                builder.Append(string.Join(Environment.NewLine, (IEnumerable<DbgEngFrame>) dbgEngFrames));
+
+                Assert.AreEqual(cordbFrames.Length, dbgEngFrames.Length, builder.ToString());
+            }
 
             for (var i = 0; i < cordbFrames.Length; i++)
             {
@@ -444,7 +454,7 @@ namespace ChaosDbg.Tests
                     Assert.AreEqual(deFrame.IP, cdbFrame.Context.IP);
                     Assert.AreEqual(deFrame.SP, cdbFrame.Context.SP);
 
-                    //DbgEng's frames don't store the BP so we can't validate thats
+                    //DbgEng's frames don't store the BP so we can't validate that they're the same
                 }
                 else
                 {

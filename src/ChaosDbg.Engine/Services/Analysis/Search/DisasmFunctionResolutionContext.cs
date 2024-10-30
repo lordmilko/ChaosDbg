@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using ChaosDbg.Disasm;
-using ChaosLib.Symbols.MicrosoftPdb;
 using Iced.Intel;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Analysis
 {
@@ -334,8 +334,10 @@ namespace ChaosDbg.Analysis
             {
                 if (existing.RuntimeFunction != null)
                 {
+                    var length = existing.RuntimeFunction.Value.EndAddress - existing.RuntimeFunction.Value.BeginAddress;
+
                     //ntdll!LdrGetProcedureAddressForCaller has an unwind block that just contains a CC after its ret finishes
-                    return existing.RuntimeFunction.Length == 1;
+                    return length == 1;
                 }
             }
 

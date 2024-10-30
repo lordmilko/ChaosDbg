@@ -2,6 +2,7 @@
 
   <Import Project="$(Build)ClrDebug.props" />
   <Import Project="$(Build)ChaosLib.props" />
+  <Import Project="$(Build)PESpy.props" />
   <Import Project="$(Build)VsDock.props" />
 
   <PropertyGroup>

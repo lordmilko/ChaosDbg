@@ -5,8 +5,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using ChaosDbg.Cordb;
 using ChaosLib;
-using ChaosLib.Symbols;
 using ClrDebug;
+using SymHelp;
 using static ClrDebug.Extensions;
 
 namespace ChaosDbg.DAC

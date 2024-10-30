@@ -1,5 +1,4 @@
 ﻿using System.Management.Automation;
-using ChaosDbg.DbgEng;
 
 namespace ChaosDbg.PowerShell.Cmdlets.Process
 {

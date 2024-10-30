@@ -31,6 +31,8 @@ namespace ChaosDbg.DbgEng
                 var engineOpts =
                     DEBUG_ENGOPT.FINAL_BREAK;    //Break when the debug target terminates
 
+                //What does it mean to INITIAL_BREAK? Essentially, INITIAL_BREAK simply tells DbgEng how to interpret the first breakpoint it sees,
+                //and whether it should break or not in response to that.
                 if (options.InitialBreak)
                     engineOpts |= DEBUG_ENGOPT.INITIAL_BREAK; //Break immediately upon starting the debug session
 

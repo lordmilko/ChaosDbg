@@ -65,7 +65,7 @@ namespace ChaosDbg.Cordb
                         if (thread.IsNull)
                             return null;
 
-                        var fieldValue = (CordbPrimativeValue) ((CordbObjectValue) thread)["m_ManagedThreadId"];
+                        var fieldValue = (CordbPrimitiveValue) ((CordbObjectValue) thread)["m_ManagedThreadId"];
 
                         managedThreadId = (int) fieldValue.ClrValue;
                     }

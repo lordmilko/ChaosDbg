@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using ChaosLib;
 using ClrDebug;
 
 namespace ChaosDbg.Cordb

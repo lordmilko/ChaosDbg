@@ -1,7 +1,6 @@
-﻿using ChaosDbg.Disasm;
-using ChaosDbg.Metadata;
+﻿using ChaosDbg.Metadata;
 using ChaosLib;
-using ChaosLib.Symbols;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {

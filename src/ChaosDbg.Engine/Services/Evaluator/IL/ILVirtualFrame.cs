@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using ChaosDbg.IL;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Evaluator.IL
 {
@@ -89,6 +89,29 @@ namespace ChaosDbg.Evaluator.IL
                     case OpCodeKind.And:                    //Bitwise AND of two integral values, returns an integral value
                         BoolOp(instr.Kind);
                         break;
+
+                    //III.3.4: get argument list
+                    //... -> ..., argListHandle
+                    case OpCodeKind.Arglist:                //Return argument list handle for the current method
+                        throw new NotImplementedException($"Handling {instr.Kind} is not implemented");
+
+                    //III.3.5: branch on equal
+                    //..., value1, value2 -> ...
+                    case OpCodeKind.Beq:                    //Branch to "target" (int32) if equal
+                    case OpCodeKind.Beq_S:                  //Branch to "target" (int8) if equal, short form
+                    {
+                        IntegerSlot value2;
+                        IntegerSlot value1;
+
+                        Pop(out value2, out value1);
+
+                        if ((bool) value1.Equals(value2).Value)
+                            MoveTo((ILInstruction) instr.Operand);
+                        else
+                            MoveNext();
+                        break;
+                    }
+
                     //III.3.6: branch on greater than or equal to
                     //..., value1, value2 -> ...
                     case OpCodeKind.Bge:                    //Branch to "target" (int32) if greater than or equal to
@@ -177,6 +200,26 @@ namespace ChaosDbg.Evaluator.IL
                     case OpCodeKind.Brtrue:                 //Branch to "target" (int32) if "value" is non-zero (true/non-null)
                     case OpCodeKind.Brtrue_S:               //Branch to "target" (int8) if "value" is non-zero (true/non-null), short form
                         throw new NotImplementedException($"Handling {instr.Kind} is not implemented");
+
+                    //III.3.19: call a method
+                    //arg0, arg1 ... argN -> ..., retVal (not always returned)
+                    case OpCodeKind.Call:                   //Call method described by "method"
+                    {
+                        var metadataMethod = (MetadataMethodInfo) instr.Operand;
+
+                        var args = new List<Slot>();
+
+                        for (var i = metadataMethod.GetParameters().Length - 1; i >= 0; i--)
+                            args.Insert(0, Pop());
+
+                        Slot instance = null;
+
+                        if (!metadataMethod.Attributes.HasFlag(MethodAttributes.Static))
+                            instance = Pop();
+
+                        var result = VirtualMachine.EvaluatorContext.CallMethod(instance, metadataMethod, args.ToArray());
+                        Push(result);
+                        MoveNext();
                     //III.3.20: indirect method call
                     //..., arg0, arg1, argN, ftn -> ..., retVal (not always returned)
                     case OpCodeKind.Calli:                  //Call method indicated on the stack with arguments described by "callsitedescr"
@@ -965,6 +1008,25 @@ namespace ChaosDbg.Evaluator.IL
             MoveNext();
         }
 
+            switch (kind)
+            {
+                case OpCodeKind.Add:
+                case OpCodeKind.Add_Ovf:
+                case OpCodeKind.Add_Ovf_Un:
+                    result = value1.Add(value2, flags);
+                    break;
+
+                case OpCodeKind.Sub:
+                case OpCodeKind.Sub_Ovf:
+                case OpCodeKind.Sub_Ovf_Un:
+                    result = value1.Subtract(value2, flags);
+                    break;
+
+                case OpCodeKind.Mul:
+                case OpCodeKind.Mul_Ovf:
+                case OpCodeKind.Mul_Ovf_Un:
+                    result = value1.Multiply(value2, flags);
+                    break;
         private void BoolOp(OpCodeKind kind)
         {
             //There's no such thing as bool. Boolean values compile to either Ldc_I4_0 or Ldc_I4_1, which we

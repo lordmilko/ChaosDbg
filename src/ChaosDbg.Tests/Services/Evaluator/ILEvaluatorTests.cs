@@ -9,9 +9,9 @@ using ChaosDbg.IL;
 using ChaosLib;
 using ChaosLib.Dynamic;
 using ChaosLib.Dynamic.Emit;
-using ChaosLib.Metadata;
 using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Tests.Evaluator
 {

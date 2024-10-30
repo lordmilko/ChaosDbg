@@ -1,8 +1,8 @@
 ﻿using System.Text;
 using ChaosDbg.Disasm;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
 using ClrDebug;
+using PESpy;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Analysis
 {
@@ -40,9 +40,9 @@ namespace ChaosDbg.Analysis
 
         public IUnmanagedSymbol? Symbol { get; set; }
 
-        public ImageRuntimeFunctionInfo? RuntimeFunction { get; set; }
+        public RuntimeFunction? RuntimeFunction { get; set; }
 
-        public IImageExportInfo? Export { get; set; }
+        public ImageExportDirectory.Export? Export { get; set; }
 
         public ByteSequence? ByteSequence { get; set; }
 
@@ -70,7 +70,7 @@ namespace ChaosDbg.Analysis
             if (Symbol != null)
                 builder.Append("[").Append(Symbol.Name).Append("] ");
             else if (Export != null)
-                builder.Append("[").Append(Export.Name).Append("] ");
+                builder.Append("[").Append(Export.Value.Name).Append("] ");
 
             builder.Append($"{addr} ({FoundBy})");
 

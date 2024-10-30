@@ -1,9 +1,8 @@
 ﻿using System;
 using ChaosDbg.Disasm;
-using ChaosDbg.Engine;
 using ChaosDbg.Text;
-using ChaosLib.PortableExecutable;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PESpy;
 
 namespace ChaosDbg.Tests
 {

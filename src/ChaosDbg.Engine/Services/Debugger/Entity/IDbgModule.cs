@@ -1,6 +1,6 @@
 ﻿using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
-using ChaosLib.PortableExecutable;
+using PESpy;
 
 namespace ChaosDbg
 {

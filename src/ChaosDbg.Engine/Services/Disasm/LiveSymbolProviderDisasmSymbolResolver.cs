@@ -3,13 +3,13 @@ using Iced.Intel;
 
 namespace ChaosDbg.Disasm
 {
-    class SymbolProviderDisasmSymbolResolver : IIndirectSymbolResolver
+    class LiveSymbolProviderDisasmSymbolResolver : IIndirectSymbolResolver
     {
-        private readonly SymbolProvider symbolProvider;
+        private readonly LiveSymbolProvider symbolProvider;
 
         public NativeDisassembler ProcessDisassembler { get; set; }
 
-        public SymbolProviderDisasmSymbolResolver(SymbolProvider symbolProvider)
+        public LiveSymbolProviderDisasmSymbolResolver(LiveSymbolProvider symbolProvider)
         {
             this.symbolProvider = symbolProvider;
         }

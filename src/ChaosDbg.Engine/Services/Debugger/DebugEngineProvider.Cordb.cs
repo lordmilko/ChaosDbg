@@ -19,6 +19,7 @@ namespace ChaosDbg
                 string commandLine,
                 bool startMinimized = false,
                 bool useInterop = false,
+                bool initialBreak = false,
                 FrameworkKind? frameworkKind = null,
                 CancellationToken cancellationToken = default)
             {
@@ -28,6 +29,7 @@ namespace ChaosDbg
                     {
                         StartMinimized = startMinimized,
                         UseInterop = useInterop,
+                        InitialBreak = initialBreak,
                         FrameworkKind = frameworkKind
                     },
                     cancellationToken

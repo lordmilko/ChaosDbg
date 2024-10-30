@@ -2,9 +2,9 @@
 using System.IO;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
 using ClrDebug;
+using PESpy;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Analysis
 {

@@ -1,16 +1,60 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text;
 using ChaosDbg.Disasm;
 using ClrDebug;
 using Iced.Intel;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {
     /// <summary>
     /// Represents a managed parameter or local variable defined within a function.
     /// </summary>
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public abstract class CordbManagedVariable : CordbVariable
     {
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        private string DebuggerDisplay
+        {
+            get
+            {
+                var builder = new StringBuilder();
+
+                builder.Append("[");
+
+                switch (LocationType)
+                {
+                    case VariableLocationType.VLT_REGISTER:
+                        builder.Append(Register.ToString().ToLower());
+                        break;
+
+                    case VariableLocationType.VLT_REGISTER_RELATIVE:
+                        builder.Append("[").Append(Register.ToString().ToLower());
+
+                        if (Offset < 0)
+                            builder.Append("-").Append((-Offset).ToString("x2"));
+                        else
+                            builder.Append("+").Append(Offset.ToString("x2"));
+
+                        builder.Append("h]");
+                        break;
+
+                    default:
+                        builder.Append(LocationType);
+                        break;
+                }
+
+                builder.Append("] ").Append(Symbol).Append(" = ").Append(Value);
+
+                return builder.ToString();
+            }
+        }
+
+        public override string Name => Symbol.ToString();
+
+        public IManagedVariableSymbol Symbol { get; }
+
         public CordbILFrame Frame { get; }
 
         public CorDebugVariableHome CorDebugVariableHome { get; }
@@ -20,12 +64,12 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the absolute memory address at which this variable begins.
         /// </summary>
-        public CORDB_ADDRESS StartAddress { get; internal set; }
+        public CORDB_ADDRESS StartAddress { get; }
 
         /// <summary>
         /// Gets the absolute memory address at which this variable ends.
         /// </summary>
-        public CORDB_ADDRESS EndAddress { get; internal set; }
+        public CORDB_ADDRESS EndAddress { get; }
 
         /// <summary>
         /// Gets the amount of memory that this variable occupies.
@@ -59,11 +103,17 @@ namespace ChaosDbg.Cordb
 
         protected CordbManagedVariable(
             CorDebugVariableHome corDebugVariableHome,
+            IManagedVariableSymbol symbol,
             CordbILFrame frame,
-            CordbModule module)
+            CordbModule module,
+            CORDB_ADDRESS startAddress,
+            CORDB_ADDRESS endAddress)
         {
             CorDebugVariableHome = corDebugVariableHome;
+            Symbol = symbol;
             Frame = frame;
+            StartAddress = startAddress;
+            EndAddress = endAddress;
 
             LocationType = corDebugVariableHome.LocationType;
 
@@ -92,28 +142,7 @@ namespace ChaosDbg.Cordb
 
         public override string ToString()
         {
-            switch (LocationType)
-            {
-                case VariableLocationType.VLT_REGISTER:
-                    return Register.ToString().ToLower();
-
-                case VariableLocationType.VLT_REGISTER_RELATIVE:
-                    var builder = new StringBuilder();
-
-                    builder.Append("[").Append(Register.ToString().ToLower());
-
-                    if (Offset < 0)
-                        builder.Append("-").Append((-Offset).ToString("x2"));
-                    else
-                        builder.Append("+").Append(Offset.ToString("x2"));
-
-                    builder.Append("h]");
-
-                    return builder.ToString();
-
-                default:
-                    return LocationType.ToString();
-            }
+            return Symbol.ToString();
         }
     }
 }

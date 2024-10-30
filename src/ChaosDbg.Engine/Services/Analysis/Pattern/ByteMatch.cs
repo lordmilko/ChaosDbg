@@ -3,7 +3,7 @@
 namespace ChaosDbg.Analysis
 {
     [DebuggerDisplay("Position = {Position.ToString(\"X\")}, Sequence = {Sequence.ToString(),nq}")]
-    class ByteMatch
+    readonly struct ByteMatch
     {
         public int Position { get; }
 

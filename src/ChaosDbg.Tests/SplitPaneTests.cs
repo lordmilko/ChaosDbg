@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Windows.Controls;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using static ChaosDbg.Tests.LayoutFactory;

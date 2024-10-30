@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Text;
 using ChaosDbg.Disasm;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 #nullable enable
 

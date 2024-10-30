@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 #nullable enable
 
@@ -55,7 +55,7 @@ namespace ChaosDbg.Cordb
                             fields[i] = New(fieldValue, Thread, this, metadataFields[i]);
                         }
 
-                        fieldMap = fields.ToDictionary(f => f.Symbol.Name, f => f);
+                        fieldMap = fields.ToDictionary(f => f.SourceMember.Name, f => f);
                     }
                 }
 
@@ -67,12 +67,16 @@ namespace ChaosDbg.Cordb
 
         public CordbManagedModule Module { get; }
 
-        internal CordbObjectValue(CorDebugObjectValue corDebugValue, CordbThread thread, CordbValue? parent, MemberInfo? symbol) : base(corDebugValue, thread, parent, symbol)
+        internal CordbObjectValue(
+            CorDebugObjectValue corDebugValue,
+            CordbManagedModule module,
+            MetadataType metadataType,
+            CordbThread thread,
+            CordbValue? parent,
+            MemberInfo? sourceMember) : base(corDebugValue, thread, parent, sourceMember)
         {
-            var corDebugClass = corDebugValue.ExactType.Class;
-            Module = thread.Process.Modules.GetModule(corDebugClass.Module);
-
-            this.metadataType = (MetadataType) Module.MetadataModule.ResolveType(corDebugClass.Token);
+            Module = module;
+            this.metadataType = metadataType;
         }
 
         public override CordbValue this[string fieldName]

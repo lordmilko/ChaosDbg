@@ -2,8 +2,8 @@
 using System.Diagnostics;
 using System.Threading;
 using ChaosLib;
-using ChaosLib.Symbols.MicrosoftPdb.TypedData;
 using ClrDebug;
+using SymHelp.Symbols.MicrosoftPdb.TypedData;
 
 namespace ChaosDbg.Cordb
 {
@@ -87,7 +87,7 @@ namespace ChaosDbg.Cordb
         /// <summary>
         /// Gets the "real" stop count of the <see cref="ICorDebugProcess"/> in mscordbi.
         /// </summary>
-        public int DbiStopCount => (int) (uint) ActiveProcess.TypedProcess["m_stopCount"].GetPrimativeValue();
+        public int DbiStopCount => (int) (uint) ActiveProcess.TypedProcess["m_stopCount"].GetPrimitiveValue();
 #endif
 
         internal readonly object UserPauseCountLock = new object();

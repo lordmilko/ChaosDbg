@@ -2,10 +2,9 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
-using ChaosDbg.Symbols;
-using ChaosLib.Symbols;
 using ClrDebug;
 using Iced.Intel;
+using SymHelp.Symbols;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Cordb
@@ -115,7 +114,7 @@ namespace ChaosDbg.Cordb
                 if (isValidAddress)
                     options |= SymFromAddrOption.DangerousManaged;
 
-                if (process.Symbols.TrySymFromAddr((long) address, options, out var displacedSymbol))
+                if (process.Symbols.TryGetSymbolFromAddress((long) address, options, out var displacedSymbol))
                 {
                     //Don't use full symbol kind when it's just a conditional jump (indicating we're likely going somewhere else inside the current method). This makes the output easier to read
                     symbol = MakeSymbol(displacedSymbol, instruction.FlowControl == FlowControl.ConditionalBranch);

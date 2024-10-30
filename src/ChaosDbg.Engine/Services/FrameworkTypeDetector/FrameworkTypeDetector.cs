@@ -2,9 +2,7 @@
 using System.IO;
 using System.Linq;
 using ChaosLib;
-using ChaosLib.Metadata;
-using ChaosLib.PortableExecutable;
-using ClrDebug;
+using PESpy;
 
 namespace ChaosDbg.Metadata
 {
@@ -34,12 +32,12 @@ namespace ChaosDbg.Metadata
             //Is this a .NET executable? And if so what kind of .NET executable is it?
 
             //Does it have an IMAGE_COR20_HEADER?
-            var pe = PEFile.FromPath(filePath, flags: PEFileDirectoryFlags.ImportDirectory | PEFileDirectoryFlags.Cor20Header);
+            var pe = PEFile.FromPath(filePath);
 
             if (pe.Cor20Header != null)
                 return DetectDotnetType(filePath);
 
-            if (pe.ImportDirectory != null && pe.ImportDirectory.Any(v => v.Name?.Equals("mscoree.dll", StringComparison.OrdinalIgnoreCase) == true))
+            if (pe.ImportTable != null && pe.ImportTable.Any(v => v.Name.ToString().Equals("mscoree.dll", StringComparison.OrdinalIgnoreCase) == true))
                 return FrameworkKind.NetFramework;
 
             var directory = Path.GetDirectoryName(filePath);

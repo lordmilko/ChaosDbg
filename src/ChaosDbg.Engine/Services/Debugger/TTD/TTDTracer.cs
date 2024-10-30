@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Text;
 using ChaosLib;
 using ChaosLib.Detour;
-using ClrDebug;
 using ClrDebug.TTD;
 
 namespace ChaosDbg.TTD
@@ -475,11 +474,6 @@ namespace ChaosDbg.TTD
                     var memoryBuffer = (ClrDebug.TTD.MemoryBuffer*) (IntPtr) result;
 
                     //Debug.WriteLine("ThreadView::" + ctx + " -> size: " + memoryBuffer->size);
-
-                    if (memoryBuffer->size == 0)
-                    {
-                        var x = 0;
-                    }
 
                     return result;
                 }

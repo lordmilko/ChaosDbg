@@ -7,11 +7,11 @@ using System.Runtime.CompilerServices;
 using ChaosDbg.Disasm;
 using ChaosDbg.Graph;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug;
 using ClrDebug.DIA;
 using Iced.Intel;
+using PESpy;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Analysis
 {
@@ -60,7 +60,7 @@ namespace ChaosDbg.Analysis
         private Dictionary<long, object> ignoreMap = new Dictionary<long, object>();
         private HashSet<long> knownCallTargets = new HashSet<long>();
         private HashSet<long> knownJumpTargets = new HashSet<long>();
-        private Dictionary<long, HashSet<ImageScopeRecord>> exceptionUnwindMap = new Dictionary<long, HashSet<ImageScopeRecord>>();
+        private Dictionary<long, HashSet<ScopeTable.ScopeRecord>> exceptionUnwindMap = new Dictionary<long, HashSet<ScopeTable.ScopeRecord>>(); //todo: need custom equals/gethashcode
         private List<(InstructionDiscoverySource, NativeCodeRegionCollection)> badFunctions = new();
         private List<InstructionDiscoverySource> deferredNewInstructions = new();
         internal HashSet<long> deferredSeen = new HashSet<long>();
@@ -179,7 +179,7 @@ namespace ChaosDbg.Analysis
         {
             //Add in all import types. A function could be pointing to any one of these
 
-            var iat = PEFile.ImportAddressTableDirectory;
+            var iat = PEFile.ImportAddressTable;
 
             void EnsureImportWasntMatched(long addr)
             {
@@ -192,7 +192,7 @@ namespace ChaosDbg.Analysis
             {
                 foreach (var item in iat)
                 {
-                    var addr = item.StructOffset + Module.Address;
+                    var addr = item.Offset + Module.Address;
 
                     ignoreMap[addr] = item;
 
@@ -206,26 +206,26 @@ namespace ChaosDbg.Analysis
             {
                 //This directory can be missing in the header but imports may still exist
 
-                if (PEFile.ImportDirectory != null)
+                if (PEFile.ImportTable != null)
                     throw new NotImplementedException("Don't know how to handle not having an IAT directory. It's still possible to have an IAT even without a dedicated directory. Should we try and pull the thunks from the normal import directory, or do something else entirely?");
             }
 
-            var bound = PEFile.BoundImportTableDirectory;
+            var bound = PEFile.BoundImportTable;
 
             if (bound != null)
                 throw new NotImplementedException("Don't know what members to look at to handle calls into bound imports");
 
-            var delay = PEFile.DelayImportTableDirectory;
+            var delay = PEFile.DelayImportTable;
 
             if (delay != null)
             {
                 foreach (var delayedModule in delay)
                 {
-                    if (delayedModule.ImportAddressTable != null)
+                    if (delayedModule.ImportAddressTableRVA.Value != null)
                     {
-                        foreach (var item in delayedModule.ImportAddressTable)
+                        foreach (var item in delayedModule.ImportAddressTableRVA.Value)
                         {
-                            var addr = item.StructOffset + Module.Address;
+                            var addr = item.Offset + Module.Address;
 
                             ignoreMap[addr] = item;
 
@@ -241,21 +241,21 @@ namespace ChaosDbg.Analysis
 
         private void RecordConfig()
         {
-            var config = PEFile.LoadConfigDirectory;
+            var config = PEFile.LoadConfigTable;
 
             if (config != null)
             {
                 var dataCandidates = new[]
                 {
-                    config.GuardCFCheckFunctionPointer,
-                    config.GuardCFDispatchFunctionPointer,
-                    config.GuardCFFunctionTable,
-                    config.GuardEHContinuationTable,
-                    config.GuardMemcpyFunctionPointer,
-                    config.GuardXFGCheckFunctionPointer,
-                    config.GuardXFGDispatchFunctionPointer,
-                    config.GuardXFGTableDispatchFunctionPointer,
-                    config.SecurityCookie
+                    config.GuardCFCheckFunctionPointer.ListedAddress,
+                    config.GuardCFDispatchFunctionPointer.ListedAddress,
+                    config.GuardCFFunctionTable.ListedAddress,
+                    config.GuardEHContinuationTable.ListedAddress,
+                    config.GuardMemcpyFunctionPointer.ListedAddress,
+                    config.GuardXFGCheckFunctionPointer.ListedAddress,
+                    config.GuardXFGDispatchFunctionPointer.ListedAddress,
+                    config.GuardXFGTableDispatchFunctionPointer.ListedAddress,
+                    config.SecurityCookie.ListedAddress
                 };
 
                 foreach (var item in dataCandidates)
@@ -268,73 +268,42 @@ namespace ChaosDbg.Analysis
                 }
 
                 var stream = Disassembler.BaseStream;
-                var reader = new PEBinaryReader(stream);
+                var reader = new FileReader(stream, false);
 
                 if (Options.HasFlag(PEMetadataSearchOptions.GuardCFFunctionTable))
-                    HydrateGuardCFFunctionTable(config, reader);
+                    HydrateGuardCFFunctionTable(config, ref reader);
 
                 if (Options.HasFlag(PEMetadataSearchOptions.GuardEHContinuationTable))
-                    HydrateGuardEHContinuationTable(config, reader);
+                    HydrateGuardEHContinuationTable(config, ref reader);
             }
         }
 
-        private void HydrateGuardCFFunctionTable(ImageLoadConfigDirectory config, PEBinaryReader reader)
+        private void HydrateGuardCFFunctionTable(ImageLoadConfigDirectory config, ref FileReader reader)
         {
             //__guard_fids_table
-            if (config.GuardCFFunctionTable != 0 && config.GuardCFFunctionCount != 0)
+            if (config.GuardCFFunctionTable.IsValid)
             {
-                reader.Seek(config.GuardCFFunctionTable);
-                var entries = new List<(int rva, IMAGE_GUARD_FLAG b)>();
-
                 //https://learn.microsoft.com/en-us/windows/win32/secbp/pe-metadata
 
                 //The GFIDS table is an array of 4 + n bytes, where n is given by ((GuardFlags & IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK) >> IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT)
-                var stride = (int) (config.GuardFlags & IMAGE_GUARD.CF_FUNCTION_TABLE_SIZE_MASK);
-                var shifted = stride >> ImageLoadConfigDirectory.CF_FUNCTION_TABLE_SIZE_SHIFT;
 
                 var xfgTargets = new List<long>();
 
-                for (var i = 0; i < config.GuardCFFunctionCount; i++)
+                foreach (var entry in config.GuardCFFunctionTable.Value.Entries)
                 {
-                    var rva = reader.ReadInt32();
-                    IMAGE_GUARD_FLAG b = 0;
-
-                    switch (shifted)
-                    {
-                        case 0:
-                            break;
-
-                        case 1:
-                            b = (IMAGE_GUARD_FLAG) reader.ReadByte();
-                            break;
-
-                        default:
-                            throw new NotImplementedException($"Don't know how to handle a shifted value of {shifted}");
-                    }
-
-                    var searchData = AddFunctionCandidate(Module.Address + rva, FoundBy.Config, DiscoveryTrustLevel.Trusted, false);
+                    var searchData = AddFunctionCandidate(Module.Address + entry.Function, FoundBy.Config, DiscoveryTrustLevel.Trusted, false);
                     searchData.FoundBySubType |= FoundBySubType.GuardCFFunctionTable;
 
-                    if (b.HasFlag(IMAGE_GUARD_FLAG.FID_XFG))
+                    if (entry.XFG != null)
                     {
                         //This function has 8 XFG bytes before it
-                        xfgTargets.Add(Module.Address + rva - 8);
+                        DataCandidates[entry.XFG.Value.ActualOffset] = new XfgMetadataInfo(Module.Address + entry.XFG.Value.ActualOffset, BitConverter.GetBytes(entry.XFG.Value.Value));
                     }
-
-                    entries.Add((rva, b));
-                }
-
-                foreach (var target in xfgTargets)
-                {
-                    reader.Seek(target);
-                    var bytes = reader.ReadBytes(8);
-
-                    DataCandidates[target] = new XfgMetadataInfo(target, bytes);
                 }
             }
         }
 
-        private void HydrateGuardEHContinuationTable(ImageLoadConfigDirectory config, PEBinaryReader reader)
+        private void HydrateGuardEHContinuationTable(ImageLoadConfigDirectory config, ref FileReader reader)
         {
             /* https://learn.microsoft.com/en-us/cpp/build/reference/guard-enable-eh-continuation-metadata?view=msvc-170
              * The instruction pointer of the __except block isn't expected to be on the shadow stack, because it would fail instruction pointer validation.
@@ -342,61 +311,50 @@ namespace ChaosDbg.Analysis
              * continuation targets in the binary */
 
             //__guard_eh_cont_table
-            if (config.GuardEHContinuationTable != 0 && config.GuardEHContinuationCount != 0)
+            if (config.GuardEHContinuationTable.IsValid)
             {
-                //no need to restore position, we havent started disassembling yey
-                reader.Seek(config.GuardEHContinuationTable);
-
-                var entries = new List<(int rva, byte b)>();
-
-                for (var i = 0; i < config.GuardEHContinuationCount; i++)
+                foreach (var entry in config.GuardEHContinuationTable.Value.Entries)
                 {
-                    var rva = reader.ReadInt32();
-                    var unknown = reader.ReadByte();
-
-                    var searchData = AddFunctionCandidate(Module.Address + rva, FoundBy.Config, DiscoveryTrustLevel.Trusted, false);
+                    var searchData = AddFunctionCandidate(Module.Address + entry.Function, FoundBy.Config, DiscoveryTrustLevel.Trusted, false);
                     searchData.FoundBySubType |= FoundBySubType.GuardEHContinuationTable;
-
-                    entries.Add((rva, unknown));
                 }
             }
         }
 
         private void HydrateExports()
         {
-            if (PEFile.ExportDirectory != null)
+            if (PEFile.ExportTable != null)
             {
-                foreach (var export in PEFile.ExportDirectory.Exports)
+                foreach (var export in PEFile.ExportTable.Exports)
                 {
-                    if (export is ImageForwardedExportInfo)
+                    if (export.ForwardOrAddress.IsForward)
                         throw new NotImplementedException("Don't know how to handle forwarded exports");
 
-                    var normalExport = (ImageExportInfo) export;
-                    var searchData = AddFunctionCandidate(normalExport.FunctionAddress, FoundBy.Export, DiscoveryTrustLevel.SemiTrusted, false);
-                    searchData.Export = normalExport;
+                    var searchData = AddFunctionCandidate(Module.Address + export.ForwardOrAddress.Address, FoundBy.Export, DiscoveryTrustLevel.SemiTrusted, false);
+                    searchData.Export = export;
                 }
             }
         }
 
         private void HydrateUnwindData()
         {
-            if (PEFile.ExceptionDirectory != null)
+            if (PEFile.ExceptionTable != null)
             {
-                foreach (var runtimeFunctionInfo in PEFile.ExceptionDirectory)
+                foreach (var runtimeFunctionInfo in PEFile.ExceptionTable)
                 {
                     var searchData = AddFunctionCandidate(runtimeFunctionInfo.BeginAddress + Module.Address, FoundBy.RuntimeFunction, DiscoveryTrustLevel.Trusted, false);
 
                     searchData.RuntimeFunction = runtimeFunctionInfo;
 
-                    if (((int) runtimeFunctionInfo.UnwindData.Flags & (int) UNW_FLAG.FHANDLER) != 0)
+                    if (((int) runtimeFunctionInfo.UnwindData.Value.Flags & (int) UNW_FLAG.FHANDLER) != 0)
                     {
-                        var handler = runtimeFunctionInfo.UnwindData.ExceptionHandler;
+                        var handler = runtimeFunctionInfo.UnwindData.Value.ExceptionHandler;
 
                         if (handler != 0)
                             AddFunctionCandidate(handler + Module.Address, FoundBy.FHandler, DiscoveryTrustLevel.Trusted, false);
                     }
 
-                    if (runtimeFunctionInfo.UnwindData.TryGetExceptionData(out var exceptionData) && exceptionData is ImageScopeTable table)
+                    if (runtimeFunctionInfo.UnwindData.Value.ExceptionData is ScopeTable table)
                     {
                         foreach (var record in table)
                         {
@@ -408,7 +366,7 @@ namespace ChaosDbg.Analysis
                                 }
                                 else
                                 {
-                                    set = new HashSet<ImageScopeRecord>
+                                    set = new HashSet<ScopeTable.ScopeRecord>
                                     {
                                         record
                                     };

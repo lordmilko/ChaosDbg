@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
 using ClrDebug;
+using PESpy;
 using Win32Process = System.Diagnostics.Process;
 
 namespace ChaosDbg.Cordb
@@ -63,11 +63,11 @@ namespace ChaosDbg.Cordb
             RelativeToAbsoluteStream stream = null;
             var needFullPELoad = false;
 
-            var peFlags = PEFileDirectoryFlags.ExportDirectory;
+            var baseAddress = corDebugModule.BaseAddress;
 
             if (!corDebugModule.IsDynamic)
             {
-                stream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, corDebugModule.BaseAddress);
+                stream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, baseAddress);
 
                 if (Process.Session.IsInterop)
                     preferNativePE = true;
@@ -75,7 +75,7 @@ namespace ChaosDbg.Cordb
                 {
                     //Defer querying the non-essential directories until we access the CordbModule.PEFile.
                     //We'll also try and asynchronously eagerly load them on the Symbol Resolution Thread
-                    peFile = PEFile.FromStream(stream, true, peFlags);
+                    peFile = PEFile.FromStream(stream, true, new PEFileServices(baseAddress, Process.Symbols));
                     needFullPELoad = true;
                 }
             }
@@ -88,7 +88,7 @@ namespace ChaosDbg.Cordb
 
                 if (Process.Session.IsInterop)
                 {
-                    if (nativeModules.TryGetValue(corDebugModule.BaseAddress, out native))
+                    if (nativeModules.TryGetValue(baseAddress, out native))
                     {
                         if (native.ManagedModule != null)
                             throw new InvalidOperationException($"Cannot set managed module: native module '{native}' already has a native module associated with it.");
@@ -104,7 +104,7 @@ namespace ChaosDbg.Cordb
                     else
                     {
                         //Uh oh, need to resolve the PEFile under the lock!
-                        peFile = PEFile.FromStream(stream, true, peFlags);
+                        peFile = PEFile.FromStream(stream, true, new PEFileServices(baseAddress, Process.Symbols));
                         needFullPELoad = true;
                     }
                 }
@@ -117,7 +117,7 @@ namespace ChaosDbg.Cordb
                     module.NativeModule = native;
                 }
 
-                ManagedModules.Add(corDebugModule.BaseAddress, module);
+                ManagedModules.Add(baseAddress, module);
             }
 
             //We don't need to add a managed module to our symbol store; we only resolve managed symbols when we see them
@@ -125,7 +125,7 @@ namespace ChaosDbg.Cordb
             Process.Assemblies.LinkModule(module);
 
             if (needFullPELoad)
-                Process.Symbols.LoadModule(module.FullName, corDebugModule.BaseAddress, corDebugModule.Size, peFile);
+                Process.Symbols.LoadModuleAsync(module.FullName, baseAddress, corDebugModule.Size, module, peFile);
 
             return module;
         }
@@ -147,7 +147,7 @@ namespace ChaosDbg.Cordb
 
             //We'll need to defer querying for the rest of the PEFile until later (inside CordbModule.PEFile), as PESymbolResolver will need to use symbols
             //in order to resolve any exception handlers
-            var peFile = PEFile.FromStream(memoryStream, true, PEFileDirectoryFlags.ExportDirectory);
+            var peFile = PEFile.FromStream(memoryStream, true, new PEFileServices(baseAddress, Process.Symbols));
 
             var name = CordbNativeModule.GetNativeModuleName(loadDll, Process.Id);
 
@@ -175,7 +175,7 @@ namespace ChaosDbg.Cordb
             //It's important to note that you cannot rely on the PEFile's ImageBase to know where a given module has been loaded. A LOAD_DLL_DEBUG_EVENT event occurs
             //whenever a process calls kernel32!MapViewOfFile with a section that created by kernel32!CreateFileMapping with SEC_IMAGE. The CLR will sometimes map two copies of
             //mscorlib, do something, and then unload one. 
-            Process.Symbols.LoadModule(name, native.BaseAddress, native.Size, peFile);
+            Process.Symbols.LoadModuleAsync(name, native.BaseAddress, native.Size, null, peFile);
 
             return native;
         }
@@ -193,7 +193,7 @@ namespace ChaosDbg.Cordb
             var address = (long) (void*) win32Process.MainModule.BaseAddress;
             var stream = MemoryReaderStream.CreateRelative((IMemoryReader) Process.DataTarget, address);
 
-            var peFile = PEFile.FromStream(stream, true, PEFileDirectoryFlags.All);
+            var peFile = PEFile.FromStream(stream, true, new PEFileServices(address, Process.Symbols));
 
             //There is no CorDebugModule for a process, so we have to fake it
             var module = new CordbManagedProcessPseudoModule(win32Process.MainModule.FileName, corDebugProcess, Process, peFile);
@@ -315,6 +315,12 @@ namespace ChaosDbg.Cordb
             return null;
         }
 
+        /// <summary>
+        /// Retrieves the <see cref="CordbManagedModule"/> that is associated with the base address of the specified
+        /// <see cref="CorDebugModule"/>.
+        /// </summary>
+        /// <param name="corDebugModule">The module to lookup.</param>
+        /// <returns>The <see cref="CordbManagedModule"/> that is associated with the specified <see cref="CorDebugModule.BaseAddress"/>.</returns>
         internal CordbManagedModule GetModule(CorDebugModule corDebugModule)
         {
             lock (moduleLock)

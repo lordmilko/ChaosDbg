@@ -5,6 +5,7 @@ using ChaosLib;
 using ChaosLib.Symbols;
 using ClrDebug;
 using ClrDebug.DbgEng;
+using SymHelp.Symbols;
 using static ClrDebug.HRESULT;
 
 namespace ChaosDbg.Cordb

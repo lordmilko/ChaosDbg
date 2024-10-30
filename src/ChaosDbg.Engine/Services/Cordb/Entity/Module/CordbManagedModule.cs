@@ -1,7 +1,8 @@
 ﻿using System;
-using ChaosLib.Metadata;
-using ChaosLib.PortableExecutable;
 using ClrDebug;
+using PESpy;
+using SymHelp.Metadata;
+using SymHelp.Symbols;
 
 #nullable enable
 
@@ -10,7 +11,7 @@ namespace ChaosDbg.Cordb
     /// <summary>
     /// Represents a managed module that is backed by a <see cref="CorDebugModule"/>.
     /// </summary>
-    public class CordbManagedModule : CordbModule
+    public class CordbManagedModule : CordbModule, IClrMetadataProvider
     {
         #region ClrAddress
 

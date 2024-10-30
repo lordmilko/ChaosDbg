@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
 using Iced.Intel;
+using PESpy;
 using Decoder = Iced.Intel.Decoder;
 
 namespace ChaosDbg.Disasm

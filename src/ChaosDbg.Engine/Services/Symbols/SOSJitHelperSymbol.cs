@@ -1,4 +1,5 @@
 ﻿using ChaosLib.Symbols;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Symbols
 {

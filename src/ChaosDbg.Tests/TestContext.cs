@@ -9,12 +9,17 @@ using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
 using ChaosDbg.Disasm;
 using ChaosLib;
+using ChaosLib.Detour;
 using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb;
+using ClrDebug;
+using ClrDebug.CoClass;
 using ClrDebug.DbgEng;
 using ClrDebug.DIA;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SymHelp;
+using SymHelp.Symbols;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Tests
 {
@@ -184,6 +189,27 @@ namespace ChaosDbg.Tests
             }
 
             breakpointHit.Reset();
+        }
+
+        public SymUnmanagedMethod GetLegacySymMethod(string methodName, mdMethodDef methodDef)
+        {
+            var module = (CordbManagedModule) Process.Modules.First(m => m.Name == methodName);
+            var binder = new SymUnmanagedBinder(new CorSymBinder_SxS());
+            var reader = binder.GetReaderForFile2(module.CorDebugModule.GetMetaDataInterface<IMetaDataImport>(), module.FullName, null, CorSymSearchPolicyAttributes.AllowSymbolServerAccess);
+            var method = reader.GetMethod(0x600454F);
+            return method;
+        }
+
+        public (SymUnmanagedMethod method, Step step) RecordLegacySymAction<T>(string methodName, mdMethodDef mdMethodDef, Func<SymUnmanagedMethod, T> action)
+        {
+            var method = GetLegacySymMethod(methodName, mdMethodDef);
+
+            if (!DebugSymbolProvider.HookDiaSymReader)
+                throw new NotImplementedException();
+
+            var result = HookRecorder.Step(() => method).Step(m => action(m)).Execute();
+
+            return (method, result[1]);
         }
 
         public void Dispose()

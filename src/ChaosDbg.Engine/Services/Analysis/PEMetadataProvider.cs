@@ -4,9 +4,9 @@ using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
 using Iced.Intel;
+using PESpy;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Analysis
 {
@@ -54,9 +54,9 @@ namespace ChaosDbg.Analysis
             PEMetadataSearchOptions options,
             Action<PEFile> peFileTestHook = null)
         {
-            var peSymbolResolver = new PESymbolResolver(symbolModule);
+            var peSymbolResolver = new PEFileServices(symbolModule);
 
-            var physicalPEFile = GetPhysicalPEFile(modulePath, PEFileDirectoryFlags.All, peSymbolResolver, peFileTestHook);
+            var physicalPEFile = GetPhysicalPEFile(modulePath, peSymbolResolver, peFileTestHook);
 
             var fileStream = File.Open(modulePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -88,7 +88,7 @@ namespace ChaosDbg.Analysis
         {
             var modulePath = Kernel32.GetModuleFileNameExW(hProcess, hModule);
 
-            var peSymbolResolver = new PESymbolResolver(symbolModule);
+            var peSymbolResolver = new PEFileServices(symbolModule);
 
             GetPEFiles(processStream, (long) (void*) hModule, modulePath, peSymbolResolver, peFileTestHook, out var physicalPEFile, out var virtualPEFile);
 
@@ -115,7 +115,7 @@ namespace ChaosDbg.Analysis
             Stream stream,
             long moduleAddress,
             string modulePath,
-            IPESymbolResolver peSymbolResolver,
+            IFileServices peFileServices,
             Action<PEFile> peFileTestHook,
             out PEFile physicalPEFile,
             out PEFile virtualPEFile)
@@ -126,15 +126,15 @@ namespace ChaosDbg.Analysis
             //we want to trust the size listed in the PhysicalPEFile. Hence, we don't copy the whole module to an in-process
             //MemoryStream to be used by both our PE File and our disassembler
             stream.Position = moduleAddress;
-            virtualPEFile = PEFile.FromStream(stream, true, PEFileDirectoryFlags.All, peSymbolResolver);
+            virtualPEFile = PEFile.FromStream(stream, true, peFileServices);
 
             peFileTestHook?.Invoke(virtualPEFile);
         }
 
-        private PEFile GetPhysicalPEFile(string modulePath, PEFileDirectoryFlags flags = PEFileDirectoryFlags.None, IPESymbolResolver peSymbolResolver = null, Action<PEFile> peFileTestHook = null)
+        private PEFile GetPhysicalPEFile(string modulePath, IFileServices peFileServices = null, Action<PEFile> peFileTestHook = null)
         {
             //Don't need any flags here. All we're really interested in is the base address.
-            var physicalPEFile = PEFile.FromPath(modulePath, flags, peSymbolResolver);
+            var physicalPEFile = PEFile.FromPath(modulePath, peFileServices);
 
             if (physicalPEFile.OptionalHeader.Magic == PEMagic.PE32)
             {

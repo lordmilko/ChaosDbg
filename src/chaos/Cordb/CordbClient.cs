@@ -7,7 +7,7 @@ using ChaosDbg;
 using ChaosDbg.Cordb;
 using ChaosDbg.Disasm;
 using ChaosDbg.Metadata;
-using ChaosLib.Symbols.MicrosoftPdb;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace chaos
 {
@@ -50,7 +50,7 @@ namespace chaos
             sw.Start();
 
             Console.WriteLine("Launching...");
-            engineProvider.Cordb.CreateProcess(executable, minimized, interop, frameworkKind);
+            engineProvider.Cordb.CreateProcess(executable, minimized, interop, frameworkKind: frameworkKind);
 
             EngineLoop();
         }

@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LocalPESpy>$(MSBuildThisFileDirectory)\..\..\PESpy\src\PESpy\bin\Debug\netstandard2.0\PESpy.dll</LocalPESpy>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <!-- If PESpy has been cloned to the parent directory containing both PESpy and ChaosDbg,
+         prefer the local version for development purposes -->
+    <PackageReference Include="PESpy" Version="$(PESpyVersion)" Condition="!Exists('$(LocalPESpy)')" />
+
+    <Reference Include="PESpy" Condition="Exists('$(LocalPESpy)')">
+      <HintPath>$(LocalPESpy)</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

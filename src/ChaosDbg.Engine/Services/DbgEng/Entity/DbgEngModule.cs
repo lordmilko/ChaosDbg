@@ -1,4 +1,4 @@
-﻿using ChaosLib.PortableExecutable;
+﻿using PESpy;
 
 namespace ChaosDbg.DbgEng
 {

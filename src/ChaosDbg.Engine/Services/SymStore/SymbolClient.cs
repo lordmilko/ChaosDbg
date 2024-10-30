@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
+using PESpy;
 
 namespace ChaosDbg.SymStore
 {

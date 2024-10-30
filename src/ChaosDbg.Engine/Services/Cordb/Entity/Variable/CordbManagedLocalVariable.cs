@@ -1,4 +1,5 @@
 ﻿using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {
@@ -7,11 +8,16 @@ namespace ChaosDbg.Cordb
     /// </summary>
     public class CordbManagedLocalVariable : CordbManagedVariable
     {
-        public int Index { get; }
+        public int Index => CorDebugVariableHome.SlotIndex;
 
-        public CordbManagedLocalVariable(CorDebugVariableHome corDebugVariableHome, CordbILFrame frame, CordbModule module) : base(corDebugVariableHome, frame, module)
+        public CordbManagedLocalVariable(
+            CorDebugVariableHome corDebugVariableHome,
+            ManagedLocalSymbol symbol,
+            CordbILFrame frame,
+            CordbModule module,
+            CORDB_ADDRESS startAddress,
+            CORDB_ADDRESS endAddress) : base(corDebugVariableHome, symbol, frame, module, startAddress, endAddress)
         {
-            Index = corDebugVariableHome.SlotIndex;
         }
 
         protected override CordbValue GetValue() => CordbValue.New(Frame.CorDebugFrame.GetLocalVariable(Index), Frame.Thread);

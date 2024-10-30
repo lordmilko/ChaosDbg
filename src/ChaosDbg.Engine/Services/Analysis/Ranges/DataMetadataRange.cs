@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using ChaosLib.Symbols.MicrosoftPdb;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Analysis
 {

@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols;
 using ClrDebug;
 using ClrDebug.DbgEng;
+using PESpy;
+using SymHelp;
+using SymHelp.Symbols;
 
 namespace ChaosDbg
 {

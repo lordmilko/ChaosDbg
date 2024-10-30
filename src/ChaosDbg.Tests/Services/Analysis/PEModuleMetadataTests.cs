@@ -8,11 +8,13 @@ using ChaosDbg.Disasm;
 using ChaosDbg.SymStore;
 using ChaosLib;
 using ChaosLib.Memory;
-using ChaosLib.PortableExecutable;
-using ChaosLib.Symbols;
-using ChaosLib.Symbols.MicrosoftPdb;
+using ClrDebug;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PESpy;
+using SymHelp;
+using SymHelp.Symbols;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Tests
 {
@@ -929,14 +931,14 @@ namespace ChaosDbg.Tests
             bool liveNtdll = false)
         {
             //Ensure we're not using the system32 version
-            GetService<NativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.DbgHelp);
-            var dbgHelpProvider = GetService<IDbgHelpProvider>();
 
             var process = Process.GetCurrentProcess();
 
             var hProcess = process.Handle;
 
-            var symbolProvider = new SymbolProvider(GetService<INativeLibraryProvider>());
+            var symbolProvider = new OfflineSymbolProvider(
+                Extensions.DllGetClassObject(GetService<INativeLibraryProvider>().GetModuleHandle(WellKnownNativeLibrary.msdia140))
+            );
 
             string path;
             Stream stream;
@@ -980,7 +982,7 @@ namespace ChaosDbg.Tests
                 var metadataProvider = GetService<PEMetadataProvider>();
 
                 var is32Bit = IntPtr.Size == 4;
-                var symbolResolver = new SymbolProviderDisasmSymbolResolver(symbolProvider);
+                var symbolResolver = new SymbolModuleDisasmSymbolResolver(diaSymbolModule);
 
                 IUnmanagedSymbolModule symbolModule;
 
@@ -1033,13 +1035,13 @@ namespace ChaosDbg.Tests
         {
             var moduleMocker = new ModuleMocker(allowedSymbols, (peFile, mockSymbolModule, disassembler) =>
             {
-                if (peFile.ExceptionDirectory == null)
+                if (peFile.ExceptionTable == null)
                     return;
 
                 var symbols = mockSymbolModule.EnumerateSymbols().ToArray();
 
-                if (peFile.ExportDirectory != null)
-                    ReflectionExtensions.SetPropertyValue(peFile.ExportDirectory, nameof(ImageExportDirectoryInfo.Exports), peFile.ExportDirectory.Exports.Where(e => symbols.Any(sym => sym.Name == e.Name)).ToArray());
+                if (peFile.ExportTable != null)
+                    ReflectionExtensions.SetPropertyValue(peFile.ExportTable, nameof(ImageExportDirectory.Exports), peFile.ExportTable.Exports.Where(e => symbols.Any(sym => sym.Name == e.Name)).ToArray());
             });
 
             TestMatchAllFunctions(
@@ -1057,7 +1059,7 @@ namespace ChaosDbg.Tests
         {
             var moduleMocker = new ModuleMocker(allowedSymbols, (peFile, mockSymbolModule, disassembler) =>
             {
-                if (peFile.ExceptionDirectory == null)
+                if (peFile.ExceptionTable == null)
                     return;
 
                 //RtlEnclaveCallDispatchReturn is a Data symbol that exists in the exports but its DiaSymbol doesn't have an address
@@ -1066,7 +1068,7 @@ namespace ChaosDbg.Tests
                 //Our Either doesn't throw on accessing the wrong value
                 var functions = symbols.Select(sym => disassembler.DisassembleCodeRegions(sym.Address)).Where(r => r.IsSuccess).ToArray();
 
-                var allowed = peFile.ExceptionDirectory.Where(e => functions.Any(f =>
+                var allowed = peFile.ExceptionTable.Where(e => functions.Any(f =>
                 {
                     if (f.Contains(e.BeginAddress + mockSymbolModule.Address))
                         return true;
@@ -1093,8 +1095,8 @@ namespace ChaosDbg.Tests
                 })).ToArray();
 
                 //For each symbol we want to consider, disassemble the function to get all its chunks, and then get all unwind items that exist within those chunks
-                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExceptionDirectory), allowed);
-                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExportDirectory), null);
+                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExceptionTable), allowed);
+                ReflectionExtensions.SetPropertyValue(peFile, nameof(PEFile.ExportTable), null);
             });
 
             TestMatchAllFunctions(
@@ -1123,7 +1125,7 @@ namespace ChaosDbg.Tests
             private NativeDisassembler nativeDisassembler;
             private MockSymbolModule mockSymbolModule;
 
-            public ModuleMocker(string[] allowedSymbols, Action<PEFile, MockSymbolModule, INativeDisassembler> configurePeFile)
+            public ModuleMocker(string[] allowedSymbols, Action<PEFile, MockSymbolModule, NativeDisassembler> configurePeFile)
             {
                 this.allowedSymbols = allowedSymbols;
                 configurePEFile = configurePeFile;

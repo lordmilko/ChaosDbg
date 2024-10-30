@@ -10,16 +10,16 @@ namespace ChaosDbg.Cordb
     /// </summary>
     class CordbNullValue : CordbValue
     {
-        internal CordbNullValue(CorDebugValue corDebugValue, CordbThread thread, CordbValue? parent, MemberInfo? symbol) : base(corDebugValue, thread, parent, symbol)
+        internal CordbNullValue(CorDebugValue corDebugValue, CordbThread thread, CordbValue? parent, MemberInfo? sourceMember) : base(corDebugValue, thread, parent, sourceMember)
         {
         }
 
         public override string ToString()
         {
-            if (Symbol == null)
+            if (SourceMember == null)
                 return "<null>";
 
-            return $"{Symbol} = null";
+            return $"{SourceMember} = null";
         }
     }
 }

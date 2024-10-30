@@ -1,12 +1,8 @@
 ﻿using System.Collections.Generic;
-﻿using System.IO;
+using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
-using ChaosDbg.Decompiler;
 using ChaosDbg.IL;
-using ChaosLib.Metadata;
-using ChaosLib.PortableExecutable;
-using ClrDebug;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ChaosDbg.Tests

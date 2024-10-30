@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using ChaosDbg.Disasm;
 using ChaosDbg.IL;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Cordb
 {

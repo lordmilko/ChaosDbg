@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
-using ChaosLib;
-using ChaosLib.Metadata;
+using ClrDebug;
+using SymHelp.Metadata;
 
 #nullable enable
 
@@ -163,7 +163,7 @@ namespace ChaosDbg.IL
                     var token = reader.ReadInt32();
 
                     if (metadataModule == null)
-                        return token;
+                        return (mdToken) token;
 
                     return metadataModule.ResolveToken(token);
                 }    
@@ -212,7 +212,7 @@ namespace ChaosDbg.IL
                     var token = reader.ReadInt32();
 
                     if (metadataModule == null)
-                        return token;
+                        return (mdToken) token;
 
                     return metadataModule.ResolveToken(token);
                 }

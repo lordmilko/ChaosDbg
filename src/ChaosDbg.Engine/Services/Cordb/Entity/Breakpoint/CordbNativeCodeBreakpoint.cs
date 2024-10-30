@@ -1,4 +1,5 @@
 ﻿using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Cordb
 {
@@ -8,17 +9,17 @@ namespace ChaosDbg.Cordb
     public class CordbNativeCodeBreakpoint : CordbBreakpoint
     {
         /// <summary>
-        /// Gets the display name of this breakpoint.
+        /// Gets the symbol at which this breakpoint resides.
         /// </summary>
-        public string Name { get; }
+        public IDisplacedSymbol Symbol { get; }
 
         public CORDB_ADDRESS Address { get; protected set; }
 
         protected CordbProcess process;
 
-        public CordbNativeCodeBreakpoint(string name, CORDB_ADDRESS address, CordbProcess process, bool isOneShot) : base(isOneShot)
+        public CordbNativeCodeBreakpoint(IDisplacedSymbol symbol, CORDB_ADDRESS address, CordbProcess process, bool isOneShot) : base(isOneShot)
         {
-            Name = name;
+            Symbol = symbol;
             Address = address;
             this.process = process;
         }
@@ -36,7 +37,7 @@ namespace ChaosDbg.Cordb
 
         public override string ToString()
         {
-            return Name;
+            return Symbol.ToString();
         }
     }
 }

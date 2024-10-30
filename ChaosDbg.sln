@@ -33,7 +33,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{285EA220
 		build\BannedSymbols.txt = build\BannedSymbols.txt
 		build\ChaosLib.props = build\ChaosLib.props
 		build\ClrDebug.props = build\ClrDebug.props
+		build\PESpy.props = build\PESpy.props
 		build\SingleFile.targets = build\SingleFile.targets
+		build\SymHelp.props = build\SymHelp.props
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "chaos", "src\chaos\chaos.csproj", "{B7CA3B2B-F6BE-46DB-9B3D-B71B9F4714C1}"

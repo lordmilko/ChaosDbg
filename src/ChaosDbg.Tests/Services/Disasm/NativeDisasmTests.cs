@@ -5,8 +5,8 @@ using ChaosDbg.DbgEng;
 using ChaosDbg.Disasm;
 using ChaosLib.Memory;
 using ClrDebug.DbgEng;
-using ChaosLib.PortableExecutable;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PESpy;
 
 namespace ChaosDbg.Tests
 {
@@ -25,7 +25,7 @@ namespace ChaosDbg.Tests
 
                 var relativeDbgEngMemoryStream = new RelativeToAbsoluteStream(dbgEngMemoryStream, baseAddress);
 
-                var peFile = new PEFile(relativeDbgEngMemoryStream, true);
+                var peFile = PEFile.FromStream(relativeDbgEngMemoryStream, true);
                 relativeDbgEngMemoryStream.Seek(peFile.OptionalHeader.AddressOfEntryPoint, SeekOrigin.Begin);
 
                 var dis = NativeDisassembler.FromStream(dbgEngMemoryStream, peFile.OptionalHeader.Magic == PEMagic.PE32, new DbgEngDisasmSymbolResolver(client));

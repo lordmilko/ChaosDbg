@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Reflection;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 namespace ChaosDbg.Cordb
 {

@@ -4,14 +4,13 @@ using System.Diagnostics;
 using ChaosDbg.Cordb;
 using ChaosDbg.DbgEng;
 using ChaosDbg.DbgEng.Server;
-using ChaosDbg.Disasm;
 using ChaosDbg.Engine;
-using ChaosDbg.IL;
 using ChaosDbg.Metadata;
 using ChaosDbg.Symbols;
+using ChaosDbg.SymStore;
 using ChaosLib;
-using ChaosLib.PortableExecutable;
 using ChaosLib.Symbols;
+using SymHelp.Symbols;
 
 namespace ChaosDbg
 {
@@ -64,6 +63,7 @@ namespace ChaosDbg
                 typeof(DbgEngEngineServices),
 
                 //Symbols
+                { typeof(ISymSrv), typeof(FakeSymSrv) },
 
                 //NativeLibrary
                 { typeof(INativeLibraryProvider), typeof(NativeLibraryProvider) },

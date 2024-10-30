@@ -7,10 +7,10 @@ using System.Text.RegularExpressions;
 using ChaosDbg.Analysis;
 using ChaosDbg.Disasm;
 using ChaosLib;
-using ChaosLib.Symbols.MicrosoftPdb;
 using ClrDebug.DIA;
 using Iced.Intel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SymHelp.Symbols.MicrosoftPdb;
 
 namespace ChaosDbg.Tests
 {

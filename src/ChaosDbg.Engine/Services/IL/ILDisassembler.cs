@@ -5,8 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using ChaosDbg.Cordb;
-using ChaosLib.Metadata;
 using ClrDebug;
+using SymHelp.Metadata;
 
 #nullable enable
 

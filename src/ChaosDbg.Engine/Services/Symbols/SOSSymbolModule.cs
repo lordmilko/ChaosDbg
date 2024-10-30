@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using ChaosLib.Symbols;
 using ClrDebug;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Symbols
 {
@@ -39,6 +40,16 @@ namespace ChaosDbg.Symbols
         }
 
         IEnumerable<ISymbol> ISymbolModule.EnumerateSymbols() => EnumerateSymbols();
+
+        public IEnumerable<IManagedSymbol> EnumerateManagedSymbols()
+        {
+            throw new NotImplementedException();
+        }
+
+        public IEnumerable<IManagedVariableSymbol> EnumerateManagedVariables(mdMethodDef methodDef, int ilOffset)
+        {
+            throw new NotImplementedException();
+        }
 
         public IEnumerable<IManagedSymbol> EnumerateSymbols()
         {

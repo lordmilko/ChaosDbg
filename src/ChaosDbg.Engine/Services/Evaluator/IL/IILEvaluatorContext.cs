@@ -1,4 +1,4 @@
-﻿using ChaosLib.Metadata;
+﻿using SymHelp.Metadata;
 
 namespace ChaosDbg.Evaluator.IL
 {

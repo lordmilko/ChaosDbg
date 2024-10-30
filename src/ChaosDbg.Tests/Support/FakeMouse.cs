@@ -45,10 +45,19 @@ namespace ChaosDbg.Tests
         private Visual window;
         private bool isActive;
 
+        //AppDomainTestMethodAttribute sets this, forcing the cctor to run in the original appdomain
+        public static bool InstallHook;
+
         static FakeMouse()
         {
+            //I think when we set InstallHook, the cctor might run first, so we can't rely on properties to protect us from running again in a remote domain
+            if (AppDomain.CurrentDomain.FriendlyName.Contains("ChaosDbg TestDomain"))
+                return;
+
             ChaosLib.Detour.DetourBuilder.AddPInvokeHook(new[] { "GetKeyState","WindowFromPoint" }, typeof(User32.Native), ctx =>
             {
+                //The callback runs in the original AppDomain, but I don't think that any of these methods used by the hook actually need to access the current AppDomain; InputManager is used by methods that are called manually
+
                 if (isFaking)
                 {
                     switch (ctx.Name)

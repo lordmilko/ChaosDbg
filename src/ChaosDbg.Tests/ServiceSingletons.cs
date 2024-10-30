@@ -2,7 +2,7 @@
 using ChaosDbg.Symbols;
 using ChaosDbg.SymStore;
 using ChaosLib;
-using ChaosLib.Symbols;
+using SymHelp.Symbols;
 
 namespace ChaosDbg.Tests
 {

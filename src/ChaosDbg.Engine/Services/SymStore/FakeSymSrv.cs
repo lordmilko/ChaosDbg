@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using ChaosLib;
-using ChaosLib.Symbols;
+using ClrDebug.DbgEng;
+using ClrDebug.EbgEng;
+using SymHelp.Symbols;
 
 #nullable enable
 
@@ -145,7 +147,9 @@ namespace ChaosDbg.SymStore
         private SSRVOPT globalType = SSRVOPT.SSRVOPT_DWORD;
         private string globalDownstreamStore;
 
+#pragma warning disable CS8618
         public FakeSymSrv()
+#pragma warning restore CS8618
         {
             symbolServerClose            = SymbolServerClose;
             symbolServerDeltaNameW       = SymbolServerDeltaNameW;
